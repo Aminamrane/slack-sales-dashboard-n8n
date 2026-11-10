@@ -3724,6 +3724,14 @@ function ForceSendBlock({ email, scheduledAt, onForced }) {
 function RenewBlock({ email, sentAt, onRenewed, bare = false }) {
   const [confirming, setConfirming] = useState(false);
   const [state, setState] = useState(null); // null | 'sending' | 'sent' | 'error'
+  // La confirmation s'annule seule après 5 s (dev 10/11/2026). Plus d'annulation à la sortie de la souris :
+  // « Confirmer » est plus court que « Renouveler » et le bouton, calé à droite, sortait de sous le curseur au
+  // premier clic, ce qui annulait aussitôt la confirmation (« j'appuie sur Renouveler, rien ne se passe »).
+  useEffect(() => {
+    if (!confirming) return undefined;
+    const t = setTimeout(() => setConfirming(false), 5000);
+    return () => clearTimeout(t);
+  }, [confirming]);
 
   const doRenew = async () => {
     setState("sending"); setConfirming(false);
@@ -3742,7 +3750,7 @@ function RenewBlock({ email, sentAt, onRenewed, bare = false }) {
   if (bare) {
     return (
       <button type="button" className={`ocv-btn${done ? " is-done" : confirming ? " is-confirm" : ""}`}
-        onClick={confirming ? doRenew : () => setConfirming(true)} onMouseLeave={() => { if (!sending) setConfirming(false); }} disabled={sending || done}>
+        onClick={confirming ? doRenew : () => setConfirming(true)} disabled={sending || done}>
         {!done && !sending && <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3.5V8h4.5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20.5V16h-4.5" /></svg>}
         {done ? "Renouvelée ✓" : sending ? "Envoi…" : state === "error" ? "Échec, réessayer" : confirming ? "Confirmer" : "Renouveler"}
       </button>
@@ -3757,7 +3765,6 @@ function RenewBlock({ email, sentAt, onRenewed, bare = false }) {
           {" "}Renouvelle-la pour renvoyer le contrat à signer au client.
         </div>
         <button onClick={confirming ? doRenew : () => setConfirming(true)}
-          onMouseLeave={() => { if (!sending) setConfirming(false); }}
           disabled={sending || done}
           style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
             padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
