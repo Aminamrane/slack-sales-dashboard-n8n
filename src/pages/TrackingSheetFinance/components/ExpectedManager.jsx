@@ -7,7 +7,12 @@
 // Puis 2026-09-04 : « il faut qu'elle puisse changer attendu, reçu, tout ! Et
 // revenir en arrière si mauvaise manip, un report… »
 //
-// Un seul dialogue, cinq onglets sur le même tableau de mois :
+// Un seul dialogue. En tête, le RELEVÉ (dev 2026-11-10, n°565 : « quand il a
+// trop payé ou pas assez, pourquoi on en est là aujourd'hui ») : lecture seule,
+// ce que chaque mois a demandé et reçu, le solde qu'il laisse, et la position
+// du client aujourd'hui. Il vient du serveur avec l'historique du client
+// (`statement`) ; sans lui (serveur plus ancien), l'onglet n'apparaît pas.
+// Puis cinq onglets de gestes sur le même tableau de mois :
 //   · MODIFIER   — fixer l'attendu et/ou le reçu d'un mois à la main. La
 //                  valeur fait foi : ni la grille ni le classeur ne la
 //                  réécrivent (`expected_manual`, audit « l'interne prime »).
@@ -44,12 +49,13 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   X, Check, Pencil, Percent, CornerDownRight, PauseCircle, Play, Plus, Trash2,
-  History, Undo2,
+  History, Undo2, ReceiptText,
 } from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
 import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, deferralLinks, outstandingByMonth, reportsByMonth, deMonthLabel } from '../constants.js';
 import { EXPLAIN_OPS_LIMIT, expectedOpsByMonth, explainExpectedMonth } from '../expectedExplain.js';
+import { buildStatement } from '../statement.js';
 
 const N = {
   text: '#37352f',
@@ -82,6 +88,7 @@ const fmtWhen = (iso) => {
 };
 
 const MODES = [
+  { key: 'statement', label: 'Relevé',   Icon: ReceiptText,     hint: 'Ce que chaque mois a demandé et reçu, et le solde qu’il laisse. Lecture seule : pour changer un montant, passer par les onglets suivants.' },
   { key: 'edit',     label: 'Modifier',   Icon: Pencil,          hint: 'Fixer l’attendu, le reçu ou le reste dû d’un mois. La valeur fait foi : ni la grille ni le classeur ne la réécriront. Un reste dû corrigé devient un ajustement de créance : l’attendu et le reçu du mois ne bougent pas.' },
   { key: 'discount', label: 'Réduire',    Icon: Percent,         hint: 'Appliquer une réduction du catalogue à des mois. Réutilisable d’un client à l’autre.' },
   { key: 'defer',    label: 'Reporter',   Icon: CornerDownRight, hint: 'Reporter déplace l’attendu : les mois cochés perdent ce qui leur reste dû, le mois de destination le reçoit en plus du sien. Le total dû ne change pas. Supprimer en perte est une option à part.' },
@@ -148,9 +155,12 @@ export default function ExpectedManager({
   billingStart = null,
   billingLastMonth = null,
   loss = null,
+  // Relevé du client servi avec son historique ({ owner: [...], optilex: [...] }).
+  statement = null,
 }) {
+  const hasStatement = !!statement;
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
-  const [mode, setMode] = useState('edit');
+  const [mode, setMode] = useState(hasStatement ? 'statement' : 'edit');
   const [selected, setSelected] = useState(() => new Set());
   const [drafts, setDrafts] = useState({});        // period_id -> attendu saisi (Modifier / Reporter)
   const [recDrafts, setRecDrafts] = useState({});  // period_id -> reçu saisi (Modifier)
@@ -195,7 +205,8 @@ export default function ExpectedManager({
   useEffect(() => {
     if (!open) return;
     setEntity(scope === 'optilex' ? 'optilex' : 'owner');
-    setMode('edit');
+    // On ouvre sur le relevé : comprendre avant d'agir.
+    setMode(hasStatement ? 'statement' : 'edit');
     setSelected(new Set());
     setDrafts({});
     setRecDrafts({});
@@ -213,7 +224,7 @@ export default function ExpectedManager({
     setLastOps([]);
     setLastRequest(null);
     setRequests(null);
-  }, [open, scope]);
+  }, [open, scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const loadDiscounts = useCallback(() => {
     apiClient.get('/api/v1/finance-periods/client/discounts')
@@ -359,6 +370,14 @@ export default function ExpectedManager({
       firstActiveKey, billingStart, billingLastMonth, loss,
     })]));
   }, [rows, periods, trace, entity, billingStart, billingLastMonth, loss]);
+
+  // Le relevé de l'entité affichée, mis en mots (statement.js).
+  const account = useMemo(() => buildStatement(statement?.[entity]), [statement, entity]);
+  const explainedByMonth = useMemo(
+    () => new Map(rows.map((r) => [r.key, explained.get(r.id)])),
+    [rows, explained],
+  );
+  const upcoming = useMemo(() => rows.filter((r) => r.futur && r.attendu > 0), [rows]);
 
   // Quels mois sont sélectionnables selon le geste.
   const selectable = useCallback((r) => {
@@ -668,7 +687,10 @@ export default function ExpectedManager({
   if (!open) return null;
 
   const entityLabel = entity === 'owner' ? 'Owner' : "Opti'lex";
-  const showCheck = mode !== 'edit' && mode !== 'history';
+  // Relevé et historique se lisent : ni motif, ni bouton d'action.
+  const readOnly = mode === 'history' || mode === 'statement';
+  const modes = hasStatement ? MODES : MODES.filter((m) => m.key !== 'statement');
+  const showCheck = mode !== 'edit' && !readOnly;
   const gridCols = mode === 'edit'
     ? 'minmax(104px, 1fr) 84px 88px 84px 122px 104px 104px 104px'
     : `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 124px minmax(120px, 1fr)`;
@@ -729,10 +751,10 @@ export default function ExpectedManager({
             </button>
           </div>
 
-          {/* Les cinq onglets */}
+          {/* Les onglets : le relevé d'abord, puis les gestes */}
           <div style={{ padding: '12px 20px 0', borderBottom: `1px solid ${N.borderSft}` }}>
             <div style={{ display: 'flex', gap: 4 }}>
-              {MODES.map((m) => {
+              {modes.map((m) => {
                 const active = mode === m.key;
                 return (
                   <button
@@ -926,7 +948,15 @@ export default function ExpectedManager({
 
           {/* Le corps : le tableau des mois, ou l'historique des opérations */}
           <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-            {mode === 'history' ? (
+            {mode === 'statement' ? (
+              <StatementView
+                account={account}
+                entityLabel={entityLabel}
+                nowKey={nowKey}
+                explainedByMonth={explainedByMonth}
+                upcoming={upcoming}
+              />
+            ) : mode === 'history' ? (
               <>
                 <RequestsList
                   requests={requests}
@@ -1234,7 +1264,7 @@ export default function ExpectedManager({
                 </button>
               </span>
             )}
-            {mode !== 'history' && (
+            {!readOnly && (
               <input
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
@@ -1242,8 +1272,8 @@ export default function ExpectedManager({
                 style={{ ...input, flex: '1 1 220px' }}
               />
             )}
-            <button type="button" onClick={onClose} style={{ ...btn('ghost'), marginLeft: mode === 'history' ? 'auto' : 0 }}>Fermer</button>
-            {mode !== 'history' && (
+            <button type="button" onClick={onClose} style={{ ...btn('ghost'), marginLeft: readOnly ? 'auto' : 0 }}>Fermer</button>
+            {!readOnly && (
               <button
                 type="button"
                 onClick={submit}
@@ -1269,6 +1299,189 @@ export default function ExpectedManager({
 }
 
 // ── Pièces ──────────────────────────────────────────────────────────────────
+
+// Couleurs du relevé : rouge = le client doit, vert = il a payé d'avance,
+// gris = rien à signaler, ambre = pas encore exigible.
+const ACCOUNT_TONES = {
+  short:  { fg: N.red,       bg: N.redBg,   rail: N.red },
+  over:   { fg: N.green,     bg: N.greenBg, rail: N.green },
+  even:   { fg: N.textMuted, bg: N.sideBg,  rail: N.border },
+  wait:   { fg: '#9f6b00',   bg: '#faf3dd', rail: '#e9c46a' },
+  paused: { fg: N.slate,     bg: N.slateBg, rail: N.slate },
+  muted:  { fg: N.textMuted, bg: N.sideBg,  rail: N.borderSft },
+  loss:   { fg: N.amber,     bg: N.amberBg, rail: N.amber },
+  manual: { fg: N.blue,      bg: N.blueBg,  rail: N.blue },
+};
+const ACCOUNT_COLS = 'minmax(128px, 1.1fr) 104px 104px minmax(196px, 1.4fr) minmax(150px, 1fr)';
+
+function Pill({ tone, children, title }) {
+  const t = ACCOUNT_TONES[tone] || ACCOUNT_TONES.even;
+  return (
+    <span title={title} style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 999,
+      background: t.bg, color: t.fg, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      {children}
+    </span>
+  );
+}
+
+// Une case de l'addition en tête du relevé.
+function Sum({ label, value, tone, sign }) {
+  return (
+    <>
+      {sign && <span style={{ color: N.textFaint, fontSize: 15, fontWeight: 500 }}>{sign}</span>}
+      <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 10.5, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{label}</span>
+        <span style={{
+          fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          color: tone ? ACCOUNT_TONES[tone].fg : N.text,
+        }}>{value}</span>
+      </span>
+    </>
+  );
+}
+
+// Le relevé du client : où il en est aujourd'hui, l'addition qui y mène, puis
+// chaque mois dans l'ordre, avec son écart, le solde qu'il laisse et la phrase
+// qui dit où l'argent est allé. Tout vient de `buildStatement` ; la pastille
+// d'un mois sans mouvement vient de `explainExpectedMonth`.
+function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcoming }) {
+  if (!account) {
+    return (
+      <div style={{ padding: '36px 20px', textAlign: 'center', fontSize: 12.5, color: N.textMuted }}>
+        Rien à relever en {entityLabel} : aucun attendu ni encaissement jusqu’à ce mois-ci.
+      </div>
+    );
+  }
+  const { head, totals, months } = account;
+  const headTone = ACCOUNT_TONES[head.tone];
+  const shownUpcoming = upcoming.slice(0, 6);
+  return (
+    <div>
+      {/* Aujourd'hui : la position, pourquoi, et l'addition */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
+        margin: '16px 20px 14px', padding: '14px 16px', borderRadius: 12,
+        background: N.sideBg, borderLeft: `3px solid ${headTone.rail}`,
+      }}>
+        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+          <div style={{ fontSize: 10.5, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>
+            Aujourd’hui · {entityLabel}
+          </div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: head.tone === 'even' ? N.text : headTone.fg, marginTop: 2 }}>
+            {head.title}
+          </div>
+          {head.why && <div style={{ fontSize: 12.5, color: N.textMuted, marginTop: 3, lineHeight: 1.45 }}>{head.why}</div>}
+          {head.pending && (
+            <div style={{ fontSize: 12.5, color: ACCOUNT_TONES.wait.fg, marginTop: 3, lineHeight: 1.45 }}>+ {head.pending}</div>
+          )}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+          <Sum label={`Attendu depuis ${totals.since}`} value={formatEUR(totals.charged)} />
+          <Sum sign="−" label="Reçu" value={formatEUR(totals.paid)} />
+          {totals.adjustment !== 0 && (
+            <Sum sign={totals.adjustment > 0 ? '+' : '−'} label="Corrections" value={formatEUR(Math.abs(totals.adjustment))} />
+          )}
+          <Sum sign="=" label="Solde" value={totals.balance} tone={totals.closing > 0 ? 'short' : totals.closing < 0 ? 'over' : null} />
+        </div>
+      </div>
+
+      {/* Mois par mois, du premier au mois en cours */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: ACCOUNT_COLS, columnGap: 12,
+        padding: '8px 20px 8px 23px', background: N.sideBg, position: 'sticky', top: 0, zIndex: 1,
+        fontSize: 11, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3,
+      }}>
+        <span>Mois</span>
+        <span style={{ textAlign: 'right' }}>Attendu</span>
+        <span style={{ textAlign: 'right' }}>Reçu</span>
+        <span>Écart du mois</span>
+        <span>Solde après le mois</span>
+      </div>
+      {months.map((m) => {
+        const ex = explainedByMonth.get(m.period) || NO_EXPLAIN;
+        // Mois sans mouvement : la pastille dit d'où vient le zéro.
+        const pill = m.pill || { label: ex.label || (m.expected > 0 ? 'Rien demandé' : 'Aucun attendu'), tone: ex.tone || 'muted' };
+        const rail = ACCOUNT_TONES[m.quiet ? 'muted' : pill.tone]?.rail || N.borderSft;
+        const balance = ACCOUNT_TONES[m.balance.tone];
+        // La phrase du relevé, puis ce que l'outil a enregistré sur le mois
+        // (pause, geste, montant fixé à la main).
+        const trace = m.quiet || m.paused ? ex.text : null;
+        return (
+          <React.Fragment key={m.period}>
+            {m.event && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 20px 7px 23px', borderTop: `1px solid ${N.borderSft}`,
+                background: '#fcfcfb', fontSize: 12, color: N.textMuted,
+              }}>
+                <CornerDownRight size={12} style={{ color: N.textFaint, flex: 'none' }} />
+                {m.event.text}
+              </div>
+            )}
+            <div style={{
+              display: 'grid', gridTemplateColumns: ACCOUNT_COLS, columnGap: 12, rowGap: 4, alignItems: 'center',
+              padding: '11px 20px', borderTop: `1px solid ${N.borderSft}`, borderLeft: `3px solid ${rail}`,
+              opacity: m.quiet ? 0.72 : 1,
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: N.text, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                {m.label}
+                {m.period === nowKey && <Tag title="Mois en cours">ce mois-ci</Tag>}
+              </span>
+              <span style={{ textAlign: 'right', fontSize: 13, color: N.text, fontVariantNumeric: 'tabular-nums' }}>
+                {m.paused
+                  ? <span style={{ color: N.textFaint, textDecoration: m.expected > 0 ? 'line-through' : 'none' }} title="En pause : rien n’est demandé">{formatEUR(m.expected)}</span>
+                  : formatEUR(m.charged)}
+              </span>
+              <span style={{ textAlign: 'right', fontSize: 13, color: m.paid > 0 ? N.text : N.textFaint, fontVariantNumeric: 'tabular-nums' }}>
+                {formatEUR(m.paid)}
+              </span>
+              <span><Pill tone={pill.tone} title={m.quiet ? ex.text || undefined : undefined}>{pill.label}</Pill></span>
+              <span style={{ fontSize: 13, fontWeight: 600, color: m.balance.tone === 'even' ? N.textMuted : balance.fg }}>
+                {m.balance.label}
+                {m.balance.note && (
+                  <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: ACCOUNT_TONES.wait.fg }}>+ {m.balance.note}</span>
+                )}
+              </span>
+              {(m.text || trace) && (
+                <span style={{ gridColumn: '1 / -1', fontSize: 12, color: N.textMuted, lineHeight: 1.5 }}>
+                  {m.text}
+                  {m.text && trace ? ' ' : ''}
+                  {trace && <span style={{ color: N.textFaint }}>{trace}{/[.!?]$/.test(trace) ? '' : '.'}</span>}
+                </span>
+              )}
+            </div>
+          </React.Fragment>
+        );
+      })}
+
+      {/* Les mois à venir : ce qui sera demandé, sans histoire encore */}
+      {upcoming.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          padding: '12px 20px 16px', borderTop: `1px solid ${N.border}`,
+        }}>
+          <span style={{ fontSize: 11, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>À venir</span>
+          {shownUpcoming.map((r) => (
+            <span key={r.id} style={{
+              fontSize: 12, color: N.textMuted, padding: '3px 9px', borderRadius: 999, border: `1px solid ${N.borderSft}`,
+              whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+            }}>
+              {r.label} · <strong style={{ color: N.text, fontWeight: 600 }}>{formatEUR(r.attendu)}</strong>
+              {r.pauseActive ? ' · en pause' : ''}
+            </span>
+          ))}
+          {upcoming.length > shownUpcoming.length && (
+            <span style={{ fontSize: 12, color: N.textFaint }}>
+              + {upcoming.length - shownUpcoming.length} mois
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 // L'historique des gestes, du plus récent au plus ancien. Annuler se fait en
 // deux temps sur la ligne (pas de boîte de dialogue du navigateur) : la

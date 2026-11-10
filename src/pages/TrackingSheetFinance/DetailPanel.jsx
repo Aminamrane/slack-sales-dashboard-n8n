@@ -1066,6 +1066,7 @@ export default function DetailPanel({
             billingStart={profile?.billing_start || null}
             billingLastMonth={profile?.billing_last_month || null}
             loss={profile?.loss || null}
+            statement={timeline?.statement || null}
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
