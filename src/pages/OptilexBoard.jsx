@@ -1232,11 +1232,11 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
       </td>
       <td style={{ ...td, color: r.secteur_activite ? TEXT : "#cbd2e0" }}>
         {r.secteur_activite ? (
-          <div className="ob-sector" title={`Secteur d'activité (NDA) : ${secteurLabel(r.secteur_activite)}`}>
+          <div className="ob-sector" title={`Secteur d'activité : ${secteurLabel(r.secteur_activite)}`}>
             <SectorIcon secteur={r.secteur_activite} size={20} />
             <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{secteurLabel(r.secteur_activite)}</span>
           </div>
-        ) : <span title="Secteur non renseigné au NDA">—</span>}
+        ) : <span title="Secteur non renseigné">—</span>}
       </td>
       <td style={{ ...td, whiteSpace: "normal" }}>
         <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client} readOnly={readOnly}
@@ -1861,6 +1861,7 @@ export default function OptilexBoard({ embed = false }) {
         .ob-pv-line{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;max-width:100%}
         .ob-pv-sub{font-size:12px;font-weight:500;color:${MUTED}}
         .ob-pv-none{font-weight:500;color:#b6bdc9}
+        .ob-pv-more{margin-left:8px;padding:0;border:0;background:none;font:inherit;font-size:12px;font-weight:500;color:#8a93a3;cursor:pointer;text-decoration:underline;text-underline-offset:2px}.ob-pv-more:hover{color:#2f6fde}
         .ob-pv-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ob-contract-line{display:flex;align-items:center;gap:12px;min-width:0}
 
@@ -3198,6 +3199,18 @@ const PROP_ICONS = {
 };
 // `top` : la valeur peut grandir (dates d'effet, alertes) ; le libellé reste en face de sa première ligne,
 // décalé de `top` pixels (hauteur de la pastille ou de la ligne de texte). `wrap` : libellé long sur deux lignes.
+// Prénom du client : le premier seulement ; les autres prénoms (NDA) au clic, jamais copiés ni exportés.
+function FirstNameValue({ first, others }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <span className="ob-pv-text" title={first}>
+      {first}
+      {others && (open
+        ? <span className="ob-pv-none"> · autres prénoms : {others}</span>
+        : <button type="button" className="ob-pv-more" onClick={() => setOpen(true)}>voir le détail</button>)}
+    </span>
+  );
+}
 function PropRow({ icon, label, children, top = 0, wrap = false, copy, copyLabel }) {
   return (
     <div className={`ob-prop${top ? " is-top" : ""}${wrap ? " is-wrap" : ""}`}>
@@ -3382,7 +3395,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
             <PropRow icon="secteur" label="Secteur">
               {row.secteur_activite
                 ? <span className="ob-pv-line"><SectorIcon secteur={row.secteur_activite} size={18} />{secteurLabel(row.secteur_activite)}</span>
-                : <span className="ob-pv-none">Non renseigné au NDA</span>}
+                : <span className="ob-pv-none">Non renseigné</span>}
             </PropRow>
             {num && (
               <PropRow icon="programmes" label="Programmes">
@@ -3412,7 +3425,9 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
                 ? <span className="ob-pv-text" title={`${name} : nom complet, prénom et nom à séparer`}>{name} <span className="ob-pv-none">· à séparer</span></span>
                 : <span className="ob-pv-none">À compléter</span>}</PropRow>
             )}
-            <PropRow icon="contact" label="Prénom du client" copy={row.client_first_name} copyLabel="le prénom du client">{row.client_first_name ? <span className="ob-pv-text" title={row.client_first_name}>{row.client_first_name}</span> : <span className="ob-pv-none">À compléter</span>}</PropRow>
+            {/* Un seul prénom (dev 10/11/2026) : le premier, copié et exporté seul ; les autres prénoms du NDA
+                n'apparaissent qu'au clic sur « voir le détail ». */}
+            <PropRow icon="contact" label="Prénom du client" copy={row.client_first_name} copyLabel="le prénom du client">{row.client_first_name ? <FirstNameValue first={row.client_first_name} others={row.client_other_first_names} /> : <span className="ob-pv-none">À compléter</span>}</PropRow>
             <PropRow icon="ville" label="Ville" copy={row.client_city} copyLabel="la ville">{row.client_city ? <span className="ob-pv-text" title={row.client_city}>{row.client_city}</span> : <span className="ob-pv-none">À compléter</span>}</PropRow>
             <PropRow icon="societe" label="Société" copy={companyName(row)} copyLabel="la société">{companyName(row) ? <span className="ob-pv-text" title={companyName(row)}>{companyName(row)}</span> : <span className="ob-pv-none">—</span>}</PropRow>
             <PropRow icon="numero" label="N° client" copy={num} copyLabel="le numéro client">{num || <span className="ob-pv-none">Contrat en cours d'envoi</span>}</PropRow>
