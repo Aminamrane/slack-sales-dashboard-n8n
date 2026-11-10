@@ -10,7 +10,7 @@
 // la phrase. Trois choses sortent de `buildStatement` :
 //
 //   head   : où en est le client aujourd'hui, et pourquoi ;
-//   totals : attendu − reçu ± corrections = solde ;
+//   totals : attendu exigible − reçu ± corrections = ce que dit `head` ;
 //   months : chaque mois, son écart, son solde, et où l'argent est allé.
 
 import { formatEUR, formatMonthLabel } from './constants.js';
@@ -243,15 +243,20 @@ export const buildStatement = (raw) => {
     text: m.quiet ? movedBit(m) : story(m, all),
   }));
   const last = months[months.length - 1];
+  // L'addition tombe sur la position d'aujourd'hui : la part du mois en cours
+  // qui n'est pas encore exigible n'y entre pas (elle est citée à part).
+  const notDue = last.closing > 0 ? Math.min(last.notDue, last.closing) : 0;
+  const closing = r2(last.closing - notDue);
   return {
     head: headOf(months),
     totals: {
       since: month(months[0].period),
-      charged: r2(months.reduce((s, m) => s + m.charged, 0)),
+      charged: r2(months.reduce((s, m) => s + m.charged, 0) - notDue),
       paid: r2(months.reduce((s, m) => s + m.paid, 0)),
       adjustment: r2(months.reduce((s, m) => s + m.adjustment, 0)),
-      closing: last.closing,
-      balance: balanceLabel(last.closing),
+      notDue: r2(notDue),
+      closing,
+      balance: balanceLabel(closing),
     },
     months,
   };

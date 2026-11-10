@@ -1378,7 +1378,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
           )}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-          <Sum label={`Attendu depuis ${totals.since}`} value={formatEUR(totals.charged)} />
+          <Sum label={`${totals.notDue > 0 ? 'Exigible' : 'Attendu'} depuis ${totals.since}`} value={formatEUR(totals.charged)} />
           <Sum sign="−" label="Reçu" value={formatEUR(totals.paid)} />
           {totals.adjustment !== 0 && (
             <Sum sign={totals.adjustment > 0 ? '+' : '−'} label="Corrections" value={formatEUR(Math.abs(totals.adjustment))} />

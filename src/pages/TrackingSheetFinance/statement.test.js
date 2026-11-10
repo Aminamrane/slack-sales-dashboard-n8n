@@ -63,7 +63,7 @@ test('n°565 : la position d’aujourd’hui et l’addition qui y mène', () =>
     tone: 'short', title: 'Le client doit 0,60 €', why: 'Impayé : octobre 2026 (0,60 €)', pending: null,
   });
   assert.deepEqual(st.totals, {
-    since: 'juin 2026', charged: 847, paid: 846.4, adjustment: 0, closing: 0.6, balance: 'Doit 0,60 €',
+    since: 'juin 2026', charged: 847, paid: 846.4, adjustment: 0, notDue: 0, closing: 0.6, balance: 'Doit 0,60 €',
   });
 });
 
@@ -82,6 +82,10 @@ test('mois en cours avant son échéance : pas une dette, « pas encore exigible
   assert.equal(st.head.title, 'Le client doit 0,60 €');
   assert.equal(st.head.why, 'Impayé : octobre 2026 (0,60 €)');
   assert.equal(st.head.pending, '169,40 € de novembre 2026 pas encore exigibles');
+  // L'addition tombe sur « doit 0,60 € », pas sur 170 € : novembre n'est pas exigible.
+  assert.deepEqual(st.totals, {
+    since: 'juin 2026', charged: 847, paid: 846.4, adjustment: 0, notDue: 169.4, closing: 0.6, balance: 'Doit 0,60 €',
+  });
 });
 
 test('client en avance : on dit quel mois a payé en trop', () => {
@@ -140,7 +144,7 @@ test('solde de départ et correction : ni attendu, ni encaissement', () => {
   });
   assert.equal(st.head.why, 'Impayé : retard antérieur (100,00 €)');
   assert.deepEqual(st.totals, {
-    since: 'septembre 2026', charged: 200, paid: 200, adjustment: 100, closing: 100, balance: 'Doit 100,00 €',
+    since: 'septembre 2026', charged: 200, paid: 200, adjustment: 100, notDue: 0, closing: 100, balance: 'Doit 100,00 €',
   });
 });
 
