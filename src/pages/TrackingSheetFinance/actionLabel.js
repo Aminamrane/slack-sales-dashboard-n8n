@@ -124,6 +124,11 @@ export function describeAction({ field, from, to, period = null, effectiveOn = n
     case 'payment_day':
       if (isBlank(to)) return "a remis la date de paiement sur le jour de l'onboarding";
       return `a fixé la date de paiement au ${to}${String(to) === '1' ? 'er' : ''} du mois${isBlank(from) ? '' : ` (au lieu du ${from})`}`;
+    case 'finance_onboarding_date':
+      // RDV d'onboarding retenu par la Finance : c'est lui qui fixe le départ de facturation.
+      if (isBlank(to)) break;
+      if (isBlank(from)) return `a retenu le ${formatDateFR(to)} comme RDV d'onboarding de la facturation`;
+      return `a déplacé le RDV d'onboarding de la facturation du ${formatDateFR(from)} au ${formatDateFR(to)}`;
     default:
       break;
   }

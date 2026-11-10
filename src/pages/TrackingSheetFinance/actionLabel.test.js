@@ -102,6 +102,17 @@ test('date de paiement : fixée, changée, remise sur l’onboarding', () => {
   assert.equal(describeAction({ field: 'payment_day', from: '15', to: null }), "a remis la date de paiement sur le jour de l'onboarding");
 });
 
+test('RDV d’onboarding retenu par la Finance : posé, puis déplacé', () => {
+  assert.equal(
+    describeAction({ field: 'finance_onboarding_date', from: null, to: '2026-06-08' }),
+    "a retenu le 08/06/2026 comme RDV d'onboarding de la facturation",
+  );
+  assert.equal(
+    describeAction({ field: 'finance_onboarding_date', from: '2026-11-10', to: '2026-06-08' }),
+    "a déplacé le RDV d'onboarding de la facturation du 10/11/2026 au 08/06/2026",
+  );
+});
+
 test('champ de la fiche : libellé connu, vide dit « vide »', () => {
   assert.equal(
     describeAction({ field: 'employee_range', from: '1-2', to: '6-10' }),
