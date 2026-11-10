@@ -836,6 +836,8 @@ export const PROFILE_CHANGE_LABELS = {
   societe_couverte: 'Société couverte',
   associe: 'Associé',
   rdv_onboarding: "RDV d'onboarding",
+  // Rendez-vous retenu par la Finance (départ de facturation), distinct de celui du CSM.
+  finance_onboarding_date: "RDV d'onboarding (facturation)",
   responsible: 'Responsable',
 };
 

@@ -1814,6 +1814,17 @@ function ContractInfoList({
 
   const [paymentDaySaving, setPaymentDaySaving] = useState(false);
 
+  // Deux rendez-vous d'onboarding (dev 2026-11-10) : celui que la Finance retient pour facturer, et
+  // celui de la plateforme, que tient le CSM. La fiche ne montre le second que s'il diffère.
+  const platformDiffers = !!profile?.platform_onboarding
+    && String(profile.platform_onboarding).slice(0, 10) !== String(profile.rdv_onboarding || '').slice(0, 10);
+  // Reprogrammer depuis la ligne (dev 2026-10-29) : le recalage déplace les agendas de l'animateur et
+  // de la facturation ; la fiche est relue ensuite. Le bouton suit le rendez-vous de la plateforme.
+  const rescheduleButton = (
+    <OnboardingRescheduleButton numeroClient={client?.numero_client || profile?.numero_client} boardRow={boardRow}
+      readOnly={readOnly} onDone={() => { onProfileChanged?.(); onContractChanged?.(); }} />
+  );
+
   const rows = [
     { Icon: NumeroIcon, label: 'Client n°',            value: numeroValue, mono: true },
       {
@@ -1882,17 +1893,17 @@ function ContractInfoList({
     { Icon: PersonIcon, label: 'Sales',                value: profile?.sales_name },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
-    // (demande dev 2026-08-26). Servi par /profile, qui prend la date du
-    // classeur puis celle de la fiche CRM ; le payload de liste ne la porte
-    // pas, d'où la lecture sur `profile` uniquement.
+    // (demande dev 2026-08-26). C'est le rendez-vous RETENU PAR LA FINANCE,
+    // posé à la vente : un onboarding de la plateforme tenu plus tard par le
+    // CSM ne le déplace pas (dev 2026-11-10) et s'affiche sur sa propre ligne,
+    // juste dessous. Servi par /profile ; le payload de liste ne le porte pas.
     {
       Icon: CalendarCheckIcon,
       label: "RDV d'onboarding",
       // Lecture seule quand la date existe (arbitrage dev 2026-08-27 : elle
       // vient de la déclaration de vente). Quand elle MANQUE, la finance peut
-      // la saisir (retour dev 2026-09-19) : elle est écrite comme date
-      // manuelle du board (même champ que le board, même endpoint), donc le
-      // board, la facturation et la fiche restent une seule vérité.
+      // la saisir (retour dev 2026-09-19) : elle est écrite sur la date de la
+      // Finance, plus sur la date manuelle du board, qui appartient au CSM.
       copyValue: formatDateLongFR(profile?.rdv_onboarding),
       node: (editing && canEdit && profile && !profile.rdv_onboarding) ? (
         <EditableDate
@@ -1900,10 +1911,8 @@ function ContractInfoList({
           placeholder="Saisir la date"
           onCommit={async (value) => {
             if (!value) return;
-            const numero = client?.numero_client || profile?.numero_client;
-            if (!numero) throw new Error('Client sans numéro');
             try {
-              await apiClient.patch('/api/v1/optilex/board-tracking', { numero_client: numero, rdv_onboarding_date_manual: value });
+              await apiClient.put(`/api/v1/finance-periods/client/${clientId}/onboarding-date`, { date: value });
               onProfileChanged?.();
               onContractChanged?.();
             } catch (e) {
@@ -1914,15 +1923,41 @@ function ContractInfoList({
           width="auto"
         />
       ) : (
-        // Reprogrammer depuis la ligne (dev 2026-10-29) : le recalage déplace les agendas de
-        // l'animateur et de la facturation ; la fiche est relue ensuite.
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
-          <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
-          <OnboardingRescheduleButton numeroClient={client?.numero_client || profile?.numero_client} boardRow={boardRow}
-            readOnly={readOnly} onDone={() => { onProfileChanged?.(); onContractChanged?.(); }} />
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
+            {platformDiffers && profile?.rdv_onboarding && (
+              <span title="Rendez-vous posé à la vente : c’est lui qui fixe le départ de la facturation."
+                style={{ fontSize: 10.5, color: N.textFaint }}>
+                départ de facturation
+              </span>
+            )}
+          </span>
+          {!platformDiffers && rescheduleButton}
         </span>
       ),
     },
+    // Onboarding de la plateforme : le rendez-vous que tient le CSM. Montré
+    // seulement quand il diffère du rendez-vous retenu par la Finance (client
+    // ancien que le CSM onboarde après coup, ou rendez-vous reprogrammé une
+    // fois la facturation commencée). Il ne change aucun attendu.
+    ...(platformDiffers ? [{
+      Icon: CalendarCheckIcon,
+      label: 'Onboarding plateforme (CSM)',
+      copyValue: formatDateLongFR(profile.platform_onboarding),
+      node: (
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span>{formatDateLongFR(profile.platform_onboarding)}</span>
+            <span title="Présentation de la plateforme par le CSM. La facturation suit le RDV d’onboarding ci-dessus."
+              style={{ fontSize: 10.5, color: N.textFaint }}>
+              sans effet sur la facturation
+            </span>
+          </span>
+          {rescheduleButton}
+        </span>
+      ),
+    }] : []),
     // Premier paiement réel, puis jour modifiable par la direction financière.
     {
       Icon: ClockIcon,
