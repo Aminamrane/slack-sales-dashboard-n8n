@@ -49,6 +49,7 @@ import {
 
 import apiClient from '../../../services/apiClient.js';
 import { formatEUR, formatMonthLabel, formatDateFR, currentPeriod, deferralsByMonth, deferralLinks, outstandingByMonth, reportsByMonth, deMonthLabel } from '../constants.js';
+import { EXPLAIN_OPS_LIMIT, expectedOpsByMonth, explainExpectedMonth } from '../expectedExplain.js';
 
 const N = {
   text: '#37352f',
@@ -98,6 +99,16 @@ const STATUS = {
   none:     { label: '—',         bg: 'transparent', fg: N.textFaint },
 };
 
+// Pastilles qui disent d'où vient un mois (expectedExplain.js) : elles
+// remplacent le « — » d'un mois à 0 €, jamais un statut de paiement.
+const EXPLAIN_TONES = {
+  muted:  { bg: N.sideBg,  fg: N.textMuted },
+  paused: { bg: N.slateBg, fg: N.slate },
+  loss:   { bg: N.amberBg, fg: N.amber },
+  manual: { bg: N.blueBg,  fg: N.blue },
+};
+const NO_EXPLAIN = { label: null, tone: null, text: null, quiet: false };
+
 const ENTITY_FIELDS = {
   owner:   { expected: 'expected_owner',       received: 'received_owner',       overdue: 'received_overdue_owner' },
   optilex: { expected: 'expected_optilex_ttc', received: 'received_optilex_ttc', overdue: 'received_overdue_optilex_ttc' },
@@ -132,6 +143,11 @@ export default function ExpectedManager({
   // Reports d'attendu en vigueur (profil, `reports`).
   reports = [],
   currentUserId = null,
+  // Repères du client (profil), pour dire d'où vient un mois à 0 € : début de
+  // facturation, dernier mois facturé fixé par la direction, perte déclarée.
+  billingStart = null,
+  billingLastMonth = null,
+  loss = null,
 }) {
   const [entity, setEntity] = useState(scope === 'optilex' ? 'optilex' : 'owner');
   const [mode, setMode] = useState('edit');
@@ -168,6 +184,10 @@ export default function ExpectedManager({
   const [confirmId, setConfirmId] = useState(null);
   const [reverting, setReverting] = useState(null);
   const [lastOps, setLastOps] = useState([]);
+  // Les opérations du client, lues à part pour expliquer chaque mois (pause
+  // levée, attendu supprimé…). `complete` : la liste n'est pas tronquée, on
+  // peut donc dire qu'un mois n'a aucun geste enregistré.
+  const [trace, setTrace] = useState(null);
 
   const base = `/api/v1/finance-periods/client/${clientId}`;
 
@@ -188,6 +208,7 @@ export default function ExpectedManager({
     setReason('');
     setCreating(false);
     setOps(null);
+    setTrace(null);
     setConfirmId(null);
     setLastOps([]);
     setLastRequest(null);
@@ -208,6 +229,18 @@ export default function ExpectedManager({
       .catch(() => setOps([]));
   }, [base, clientId]);
   useEffect(() => { if (open && mode === 'history') { setConfirmId(null); loadOps(); } }, [open, mode, loadOps]);
+
+  const loadTrace = useCallback(() => {
+    if (!clientId) return;
+    apiClient.get(`${base}/operations?limit=${EXPLAIN_OPS_LIMIT}`)
+      .then((d) => {
+        const items = Array.isArray(d?.items) ? d.items : [];
+        setTrace({ items, complete: items.length < EXPLAIN_OPS_LIMIT });
+      })
+      // Sans la liste, on n'affirme rien sur ce qui a été fait ou non.
+      .catch(() => setTrace({ items: [], complete: false }));
+  }, [base, clientId]);
+  useEffect(() => { if (open && trace === null) loadTrace(); }, [open, trace, loadTrace]);
 
   const loadRequests = useCallback(() => {
     if (!clientId) return;
@@ -314,6 +347,18 @@ export default function ExpectedManager({
   }, [periods, f, nowKey, deferred, links, corrections, reported, pendingMonths]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
+
+  // Pourquoi chaque mois est ce qu'il est : la pastille et la phrase de la
+  // ligne. Lecture seule, sans effet sur les montants ni sur les gestes.
+  const explained = useMemo(() => {
+    const periodById = new Map((periods || []).map((p) => [p.id, p]));
+    const opsByMonth = expectedOpsByMonth(trace?.items, entity);
+    const firstActiveKey = rows.find((r) => r.attendu > 0 || r.recu > 0)?.key || null;
+    return new Map(rows.map((r) => [r.id, explainExpectedMonth(r, periodById.get(r.id), {
+      entity, monthOps: opsByMonth[r.key] || null, opsComplete: !!trace?.complete,
+      firstActiveKey, billingStart, billingLastMonth, loss,
+    })]));
+  }, [rows, periods, trace, entity, billingStart, billingLastMonth, loss]);
 
   // Quels mois sont sélectionnables selon le geste.
   const selectable = useCallback((r) => {
@@ -500,6 +545,7 @@ export default function ExpectedManager({
     setReason('');
     setLastOps(opIds);
     setOps(null);
+    setTrace(null);
     onDone?.();
   };
 
@@ -586,6 +632,7 @@ export default function ExpectedManager({
         setLastOps(r?.operation_id ? [r.operation_id] : []);
       }
       setOps(null);
+      setTrace(null);
       onDone?.();
     } catch (e) {
       onShowToast?.(e?.data?.detail || 'Reprise impossible', 'error');
@@ -613,6 +660,7 @@ export default function ExpectedManager({
       setConfirmId(null);
       setLastOps((l) => l.filter((id) => !list.slice(0, done).includes(id)));
       loadOps();
+      setTrace(null);
       if (done) onDone?.();
     }
   }, [base, reverting, loadOps, onDone, onShowToast]);
@@ -622,8 +670,8 @@ export default function ExpectedManager({
   const entityLabel = entity === 'owner' ? 'Owner' : "Opti'lex";
   const showCheck = mode !== 'edit' && mode !== 'history';
   const gridCols = mode === 'edit'
-    ? 'minmax(104px, 1fr) 84px 88px 84px 86px 104px 104px 104px'
-    : `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 110px minmax(120px, 1fr)`;
+    ? 'minmax(104px, 1fr) 84px 88px 84px 122px 104px 104px 104px'
+    : `${showCheck ? '28px ' : ''}minmax(120px, 1.2fr) 110px 100px 100px 124px minmax(120px, 1fr)`;
 
   return createPortal(
     <AnimatePresence>
@@ -647,7 +695,7 @@ export default function ExpectedManager({
           transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: 'min(920px, 100%)', maxHeight: '90vh',
+            width: 'min(960px, 100%)', maxHeight: '90vh',
             display: 'flex', flexDirection: 'column',
             background: '#fff', borderRadius: 14,
             boxShadow: '0 24px 64px rgba(17,24,39,0.22)',
@@ -932,13 +980,17 @@ export default function ExpectedManager({
                   const isPicked = selected.has(r.id);
                   const after = reportPlan ? reportPlan.after[r.id] : undefined;
                   // Un mois reporté, ou qui reçoit un report, reste lisible même sans attendu.
-                  const dim = r.attendu === 0 && r.recu === 0 && r.reste === 0 && !r.pauseActive && !r.reportedTo.length && after === undefined;
+                  const ex = explained.get(r.id) || NO_EXPLAIN;
+                  const pill = ex.label ? { label: ex.label, ...EXPLAIN_TONES[ex.tone] } : st;
+                  // Estompé seulement s'il n'a rien à dire : un mois à 0 € expliqué reste lisible.
+                  const dim = r.attendu === 0 && r.recu === 0 && r.reste === 0 && !r.pauseActive && !r.reportedTo.length && after === undefined
+                    && (ex.quiet || !ex.text);
                   return (
                     <div
                       key={r.id}
                       onClick={showCheck && canPick ? () => toggle(r.id) : undefined}
                       style={{
-                        display: 'grid', gridTemplateColumns: gridCols, gap: 10, alignItems: 'center',
+                        display: 'grid', gridTemplateColumns: gridCols, columnGap: 10, rowGap: 3, alignItems: 'center',
                         padding: '8px 20px', fontSize: 12.5,
                         borderTop: `1px solid ${N.borderSft}`,
                         background: isPicked ? '#f4f7fb' : isTarget ? N.greenBg : 'transparent',
@@ -1009,11 +1061,11 @@ export default function ExpectedManager({
                         )}
                       </span>
                       <span>
-                        <span style={{
+                        <span title={ex.quiet && ex.text ? ex.text : undefined} style={{
                           display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-                          background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                          background: pill.bg, color: pill.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
                         }}>
-                          {st.label}
+                          {pill.label}
                         </span>
                         {/* Le sens du report, en toutes lettres : l'attendu du mois
                             ne change pas, la créance, elle, a bougé. */}
@@ -1044,11 +1096,6 @@ export default function ExpectedManager({
                             dont {formatEUR(x.amount)} reporté {deMonthLabel(x.month)}
                           </span>
                         ))}
-                        {r.pauseActive && r.pauseUntil && (
-                          <span style={{ display: 'block', fontSize: 10.5, color: N.textFaint, marginTop: 2 }}>
-                            reprise le {formatDateFR(r.pauseUntil)}
-                          </span>
-                        )}
                       </span>
                       {mode === 'edit' ? (
                         <>
@@ -1117,6 +1164,13 @@ export default function ExpectedManager({
                               <Play size={11} /> Reprendre
                             </button>
                           )}
+                        </span>
+                      )}
+                      {/* D'où vient ce mois, en toutes lettres : pause (qui, quand,
+                          jusqu'à quand), attendu supprimé, mois sans aucun geste. */}
+                      {ex.text && !ex.quiet && (
+                        <span style={{ gridColumn: showCheck ? '2 / -1' : '1 / -1', fontSize: 11, lineHeight: 1.4, color: N.textMuted }}>
+                          {ex.text}
                         </span>
                       )}
                     </div>
