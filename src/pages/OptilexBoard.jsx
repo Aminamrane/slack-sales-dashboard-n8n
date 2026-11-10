@@ -78,7 +78,7 @@ const SECONDARY_CATS = ["Résiliation", "Rétractation", "Self-Résiliation", "L
 const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onboarding à venir"];
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir" };
 // Libellés courts des filtres posés, rappelés sous la barre (dev 28/10/2026).
-const ONBOARDING_TAGS = { venir: "À venir", done: "Réalisé", todo: "À faire", noshow: "No show", recaler: "À recaler" };
+const ONBOARDING_TAGS = { venir: "À venir", done: "Réalisé", confirm: "À confirmer", todo: "À faire", noshow: "No show", recaler: "À recaler" };
 const PROGRAMME_TAGS = { ambassadeur: "Ambassadeur", parrainage: "Parrainage", temoignage: "Témoignage" };
 // Pictogrammes des programmes (dev 29/10/2026) : l'ambassadeur parle (porte-voix), le parrainage se serre la main,
 // le témoignage est une bulle avec son étoile. Deux tons, teinte de la palette du dev quand le programme est coché.
@@ -998,7 +998,10 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
                     )}
                   </span>
                   {it.icon}
-                  <span style={{ flex: 1 }}>{it.label}</span>
+                  <span style={{ flex: 1 }}>
+                    {it.label}
+                    {it.hint && <span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: MUTED }}>{it.hint}</span>}
+                  </span>
                   <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{it.count}</span>
                 </button>
               );
@@ -1277,8 +1280,12 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
         {(() => {
           // Pastilles sous la date, pas sur sa ligne (elles débordaient sur la colonne voisine).
           const recaler = r.onboarding_reschedule_pending && !r.rdv_onboarding_done;
-          return (noShow || recaler) ? (
+          const toConfirm = !!r.onboarding_to_confirm;
+          return (noShow || recaler || toConfirm) ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
+              {toConfirm && (
+                <div title="Onboarding à confirmer : en attente de qualification par le Client Success (fiche du client)" style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#eef2ff", color: "#4338ca", fontSize: 10.5, fontWeight: 700 }}>À confirmer</div>
+              )}
               {noShow && <OnboardingNoShowBadge date={r.rdv_onboarding_date_manual || r.rdv_onboarding_date} />}
               {recaler && (
                 <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
@@ -1315,7 +1322,7 @@ export default function OptilexBoard({ embed = false }) {
   // Familles regroupées en menus (demande dev 2026-09-03, barre trop chargée) :
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
   const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
-  const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'todo' | 'noshow' | 'recaler'
+  const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'confirm' | 'todo' | 'noshow' | 'recaler'
   const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding
   // Largeur disponible du tableau -> part égale du surplus pour chaque colonne (cf. TABLE_COLS).
   const tableWrapRef = useRef(null);
@@ -1470,7 +1477,7 @@ export default function OptilexBoard({ embed = false }) {
   // « À venir + réalisé + à faire + no show » = clients comptés (`total`, affiché dans le menu) ;
   // « à recaler » est un sous-ensemble de « à faire » et du no show.
   const onboardingCounts = useMemo(() => {
-    const c = { venir: 0, done: 0, todo: 0, noshow: 0, recaler: 0, total: 0 };
+    const c = { venir: 0, done: 0, confirm: 0, todo: 0, noshow: 0, recaler: 0, total: 0 };
     for (const r of rows) {
       if (!viewFilter.passes(r, false)) continue;
       if (meteoFilter.length > 0 && !meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context))) continue;
@@ -1484,13 +1491,10 @@ export default function OptilexBoard({ embed = false }) {
   }, [rows, viewFilter, meteoFilter]);
 
   // Onboardings restants (dev 29/10/2026, compteur à volets à gauche de la recherche, comme le Suivi des ventes) :
-  // clients actifs du board dont l'onboarding n'est pas réalisé (à venir, à faire, no show), quels que soient les filtres ;
-  // ni les clients partis ni ceux en cours de résiliation, rétractation ou liquidation (dev 10/11/2026).
-  const onboardingsLeft = useMemo(() => {
-    const today = _todayParisISO();
-    return rows.filter((r) => !r.is_pending_contract && !r.rdv_onboarding_done
-      && onboardingSituation(r, today, { exited: isOutOfOnboarding(displayEtat(r)) })).length;
-  }, [rows]);
+  // exactement les cases « à venir + à confirmer + à faire + no show » du menu Onboarding, sur la même vue (onglet,
+  // filtres, météo) — dev 10/11/2026 : « il faut que ce soit cohérent, sinon on sait qu'il y a un problème ».
+  // Clients partis ou en cours de départ exclus, comme dans le menu.
+  const onboardingsLeft = onboardingCounts.venir + onboardingCounts.confirm + onboardingCounts.todo + onboardingCounts.noshow;
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
@@ -1569,10 +1573,13 @@ export default function OptilexBoard({ embed = false }) {
     }
     mutSeq.current += 1;
     let snapshot = null;   // ligne d'avant la MAJ optimiste, pour rollback si le PATCH échoue
+    // Le Client Success qui coche ou décoche l'onboarding tranche un « à confirmer » : le back efface le marqueur.
+    const local = ("rdv_onboarding_done" in changes && ONBOARDING_FLOW_ROLES.includes(roleOf()))
+      ? { ...changes, onboarding_to_confirm: false } : changes;
     setRows((prev) => prev.map((r) => {
       if (r.numero_client !== numero) return r;
       snapshot = r;
-      return { ...r, ...changes };
+      return { ...r, ...local };
     }));
     try { await apiClient.patch("/api/v1/optilex/board-tracking", { numero_client: numero, ...changes }); }
     catch (e) {
@@ -2378,6 +2385,10 @@ export default function OptilexBoard({ embed = false }) {
                     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg> },
                   { key: "done", label: "Onboarding réalisé", count: onboardingCounts.done,
                     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="m9 16 2 2 4-4" /></svg> },
+                  // En attente de qualification (dev 10/11/2026) : cochés sans action du Client Success, ou action du
+                  // Client Success sans onboarding coché. Ni réalisé ni à faire tant qu'il n'a pas tranché sur la fiche.
+                  { key: "confirm", label: "Onboarding à confirmer", hint: "en attente de qualification", count: onboardingCounts.confirm,
+                    icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" /></svg> },
                   { key: "todo", label: "Onboarding à faire", count: onboardingCounts.todo,
                     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
                   { key: "noshow", label: "Onboarding no show", count: onboardingCounts.noshow,
@@ -2434,7 +2445,7 @@ export default function OptilexBoard({ embed = false }) {
           </AnimatePresence>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div className="ob-left" title="Clients actifs dont l'onboarding n'est pas encore réalisé (à venir, à faire, no show)">
+          <div className="ob-left" title="Onboardings pas encore réalisés dans la vue affichée : à venir + à confirmer + à faire + no show du menu Onboarding">
             <span>Onboardings<br />restants</span>
             <AirportKPI label="" value={onboardingsLeft} minDigits={3} scale={0.66} />
           </div>
@@ -2638,6 +2649,34 @@ const canSelectEmail = () => { try { return EMAIL_SELECT_ROLES.includes((apiClie
 const RELAUNCH_ROLES = ["admin", "ceo", "optilex"];
 const ALERT_CABINET_ROLES = ["customer_success_manager", "admin", "ceo"];
 const ONBOARDING_FLOW_ROLES = ["customer_success_manager", "admin", "ceo"];
+
+// Onboarding « à confirmer, en attente de qualification » (dev 10/11/2026) : le Client Success tranche en un geste.
+// « Réalisé » pose la date réelle (souvent passée) ; « Pas encore fait » le remet en « à faire ». Pur suivi : ni
+// e-mail au client, ni agenda, ni facturation (même enregistrement que « Marquer l'onboarding réalisé sans le parcours »).
+function OnboardingToConfirm({ row, onDone, onNotDone }) {
+  const todayParis = _todayParisISO();
+  const planned = String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date || "").slice(0, 10);
+  const [day, setDay] = useState(() => String(row.rdv_onboarding_done_date || "").slice(0, 10)
+    || (planned && planned <= todayParis ? planned : todayParis));
+  return (
+    <div style={{ border: "1px solid #c7d2fe", background: "#f5f7ff", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: "#3730a3" }}>Onboarding à confirmer</div>
+      <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
+        En attente de qualification : {row.rdv_onboarding_done ? "coché réalisé sans action du Client Success" : "le Client Success est intervenu, l'onboarding n'est pas coché"}.
+        Le client n'est pas prévenu.
+      </div>
+      <form onSubmit={(e) => { e.preventDefault(); if (day) onDone(day); }} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
+        <label style={{ fontSize: 12, color: TEXT, display: "flex", alignItems: "center", gap: 6 }}>
+          Réalisé le
+          <input type="date" required value={day} max={todayParis} onChange={(e) => setDay(e.target.value)}
+            style={{ border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 6px", fontFamily: "inherit", fontSize: 12 }} />
+        </label>
+        <button type="submit" className="ob-composer-send" disabled={!day}>Réalisé</button>
+        <button type="button" className="ob-btn-ghost" onClick={onNotDone}>Pas encore fait</button>
+      </form>
+    </div>
+  );
+}
 const roleOf = () => { try { return (apiClient.getUser() || {}).role; } catch { return undefined; } };
 
 // Onglet Détails allégé pour le Client Success : l'état de l'onboarding en une carte et un seul
@@ -4079,6 +4118,11 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               </motion.button>
             )}
           </div>
+          {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num && row.onboarding_to_confirm && (
+            <OnboardingToConfirm key={num} row={row}
+              onDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
+              onNotDone={() => patch(num, { rdv_onboarding_done: false })} />
+          )}
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
             <OnboardingCard row={row} holdCut={onboardingOpen} onStart={() => setOnboardingOpen(true)} onDateSaved={reload}

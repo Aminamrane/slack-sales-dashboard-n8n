@@ -94,3 +94,16 @@ test('à recaler stays a subset of the past, undone onboardings, to do or no sho
     assert.deepEqual(['todo', 'noshow', 'venir', 'done', null].map((s) => isOnboardingToReschedule(r, s)), [true, true, false, false, false]);
     assert.equal(isOnboardingToReschedule({}, 'noshow'), false);
 });
+
+test('an onboarding to confirm is neither done nor to do, and still remains to be done (dev 10/11/2026)', async () => {
+  const { isOnboardingRemaining } = await import('./boardIntegration.js');
+  const today = '2026-11-10';
+  const done = { numero_client: 'n°701', rdv_onboarding_done: true, onboarding_to_confirm: true };
+  const touched = { numero_client: 'n°103', rdv_onboarding_done: false, onboarding_to_confirm: true };
+  assert.equal(onboardingSituation(done, today), 'confirm');
+  assert.equal(onboardingSituation(touched, today), 'confirm');
+  assert.equal(onboardingSituation({ ...done, onboarding_to_confirm: false }, today), 'done');
+  assert.equal(onboardingSituation(touched, today, { exited: true }), null);
+  for (const s of ['venir', 'confirm', 'todo', 'noshow']) assert.equal(isOnboardingRemaining(s), true, s);
+  for (const s of ['done', null]) assert.equal(isOnboardingRemaining(s), false, String(s));
+});
