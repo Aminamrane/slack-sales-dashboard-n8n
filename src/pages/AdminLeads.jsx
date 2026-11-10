@@ -8,7 +8,7 @@ import myLogo from "../assets/my_image.png";
 import myLogoDark from "../assets/my_image2.png";
 import metaLogo from "../assets/meta.png";
 import sysLogo from "../assets/sys.png";
-import SharedNavbar from "../components/SharedNavbar.jsx";
+import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
 import "../index.css";
 
 Chart.register(ChartDataLabels);
@@ -63,7 +63,7 @@ export default function AdminLeads() {
     }
   }, [darkMode]);
 
-  const [session, setSession] = useState(null);
+  const [, setSession] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -546,16 +546,17 @@ export default function AdminLeads() {
     return <p style={{ padding: 24 }}>Loading...</p>;
   }
 
+  // Menu de gauche partagé à la place de la navbar (dev 10/11/2026 : « il faut qu'on ait toujours le menu »).
   return (
+    <PageWithSidebar darkMode={darkMode} setDarkMode={setDarkMode}>
     <div style={{
       padding: 0,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: CARD.surface,
       minHeight: "100vh",
-      paddingTop: '80px',
+      paddingTop: '16px',
       color: CARD.text,
     }}>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
 
       <div style={{
         maxWidth: 1400,
@@ -1323,5 +1324,6 @@ export default function AdminLeads() {
       </div>
       </div>{/* /outer wrapper */}
     </div>
+    </PageWithSidebar>
   );
 }

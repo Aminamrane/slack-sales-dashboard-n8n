@@ -3,13 +3,11 @@ import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion as Motion } from "framer-motion";
 import apiClient from "../services/apiClient";
-import SharedNavbar from "../components/SharedNavbar.jsx";
-import companyLogo from "../assets/my_image.png";
+import SheetSidebar from "../components/shared/Sidebar/SheetSidebar.jsx";
+import { getColors } from "../utils/ceoColors.js";
 import firstPlace from "../assets/1st-place.png";
 import secondPlace from "../assets/2st-place.png";
 import thirdPlace from "../assets/3st-place.png";
-import iconGlobal from "../assets/global.png";
-import iconFinance from "../assets/finance.png";
 import "../index.css";
 import { performanceRows, performanceTotals, ratio, isPerformanceSalesPerson, visibleHeadcount } from "../utils/performanceSales.js";
 import { getCanonicalKey } from "../utils/salesNames.js";
@@ -361,7 +359,6 @@ export default function MonitoringPerf({ embed = false } = {}) {
   return (
     <>
       {appointmentDialog}
-      {!embedMode && <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />}
       {tip && <CalcTip text={tip.t} rect={tip.r} darkMode={darkMode} />}
       <style>{`@keyframes pageReveal{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}@keyframes sidebarReveal{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:none}}@keyframes rowIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:none}}html,body{background:${darkMode?'#13141b':'#ffffff'}}.perfv2{border-collapse:separate;border-spacing:0;background:${C.bg};border-radius:14px}.perfv2 th{padding:14px 12px;font-size:12px;font-weight:600;color:${C.secondary};border-bottom:1px solid ${C.border}}.perfv2 .perfv2-groups th{padding:10px 12px 6px;font-size:10.5px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;border-bottom:1px solid transparent}.perfv2 .perfv2-groups th.is-group{border-bottom:2px solid}.perfv2 td{padding:13px 12px;font-size:13px;border-bottom:1px solid ${C.border};white-space:nowrap}.perfv2 tbody tr:hover{background:${C.subtle}}.mp-scroll::-webkit-scrollbar{width:3px;height:3px}.mp-scroll::-webkit-scrollbar-track{background:transparent}.mp-scroll::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.12);border-radius:4px}`}</style>
 
@@ -371,27 +368,13 @@ export default function MonitoringPerf({ embed = false } = {}) {
       <div style={{animation:'pageReveal 0.5s cubic-bezier(0.4,0,0.2,1) backwards',fontFamily:"'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif"}}>
         <div style={{display:'flex',alignItems:'stretch',minHeight:'100vh'}}>
 
-          {/* SIDEBAR \u2014 masqu\u00e9e en mode embed (sidebar du wrapper Ceo*View
-              prend le relais et g\u00e8re la navigation perf_sales / lead_quality). */}
+          {/* Menu de gauche partagé (dev 10/11/2026 : « quand les head of sales vont dans Monitoring Sales, la navbar
+              réapparaît et le menu gauche disparaît ») : les deux vues de la page, puis « Mes pages », notifications et
+              profil. En embed, le menu du tableau de bord prend le relais. */}
           {!embedMode && (
-          <div style={{width:220,minWidth:220,borderRight:'1px solid '+C.border,display:'flex',flexDirection:'column',background:darkMode?C.subtle:'#eceef2',animation:'sidebarReveal 0.4s ease both'}}>
-            <div style={{padding:'18px 16px 14px',borderBottom:'1px solid '+C.border,marginBottom:12}}>
-              <div style={{display:'flex',alignItems:'center',gap:8,padding:'6px 8px',borderRadius:10,border:'1px solid '+C.border,background:darkMode?'rgba(255,255,255,0.04)':'#fff'}}>
-                <div style={{width:32,height:32,borderRadius:8,background:darkMode?'#fff':'#1e2330',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0}}>
-                  <img src={companyLogo} alt="" style={{width:20,height:20,objectFit:'contain',filter:darkMode?'none':'brightness(0) invert(1)'}} />
-                </div>
-                <div style={{fontSize:15,fontWeight:700,color:C.text}}>Owner</div>
-              </div>
-            </div>
-            {[{key:'perf_sales',label:'Perf. Sales',icon:iconGlobal},{key:'lead_quality',label:'Qualit\u00e9 Leads',icon:iconFinance}].map(it => {
-              const a = viewMode===it.key;
-              return (<div key={it.key} onClick={()=>setViewMode(it.key)} style={{display:'flex',alignItems:'center',gap:6,padding:'9px 12px',margin:'1px 12px',cursor:'pointer',borderRadius:10,background:a?(darkMode?'#fff':'#1e2330'):'transparent',color:a?(darkMode?'#1e2330':'#fff'):C.muted,transition:'all 0.2s ease'}} onMouseEnter={e=>{if(!a)e.currentTarget.style.background=darkMode?'rgba(255,255,255,0.04)':'rgba(0,0,0,0.03)';}} onMouseLeave={e=>{if(!a)e.currentTarget.style.background='transparent';}}>
-                <div style={{width:28,height:28,flexShrink:0,backgroundColor:a?(darkMode?'#1e2330':'#fff'):(darkMode?'rgba(255,255,255,0.45)':'rgba(0,0,0,0.3)'),WebkitMaskImage:'url('+it.icon+')',WebkitMaskSize:'contain',WebkitMaskRepeat:'no-repeat',WebkitMaskPosition:'center',maskImage:'url('+it.icon+')',maskSize:'contain',maskRepeat:'no-repeat',maskPosition:'center'}} />
-                <span style={{fontSize:13,fontWeight:a?600:500,color:a?(darkMode?'#1e2330':'#fff'):C.muted}}>{it.label}</span>
-              </div>);
-            })}
-            <div style={{flex:1}} />
-          </div>
+            <SheetSidebar title="Monitoring Sales"
+              views={[{ key: 'perf_sales', label: 'Perf. Sales' }, { key: 'lead_quality', label: 'Qualité Leads' }]}
+              activeView={viewMode} onView={setViewMode} C={getColors(darkMode)} darkMode={darkMode} setDarkMode={setDarkMode} />
           )}
 
           {/* RIGHT */}

@@ -41,7 +41,6 @@ import SidebarAvailability from "./SidebarAvailability.jsx";
 import { usesDashboardOnlyNavbar } from "../../../utils/dashboardAudience.js";
 import { isTypingTarget } from "../../../utils/typingTarget.js";
 import { homeRouteFor } from "../../../navigation/home.js";
-import { myPages } from "../../../navigation/myPages.js";
 import "./Sidebar.css";
 
 // État de survol PERSISTANT entre les navigations. Sur les dashboards CEO/Acquisition, chaque
@@ -86,17 +85,9 @@ function buildLayout(sections) {
   };
 }
 
-export default function Sidebar({ width, collapsed, onToggle, sections: pageSections, activeTab, setActiveTab: onPageTab, C, darkMode, setDarkMode, headerExtra }) {
-  // « Mes pages » (liens de l'ancienne navbar) : ajoutée aux menus qui ne l'ont pas déjà (tableaux de bord), sauf
-  // pour les comptes « tableau de bord seul », à qui la navbar ne la montrait pas. Un clic sur une page y mène.
-  const sections = useMemo(() => {
-    if (pageSections.some((s) => s.key === "pages") || usesDashboardOnlyNavbar(apiClient.getUser())) return pageSections;
-    // Une page déjà présente comme onglet du menu (même écran) n'est pas répétée dans « Mes pages ».
-    const tabIds = new Set(pageSections.flatMap((s) => s.items.map((it) => it.id)));
-    const pages = myPages().filter((p) => !p.tab || !tabIds.has(p.tab));
-    return pages.length ? [...pageSections, { key: "pages", label: "Mes pages", items: pages.map((p) => ({ id: p.id, label: p.label, icon: p.icon })) }] : pageSections;
-  }, [pageSections]);
-  const addedPages = sections !== pageSections;
+export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode, setDarkMode, headerExtra }) {
+  // Les tableaux de bord n'affichent que leurs propres onglets, sans « Mes pages » (dev 10/11/2026 : « mon menu de
+  // gauche est hyper long »). « Mes pages » vit sur les pages hors tableau de bord (PageWithSidebar, SheetSidebar).
   // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
   // l'ouvre (largeur étendue + labels) ; en sortir la referme. Le bouton de pin
   // (onToggle/collapsed) reste prioritaire : barre épinglée ouverte = toujours ouverte.
@@ -104,14 +95,6 @@ export default function Sidebar({ width, collapsed, onToggle, sections: pageSect
   const setHover = (v) => { railHovered = v; setHovered(v); };
   // Notifications : la liste s'ouvre dans le menu, qui reste déplié et s'élargit le temps de la lecture.
   const navigate = useNavigate();
-  const setActiveTab = (id) => {
-    if (addedPages && typeof id === "string" && id.startsWith("page:")) {
-      const page = myPages().find((p) => p.id === id);
-      if (page) navigate(page.path);
-      return;
-    }
-    onPageTab(id);
-  };
   const notifs = useGlobalNotifications();
   const [notifOpen, setNotifOpen] = useState(false);
   const asideRef = useRef(null);

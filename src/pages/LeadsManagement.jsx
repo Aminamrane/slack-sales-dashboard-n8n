@@ -3,7 +3,7 @@ import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabaseClient"; // Still needed for clients, Info, tracking_sheets
 import apiClient from "../services/apiClient";
-import SharedNavbar from "../components/SharedNavbar.jsx";
+import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
 import LeadHistoryPanel from "../components/perfSales/v2/LeadHistory.jsx";
 import "../components/perfSales/v2/v2.css";
 import {
@@ -969,15 +969,15 @@ export default function LeadsManagement({ embedded = false, darkModeOverride, C:
 
   if (embedded) return mainContent;
 
+  // Menu de gauche partagé à la place de la navbar (dev 10/11/2026 : « il faut qu'on ait toujours le menu »).
   return (
-    <>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} />
+    <PageWithSidebar darkMode={darkMode} setDarkMode={setDarkMode}>
       <style>{`html, body { background: ${darkMode ? '#13141b' : '#ffffff'}; scrollbar-gutter: stable; }`}</style>
       <div style={{ animation: 'lmReveal 0.5s ease both', fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif' }}>
-        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 80 }}>
+        <div style={{ display: 'flex', minHeight: '100vh', paddingTop: 16 }}>
           {mainContent}
         </div>
       </div>
-    </>
+    </PageWithSidebar>
   );
 }

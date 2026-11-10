@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
-import SharedNavbar from "../components/SharedNavbar.jsx";
+import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
 import "../index.css";
 
 // ── CONSTANTS ────────────────────────────────────────────────────────────────
@@ -71,28 +71,22 @@ function useAudioRecorder() {
 export default function EODReportV2() {
   const navigate = useNavigate();
 
-  // ── DARK MODE (forced on this page, no flash) ──────────────────────────────
+  // ── THÈME CLAIR (dev 10/11/2026 : « que la page End of Day ne soit pas tout le temps en dark mode, qu'elle soit en
+  // light mode ») : la page s'affiche toujours en clair, posé avant le premier rendu (pas de flash), et rend le
+  // thème précédent en partant.
   const prevModeRef = useRef(localStorage.getItem("darkMode"));
   const [darkMode] = useState(() => {
-    // Force dark SYNCHRONOUSLY before first paint
-    document.body.classList.add("dark-mode");
-    document.documentElement.classList.add("dark-mode");
-    return true;
+    document.body.classList.remove("dark-mode");
+    document.documentElement.classList.remove("dark-mode");
+    return false;
   });
-  const setDarkMode = () => {}; // no-op — disable toggle
+  const setDarkMode = () => {}; // le thème ne se change pas sur cette page
 
-  useEffect(() => {
-
-    return () => {
-      // Restore previous mode on leave
-      document.body.style.transition = '';
-      document.documentElement.style.transition = '';
-      const wasDark = prevModeRef.current === "true";
-      if (!wasDark) {
-        document.body.classList.remove("dark-mode");
-        document.documentElement.classList.remove("dark-mode");
-      }
-    };
+  useEffect(() => () => {
+    if (prevModeRef.current === "true") {
+      document.body.classList.add("dark-mode");
+      document.documentElement.classList.add("dark-mode");
+    }
   }, []);
 
   const C = {
@@ -108,7 +102,6 @@ export default function EODReportV2() {
   };
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
-  const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [eodStatus, setEodStatus] = useState(null);
   const [todayReport, setTodayReport] = useState(null);
@@ -187,7 +180,6 @@ export default function EODReportV2() {
         const token = apiClient.getToken();
         const user = apiClient.getUser();
         if (!token || !user) { navigate("/login"); return; }
-        setSession({ user: { email: user.email, user_metadata: { name: user.name, avatar_url: user.avatar_url || null } } });
 
         // Check EOD status
         try {
@@ -613,18 +605,20 @@ export default function EODReportV2() {
   }, [loading]);
 
   if (loading) return (
-    <div style={{ minHeight: '100vh', background: '#13141b' }}>
-      {showLoadingText && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}><p style={{ color: '#5e6273' }}>Chargement...</p></div>}
-    </div>
+    <PageWithSidebar darkMode={darkMode} setDarkMode={setDarkMode}>
+      <div style={{ minHeight: '100vh', background: C.surface }}>
+        {showLoadingText && <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}><p style={{ color: C.muted }}>Chargement...</p></div>}
+      </div>
+    </PageWithSidebar>
   );
 
   // ══════════════════════════════════════════════════════════════════════════
   // RENDER
   // ══════════════════════════════════════════════════════════════════════════
   return (
-    <>
-    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", paddingTop: 80, animation: 'eodPageIn 1.8s cubic-bezier(0.16,1,0.3,1) both' }}>
-      <SharedNavbar session={session} darkMode={darkMode} setDarkMode={setDarkMode} hideDarkToggle />
+    <PageWithSidebar darkMode={darkMode} setDarkMode={setDarkMode}>
+    {/* Le menu de gauche reste affiché (dev 10/11/2026 : « quand on va sur la page, le menu disparaît ») ; la navbar n'existe plus. */}
+    <div style={{ fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", paddingTop: 16, animation: 'eodPageIn 1.8s cubic-bezier(0.16,1,0.3,1) both' }}>
 
       <style>{`
         @keyframes blink { 0%, 50% { opacity: 1; } 51%, 100% { opacity: 0; } }
@@ -1393,6 +1387,6 @@ export default function EODReportV2() {
       );
     })()}
 
-    </>
+    </PageWithSidebar>
   );
 }
