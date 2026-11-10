@@ -23,7 +23,7 @@ import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
 import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
-import { createLatestRequestTracker, displayEtat, EXITED_ETATS, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
+import { createLatestRequestTracker, displayEtat, EXITED_ETATS, isOutOfOnboarding, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
 import { Fragment, memo, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useId } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
@@ -987,7 +987,7 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
               const on = selected.includes(it.key);
               return (
                 <button key={it.key} type="button" onClick={() => onToggle(it.key)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: it.sub ? "6px 10px 6px 34px" : "8px 10px", cursor: "pointer", fontSize: it.sub ? 12 : 12.5, fontWeight: it.sub ? 500 : 600, color: it.sub ? MUTED : TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
                   onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
                   onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
                   <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
@@ -1422,7 +1422,7 @@ export default function OptilexBoard({ embed = false }) {
     // 2026-08-28). Un client parti qui arrive ici avec une sélection d'états active a forcément été
     // demandé (il a passé le filtre d'états).
     const situationOf = (r) => onboardingSituation(r, today, {
-      exited: TERMINATED_ETATS.includes(displayEtat(r)), includeExited: etatsSel.length > 0,
+      exited: isOutOfOnboarding(displayEtat(r)), includeExited: etatsSel.length > 0,
     });
     const passes = (r, withOnboarding = true) => {
       // « Tous » regroupe les clients actuels et anciens, pas les prospects.
@@ -1484,11 +1484,12 @@ export default function OptilexBoard({ embed = false }) {
   }, [rows, viewFilter, meteoFilter]);
 
   // Onboardings restants (dev 29/10/2026, compteur à volets à gauche de la recherche, comme le Suivi des ventes) :
-  // clients actifs du board dont l'onboarding n'est pas réalisé (à venir, à faire, no show), quels que soient les filtres.
+  // clients actifs du board dont l'onboarding n'est pas réalisé (à venir, à faire, no show), quels que soient les filtres ;
+  // ni les clients partis ni ceux en cours de résiliation, rétractation ou liquidation (dev 10/11/2026).
   const onboardingsLeft = useMemo(() => {
     const today = _todayParisISO();
     return rows.filter((r) => !r.is_pending_contract && !r.rdv_onboarding_done
-      && onboardingSituation(r, today, { exited: TERMINATED_ETATS.includes(displayEtat(r)) })).length;
+      && onboardingSituation(r, today, { exited: isOutOfOnboarding(displayEtat(r)) })).length;
   }, [rows]);
 
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
@@ -2381,7 +2382,9 @@ export default function OptilexBoard({ embed = false }) {
                     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="18" x="3" y="4" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /><path d="M12 14v4M12 14h.01" /></svg> },
                   { key: "noshow", label: "Onboarding no show", count: onboardingCounts.noshow,
                     icon: <span style={{ display: "inline-flex", color: MUTED }}><GhostIcon size={14} /></span> },
-                  { key: "recaler", label: "Onboarding à recaler", count: onboardingCounts.recaler,
+                  // Sous-ensemble de « à faire » et du no show (dev 10/11/2026 : les cinq cases additionnées
+                  // dépassaient le nombre de clients) : affiché en retrait, « dont », jamais comme une case de plus.
+                  { key: "recaler", label: "dont à recaler", sub: true, count: onboardingCounts.recaler,
                     icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg> },
                 ]}
                 selected={onboardingSel}

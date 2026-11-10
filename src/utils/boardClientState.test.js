@@ -4,7 +4,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  createLatestRequestTracker, displayEtat, isCurrentProductClient, matchesSignedClient, withConfirmedEtat,
+  createLatestRequestTracker, displayEtat, isCurrentProductClient, isOutOfOnboarding, matchesSignedClient, withConfirmedEtat,
 } from './boardClientState.js';
 import { matchesUpcomingIntegration } from './boardIntegration.js';
 
@@ -95,4 +95,11 @@ test("l'état affiché n'est défini et lu qu'à un seul endroit", () => {
     if (/\betat_affiche\b/.test(code)) offenders.push(`${file} : etat_affiche lu sans displayEtat`);
   }
   assert.deepEqual(offenders, []);
+});
+
+test('a client leaving, even not yet effectively, is out of the onboarding counts (dev 10/11/2026)', () => {
+  for (const etat of ['En cours de résiliation', 'En cours de rétractation', 'En cours de liquidation', 'Résiliation', 'Rétractation', 'Liquidation', 'Self-Résiliation', 'Sans suite']) {
+    assert.equal(isOutOfOnboarding(etat), true, etat);
+  }
+  for (const etat of ['Signé', "Attente Opti'Lex", 'Pause', null]) assert.equal(isOutOfOnboarding(etat), false, String(etat));
 });

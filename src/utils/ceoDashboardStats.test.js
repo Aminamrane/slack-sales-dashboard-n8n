@@ -52,7 +52,7 @@ test('ARR perdu : même périmètre que les sorties, un montant inconnu est comp
   assert.equal(computeBoardStats(ROWS, 'all', null, NOW).arrResilies, null);
 });
 
-test('RDV onboarding à venir : même compteur que le menu Onboarding du board, clients partis exclus', () => {
+test('RDV onboarding à venir : même compteur que le menu Onboarding du board, clients partis ou en cours de départ exclus', () => {
   // Heures en heure-mur de Paris (étiquetées UTC, comme en base) ; NOW = 27/10, entre 9 h et 13 h à Paris.
   const rows = [
     row({ numero_client: 'n°11', rdv_onboarding_date: '2026-11-03T10:00:00+00:00' }),           // à venir
@@ -61,15 +61,15 @@ test('RDV onboarding à venir : même compteur que le menu Onboarding du board, 
     row({ numero_client: 'n°14', rdv_onboarding_date: '2026-11-05', rdv_onboarding_done: true }), // déjà réalisé
     row({ numero_client: 'n°15', etat_affiche: 'Résiliation', rdv_onboarding_date: '2026-11-04T09:00:00+00:00' }),
     row({ numero_client: 'n°16', etat_affiche: 'Sans suite', rdv_onboarding_date: '2026-10-27T08:30:00+00:00' }),
-    row({ numero_client: 'n°17', etat_affiche: 'En cours de résiliation', rdv_onboarding_date: '2026-11-06T09:00:00+00:00' }), // encore client
+    row({ numero_client: 'n°17', etat_affiche: 'En cours de résiliation', rdv_onboarding_date: '2026-11-06T09:00:00+00:00' }), // part : hors onboarding (dev 10/11/2026)
     row({ numero_client: 'n°18', is_pending_contract: true, rdv_onboarding_date: '2026-11-07T09:00:00+00:00' }),
   ];
   const s = computeBoardStats(rows, 'all', null, NOW);
-  assert.equal(s.onboarding, 4);          // n°11, n°12, n°13, n°17 ; n°15 et n°16 partis, n°14 réalisé, n°18 contrat en vol
+  assert.equal(s.onboarding, 3);          // n°11, n°12, n°13 ; n°15 et n°16 partis, n°17 en cours de résiliation, n°14 réalisé, n°18 contrat en vol
   assert.equal(s.onboardingOverdue, 1);   // n°13 ; n°16 (parti) n'est pas compté en retard
-  // Bulle : les mêmes 4 RDV par échéance (aujourd'hui n°12 et n°13, sous 7 jours n°11, plus tard n°17) ;
+  // Bulle : les mêmes 3 RDV par échéance (aujourd'hui n°12 et n°13, sous 7 jours n°11) ;
   // le prochain n'est pas celui de ce matin, déjà passé.
-  assert.deepEqual(s.onboardingDetail, { today: 2, week: 1, later: 1, next: '2026-10-27T18:00:00+00:00' });
+  assert.deepEqual(s.onboardingDetail, { today: 2, week: 1, later: 0, next: '2026-10-27T18:00:00+00:00' });
 });
 
 test('bulles des sorties : 12 mois + avant + après + sans date = total de l’état', () => {
