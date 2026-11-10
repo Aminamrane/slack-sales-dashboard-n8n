@@ -309,7 +309,11 @@ const rowToCsvCells = (r) => {
   const client = person && societe && !societe.toLowerCase().includes(person.toLowerCase())
     ? `${societe} - ${person}`
     : (societe || person || "");
-  const { first, last } = splitName(person);
+  // Nom et prénom de la fiche (dev 10/11/2026) : un seul prénom, le premier, jamais tous ceux du NDA ; le
+  // découpage du nom du contact ne sert qu'à défaut.
+  const guess = splitName(person);
+  const first = r.client_first_name || (guess.first || "").split(/\s+/)[0] || "";
+  const last = r.client_last_name || guess.last || "";
   const phone = ov(r, "phone_ovr", "contact_phone") || "";
   const email = ov(r, "email_ovr", "email") || "";
   const band = weatherPresentation(r.meteo_score, r.meteo_context)?.label || "";
@@ -1744,6 +1748,20 @@ export default function OptilexBoard({ embed = false }) {
     ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: PROGRAMME_TAGS[k] || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
     ...(q ? [{ key: "q", group: "Recherche", label: `« ${q} »`, clear: () => setQ("") }] : []),
   ];
+  // Compteur à volets (dev 10/11/2026) : par défaut (onglet Signé, aucun filtre), les onboardings restants ; dès
+  // qu'un autre onglet ou un filtre est choisi, le nom de ce filtre et le nombre de clients affichés.
+  const tabsOn = multiFilter.length ? multiFilter : [etatFilter];
+  const tagText = (t) => (t.group === "Onboarding" ? `Onboarding ${t.label.toLowerCase()}`
+    : t.group === "Recherche" ? `Recherche ${t.label}`
+    : t.group === "Signature" || t.group === "Onboarding date" ? `${t.group} ${t.label}` : t.label);
+  const isDefaultView = activeTags.length === 0 && tabsOn.length === 1 && tabsOn[0] === "Signé";
+  const counter = isDefaultView
+    ? { label: "Onboardings restants", value: onboardingsLeft,
+        title: "Onboardings pas encore réalisés dans la vue affichée : à venir + à confirmer + à faire + no show du menu Onboarding" }
+    : (() => {
+        const label = activeTags.length ? activeTags.map(tagText).join(" · ") : tabsOn.map(tabLabel).join(" · ");
+        return { label, value: filtered.length, title: `${label} : ${filtered.length} client${filtered.length > 1 ? "s" : ""} affiché${filtered.length > 1 ? "s" : ""}` };
+      })();
   // « Tout effacer » retire ces filtres et garde les onglets d'état choisis.
   const clearRefinements = () => {
     setSortCol(null);
@@ -2211,6 +2229,8 @@ export default function OptilexBoard({ embed = false }) {
         .ob-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:38px}
         .ob-left{display:flex;align-items:center;gap:10px;margin-right:8px}
         .ob-left>span{font-size:10.5px;font-weight:700;line-height:1.25;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af;text-align:right}
+        .ob-left-label{display:block;max-width:112px}
+        .ob-left-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;will-change:transform,opacity}
         .ob-active{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;flex:1;min-width:0;padding:0 4px}
         .ob-tag{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:#eef1f6;color:${TEXT};font-size:12px;font-weight:600;white-space:nowrap}
         .ob-tag small{font-size:11px;font-weight:600;color:${MUTED}}
@@ -2446,9 +2466,17 @@ export default function OptilexBoard({ embed = false }) {
           </AnimatePresence>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <div className="ob-left" title="Onboardings pas encore réalisés dans la vue affichée : à venir + à confirmer + à faire + no show du menu Onboarding">
-            <span>Onboardings<br />restants</span>
-            <AirportKPI label="" value={onboardingsLeft} minDigits={3} scale={0.66} />
+          <div className="ob-left" title={counter.title}>
+            <span className="ob-left-label">
+              <AnimatePresence mode="wait" initial={false}>
+                <motion.span key={counter.label} className="ob-left-text"
+                  initial={{ opacity: 0, y: 6, filter: "blur(2px)" }} animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                  exit={{ opacity: 0, y: -6, filter: "blur(2px)" }} transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}>
+                  {counter.label}
+                </motion.span>
+              </AnimatePresence>
+            </span>
+            <AirportKPI label="" value={counter.value} minDigits={3} scale={0.66} />
           </div>
           <span style={{ position: "relative", display: "inline-flex", alignItems: "center" }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
