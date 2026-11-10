@@ -1,6 +1,10 @@
 export const PENDING_EXITS = ['En cours de résiliation', 'En cours de rétractation'];
 // Clients partis : hors parc, hors cases d'onboarding du board et du dashboard CEO.
 export const EXITED_ETATS = ['Résiliation', 'Self-Résiliation', 'Rétractation', 'Liquidation', 'Sans suite'];
+// Onboarding (dev 10/11/2026 : « dans ce qui reste à faire, on ne compte pas les résiliations et les rétractations ») :
+// un client qui part, même pas encore effectivement (« en cours de … »), n'entre dans aucune case d'onboarding.
+export const LEAVING_ETATS = [...PENDING_EXITS, 'En cours de liquidation'];
+export const isOutOfOnboarding = (displayedState) => EXITED_ETATS.includes(displayedState) || LEAVING_ETATS.includes(displayedState);
 
 // État affiché d'un client du board : calculé UNE seule fois, par le back
 // (champ `etat_affiche` de GET /optilex/board), jamais recalculé ici. Le board,
