@@ -1363,7 +1363,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
       <div style={{
         display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
         margin: '16px 20px 14px', padding: '14px 16px', borderRadius: 12,
-        background: N.sideBg, borderLeft: `3px solid ${headTone.rail}`,
+        background: N.sideBg,
       }}>
         <div style={{ flex: '1 1 260px', minWidth: 0 }}>
           <div style={{ fontSize: 10.5, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>
