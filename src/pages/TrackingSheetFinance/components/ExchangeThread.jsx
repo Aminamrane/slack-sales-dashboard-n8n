@@ -7,7 +7,9 @@
 //   - les notations météo du board (/api/v1/optilex/meteo-history) : lues ici, on y répond et on y réagit ;
 //     noter ou corriger une météo reste dans le board ;
 //   - les notes internes finance (/api/v1/finance-periods/client/{id}/comments) : jamais montrées au cabinet,
-//     épinglables. Leur route n'accepte que du texte : ni mention ni pièce jointe.
+//     épinglables, et l'on y répond comme à un message (11/11/2026 : « pourquoi ils ne peuvent pas répondre à
+//     l'interne ? »). Une réponse est une note dont `parent_id` désigne la note. Leur route n'accepte que du
+//     texte : ni mention ni pièce jointe ni réaction.
 // La saisie dit toujours à qui l'on écrit. Rôles en lecture seule : tout se lit, rien ne s'écrit.
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
@@ -173,7 +175,7 @@ const editItems = (t, key, body) => [
 ];
 
 // Réponse sous le message : une ligne de saisie dans la carte ; l'auteur du message est prévenu comme une mention.
-function InlineReply({ t, placeholder, onSend }) {
+function InlineReply({ t, placeholder, onSend, people = t.people }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const send = async () => {
@@ -188,7 +190,7 @@ function InlineReply({ t, placeholder, onSend }) {
     <Motion.div className="fx-reply" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.24, ease: EASE }}>
       <div className="fx-reply-box">
         <Avatar name={t.myName} size={22} />
-        <MentionTextarea value={text} onChange={setText} people={t.people} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
+        <MentionTextarea value={text} onChange={setText} people={people} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
           aria-label="Votre réponse" maxLength={4000}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
@@ -217,9 +219,25 @@ function Reply({ c, t }) {
     </div>
   );
 }
-// Réponses d'un message ou d'une météo : ouvertes jusqu'à deux, sinon regroupées derrière leurs auteurs ; le fil
-// s'ouvre de lui-même quand une réponse vient d'y être publiée.
-function Replies({ replies, t, openSignal }) {
+// Réponse à une note interne : texte seul. Les actions viennent du serveur (`can_moderate`).
+function NoteReply({ n, t }) {
+  const key = `n:${n.id}`;
+  const edited = n.updated_at && n.updated_at !== n.created_at;
+  return (
+    <div className={`fx-sub${n.fresh ? ' is-fresh' : ''}`}>
+      <Head author={authorOf(n)} size={22} small iso={n.created_at} extra={edited ? ' · modifiée' : ''}
+        menu={!t.readOnly && n.can_moderate && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, n.body)} />} />
+      <div className="fx-sub-in">
+        {t.edit.key === key ? <EditBox t={t} />
+          : <Clamp max={88} measureKey={n.body}><div className="fx-text">{n.body}</div></Clamp>}
+        {t.confirming === key && <DeleteConfirm t={t} entryKey={key} what="cette réponse" />}
+      </div>
+    </div>
+  );
+}
+// Réponses d'un message, d'une météo ou d'une note : ouvertes jusqu'à deux, sinon regroupées derrière leurs
+// auteurs ; le fil s'ouvre de lui-même quand une réponse vient d'y être publiée.
+function Replies({ replies, t, openSignal, note = false }) {
   const [open, setOpen] = useState(replies.length <= 2);
   useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   const names = replies.map(authorOf);
@@ -233,7 +251,7 @@ function Replies({ replies, t, openSignal }) {
       <AnimatePresence initial={false}>
         {open && (
           <Motion.div className="fx-replies-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: EASE }}>
-            {replies.map((reply) => <Reply key={reply.id} c={reply} t={t} />)}
+            {replies.map((reply) => (note ? <NoteReply key={reply.id} n={reply} t={t} /> : <Reply key={reply.id} c={reply} t={t} />))}
           </Motion.div>
         )}
       </AnimatePresence>
@@ -312,7 +330,17 @@ function NoteCard({ e, t }) {
       <div className="fx-in">
         {t.edit.key === e.key ? <EditBox t={t} />
           : <Clamp max={88} measureKey={e.body}><div className="fx-text">{e.body}</div></Clamp>}
-        {t.confirming === e.key && <DeleteConfirm t={t} entryKey={e.key} what="cette note" />}
+        {t.confirming === e.key && <DeleteConfirm t={t} entryKey={e.key} what={e.replies.length ? 'cette note et ses réponses' : 'cette note'} />}
+        {!e._pending && (
+          <footer className="fx-foot is-end">
+            <button type="button" className="fx-answer" aria-expanded={t.replying === e.key} onClick={() => t.toggleReply(e.key)}
+              title="Répondre en interne : le cabinet ne voit pas la réponse" {...t.ro}><CornerUpLeft size={14} />Répondre</button>
+          </footer>
+        )}
+        {e.replies.length > 0 && <Replies note replies={e.replies} t={t} openSignal={t.bump.key === e.key ? t.bump.n : 0} />}
+        <AnimatePresence initial={false}>
+          {t.replying === e.key && <InlineReply key="reply" t={t} people={[]} placeholder={`Répondre en interne à ${firstName(authorOf(e))}…`} onSend={(body) => t.sendNoteReply(e, body)} />}
+        </AnimatePresence>
       </div>
     </Motion.article>
   );
@@ -379,6 +407,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const [deleting, setDeleting] = useState(null);
   const fileInput = useRef(null);
   const rootRef = useRef(null);
+  const sameId = (a, b) => String(a) === String(b);
   const composerId = `fx-composer-${useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
   useEffect(() => {
@@ -425,13 +454,16 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const canWrite = !readOnly && !loading && (mode === 'shared' ? canShare : canNote);
 
   const isRatingReply = (c) => c.rating_id && ratings.some((r) => r.id === c.rating_id);
+  // Réponse à une note : seulement si sa note est encore là (sinon elle reste lisible comme une note).
+  const isNoteReply = (n) => n.parent_id && notes.some((p) => sameId(p.id, n.parent_id) && !p.parent_id);
   const entries = useMemo(() => {
     const repliesOf = (field, id) => comments.filter((c) => c[field] === id).sort((a, b) => stamp(a.created_at) - stamp(b.created_at));
     const withActivity = (e) => ({ ...e, at: Math.max(stamp(e.created_at), ...e.replies.map((r) => stamp(r.created_at))) });
     return [
       ...comments.filter((c) => !c.parent_id && !isRatingReply(c)).map((c) => withActivity({ ...c, kind: 'comment', key: `c:${c.id}`, replies: repliesOf('parent_id', c.id) })),
       ...ratings.map((r) => withActivity({ ...r, kind: 'rating', key: `r:${r.id}`, replies: repliesOf('rating_id', r.id) })),
-      ...notes.map((n) => ({ ...n, kind: 'note', key: `n:${n.id}`, replies: [], at: stamp(n.created_at) })),
+      ...notes.filter((n) => !isNoteReply(n)).map((n) => withActivity({ ...n, kind: 'note', key: `n:${n.id}`,
+        replies: notes.filter((r) => sameId(r.parent_id, n.id)).sort((a, b) => stamp(a.created_at) - stamp(b.created_at)) })),
     ].sort((a, b) => (!!b.pinned - !!a.pinned) || b.at - a.at || a.key.localeCompare(b.key));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [comments, ratings, notes]);
@@ -543,6 +575,22 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       return false;
     }
   };
+  // Répondre sous une note interne : la réponse reste interne, le fil s'ouvre et remonte. Personne n'est prévenu.
+  const sendNoteReply = async (parent, body) => {
+    if (readOnly || !notesBase) return false;
+    setError('');
+    try {
+      const created = await apiClient.post(notesBase, { body, parent_id: parent.id });
+      if (!created?.id || !created?.body) throw new Error('Réponse incomplète');
+      setNotes((prev) => sortNotes([{ ...created, fresh: true }, ...prev.filter((n) => !sameId(n.id, created.id))]));
+      setReplying(null);
+      setBump((b) => ({ key: parent.key, n: b.n + 1 }));
+      return true;
+    } catch (e) {
+      setError(e?.data?.detail || 'La réponse n’a pas été confirmée. Votre texte est conservé.');
+      return false;
+    }
+  };
   // Le fil qui vient de remonter reste sous les yeux.
   useEffect(() => {
     if (!bump.n) return undefined;
@@ -551,7 +599,6 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   }, [bump]);
 
   const idOf = (key) => { const raw = key.slice(2); return /^\d+$/.test(raw) ? Number(raw) : raw; };
-  const sameId = (a, b) => String(a) === String(b);
   const saveEdit = async () => {
     const body = edit.draft.trim();
     if (!body || edit.saving) return;
@@ -579,7 +626,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
     try {
       if (key.startsWith('n:')) {
         await apiClient.delete(`${notesBase}/${id}`);
-        setNotes((prev) => prev.filter((n) => !sameId(n.id, id)));
+        setNotes((prev) => prev.filter((n) => !sameId(n.id, id) && !sameId(n.parent_id, id)));
       } else {
         await apiClient.delete(`${SHARED}/${id}`);
         setComments((prev) => prev.filter((c) => !sameId(c.id, id) && !sameId(c.parent_id, id)));
@@ -603,7 +650,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
 
   const mine = (c) => (me.email || '').toLowerCase() === (c.author_email || '').toLowerCase();
   const t = {
-    readOnly, ro, people, myName, react, sendReply, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
+    readOnly, ro, people, myName, react, sendReply, sendNoteReply, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
     canPin: !!internal?.canPin,
     canEdit: (c) => !readOnly && (c.can_edit || mine(c) || ['admin', 'ceo'].includes(me.role)),
     reactionsOf: (target, id) => reactions[`${target}:${id}`] || [],
