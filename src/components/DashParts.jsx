@@ -3,23 +3,23 @@
 // Styles dans DashParts.css (classes ofd-*). Utilisées par « Faire l'onboarding » et la fenêtre « Créances ».
 import "./DashParts.css";
 
-const STROKE = "#c9cdd6";
-const SOFT = "#dde0e6";
+const STROKE = "#d8d3cb";
+const SOFT = "#e3ded6";
 const ART = {
   doc: <><rect x="20" y="10" width="30" height="40" rx="5" fill="#fff" stroke={SOFT} strokeWidth="2" /><rect x="12" y="16" width="30" height="40" rx="5" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M19 28h16M19 35h16M19 42h10" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /></>,
-  check: <><rect x="14" y="14" width="34" height="34" rx="9" fill="#fff" stroke={STROKE} strokeWidth="2" /><path className="ofd-art-tick" d="m22 31 6.5 6.5L41 25" stroke="#9aa1ad" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
+  check: <><rect x="14" y="14" width="34" height="34" rx="9" fill="#fff" stroke={STROKE} strokeWidth="2" /><path className="ofd-art-tick" d="m22 31 6.5 6.5L41 25" stroke="#a8a39b" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
   folder: <><path d="M10 20a5 5 0 0 1 5-5h12l5 5h17a5 5 0 0 1 5 5v19a5 5 0 0 1-5 5H15a5 5 0 0 1-5-5Z" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M38 41h9" stroke={STROKE} strokeWidth="2.4" strokeLinecap="round" /></>,
   coins: <><ellipse cx="27" cy="22" rx="14" ry="5.5" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M13 22v8c0 3 6.3 5.5 14 5.5s14-2.5 14-5.5v-8" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M23 36v8c0 3 6.3 5.5 14 5.5s14-2.5 14-5.5v-8" fill="#fff" stroke={SOFT} strokeWidth="2" /><ellipse cx="37" cy="36" rx="14" ry="5.5" fill="#fff" stroke={SOFT} strokeWidth="2" /></>,
-  calendar: <><rect x="12" y="15" width="38" height="34" rx="6" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M12 25h38M22 11v8M40 11v8" stroke={STROKE} strokeWidth="2" strokeLinecap="round" /><rect x="20" y="31" width="7" height="6" rx="1.5" fill={SOFT} /><rect x="31" y="31" width="7" height="6" rx="1.5" fill="#e8eaee" /></>,
+  calendar: <><rect x="12" y="15" width="38" height="34" rx="6" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M12 25h38M22 11v8M40 11v8" stroke={STROKE} strokeWidth="2" strokeLinecap="round" /><rect x="20" y="31" width="7" height="6" rx="1.5" fill={SOFT} /><rect x="31" y="31" width="7" height="6" rx="1.5" fill="#ece9e4" /></>,
   envelope: <><rect x="11" y="16" width="40" height="30" rx="6" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="m12 19 19 13 19-13" stroke={STROKE} strokeWidth="2" fill="none" strokeLinejoin="round" /></>,
   // Badge de personne : le juriste de référence.
   person: <><rect x="9" y="14" width="44" height="34" rx="7" fill="#fff" stroke={STROKE} strokeWidth="2" /><circle cx="23" cy="28" r="5" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M15 41c1.5-3.6 4.4-5.5 8-5.5s6.5 1.9 8 5.5" stroke={STROKE} strokeWidth="2" fill="none" strokeLinecap="round" /><path d="M36 26h10M36 32h7" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /></>,
   // Pile de rendez-vous : le nombre total.
   stack: <><rect x="16" y="10" width="34" height="12" rx="4" fill="#fff" stroke={SOFT} strokeWidth="2" /><rect x="12" y="25" width="38" height="12" rx="4" fill="#fff" stroke={STROKE} strokeWidth="2" /><rect x="12" y="40" width="38" height="12" rx="4" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M18 31h10M18 46h14" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /></>,
   // Reçu au bord dentelé et son horloge : ce qui reste dû.
-  receipt: <><path d="M15 9h28a3 3 0 0 1 3 3v40l-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3V12a3 3 0 0 1 3-3Z" fill="#fff" stroke={STROKE} strokeWidth="2" strokeLinejoin="round" /><path d="M20 19h18M20 26h18M20 33h10" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /><circle cx="44" cy="42" r="9" fill="#fff" stroke="#9aa1ad" strokeWidth="2" /><path className="ofd-art-hand" d="M44 37.5V42l3 2" stroke="#9aa1ad" strokeWidth="2" fill="none" strokeLinecap="round" /></>,
+  receipt: <><path d="M15 9h28a3 3 0 0 1 3 3v40l-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3V12a3 3 0 0 1 3-3Z" fill="#fff" stroke={STROKE} strokeWidth="2" strokeLinejoin="round" /><path d="M20 19h18M20 26h18M20 33h10" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /><circle cx="44" cy="42" r="9" fill="#fff" stroke="#a8a39b" strokeWidth="2" /><path className="ofd-art-hand" d="M44 37.5V42l3 2" stroke="#a8a39b" strokeWidth="2" fill="none" strokeLinecap="round" /></>,
   // Pièces qui tombent dans une tirelire-coffre : ce qui est payé.
-  paid: <><rect x="11" y="24" width="40" height="26" rx="7" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M24 24v-3a7 7 0 0 1 14 0v3" stroke={SOFT} strokeWidth="2" fill="none" /><path className="ofd-art-tick" d="m23 37 5 5 11-10" stroke="#9aa1ad" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
+  paid: <><rect x="11" y="24" width="40" height="26" rx="7" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M24 24v-3a7 7 0 0 1 14 0v3" stroke={SOFT} strokeWidth="2" fill="none" /><path className="ofd-art-tick" d="m23 37 5 5 11-10" stroke="#a8a39b" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
 };
 export const Art = ({ name }) => <svg className="ofd-art" viewBox="0 0 62 62" aria-hidden="true">{ART[name]}</svg>;
 
@@ -67,13 +67,13 @@ export function ListRow({ icon, label, children }) {
     </div>
   );
 }
-export const Tag = ({ tone = "#8a93a4", children }) => <span className="ofd-tag" style={{ color: tone, background: `${tone}14` }}>{children}</span>;
+export const Tag = ({ tone = "#8b867e", children }) => <span className="ofd-tag" style={{ color: tone, background: `${tone}14` }}>{children}</span>;
 // Carte-dossier (réf. « Your Contacts ») : le dossier au trait, l'état en haut à droite, le titre, une phrase.
 export function FolderCard({ title, status, tone, children, i = 0 }) {
   return (
     <div className="ofd-folder" style={{ "--ofd-i": i }}>
       <div className="ofd-folder-top">
-        <svg className="ofd-folder-art" viewBox="0 0 92 64" aria-hidden="true"><path d="M3 10a6 6 0 0 1 6-6h20l7 7h47a6 6 0 0 1 6 6v37a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6Z" fill="#fff" stroke="#dcdfe5" strokeWidth="1.6" /><path d="M64 48h14" stroke={STROKE} strokeWidth="2.4" strokeLinecap="round" /></svg>
+        <svg className="ofd-folder-art" viewBox="0 0 92 64" aria-hidden="true"><path d="M3 10a6 6 0 0 1 6-6h20l7 7h47a6 6 0 0 1 6 6v37a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6Z" fill="#fff" stroke="#e3ded6" strokeWidth="1.6" /><path d="M64 48h14" stroke={STROKE} strokeWidth="2.4" strokeLinecap="round" /></svg>
         {status && <Tag tone={tone}>{status}</Tag>}
       </div>
       <strong>{title}</strong>

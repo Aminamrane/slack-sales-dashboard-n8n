@@ -9,7 +9,7 @@ import apiClient from '../services/apiClient';
 import EarlyDeclarationNote from './EarlyDeclarationNote';
 import { METEO_MEANING, MeteoIcon, MeteoPicker, MeteoMeaning } from './meteo.jsx';
 
-const buttonStyle = { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'9px 12px', borderRadius:9, fontSize:12, fontWeight:650, cursor:'pointer', textDecoration:'none' };
+const buttonStyle = { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'9px 12px', borderRadius:9, fontSize:12, fontWeight:500, cursor:'pointer', textDecoration:'none' };
 // Météo d'onboarding : le Client Success (et admin/CEO en support) finalise la fiche. Les sales
 // ne la posent jamais ici, le cabinet ne fait que la lire.
 const RATING_ROLES = ['customer_success_manager', 'admin', 'ceo'];
@@ -79,21 +79,21 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
     : state ? state.message : error ? '' : 'Chargement de la fiche…';
   // Portefeuille de la fiche (refonte board) + la note « vente déclarée sans documents » de main (24ac545).
   if (compact) return <><IntegrationWallet state={state} error={error} busy={busy} pdf={pdf} onPdf={openPdf} /><EarlyDeclarationNote documents={state?.documents} compact/></>;
-  return <section aria-label="Fiche d’intégration" style={{ marginBottom:22, padding:16, border:'1px solid #e9ebf0', borderRadius:12, background:'#f8faf9', color:'#1e2330' }}>
+  return <section aria-label="Fiche d’intégration" style={{ marginBottom:22, padding:16, border:'1px solid #ece9e4', borderRadius:12, background:'#f8faf9', color:'#1c1b19' }}>
     <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
       <FileText size={21} style={{ color:'#526b68', flexShrink:0, marginTop:2 }}/>
-      <div><h3 style={{ margin:0, fontSize:14 }}>Fiche d’intégration{state?.available && <span style={{ marginLeft:8, fontSize:11, fontWeight:700, padding:'2px 8px', borderRadius:999, background: state.final ? '#e3f4ea' : '#fff4e0', color: state.final ? '#15794a' : '#b45309' }}>{state.final ? 'Finalisée' : 'À finaliser'}</span>}</h3>
-        <p style={{ margin:'5px 0 0', fontSize:12, lineHeight:1.5, color:'#687483' }}>{description}</p>
+      <div><h3 style={{ margin:0, fontSize:14 }}>Fiche d’intégration{state?.available && <span style={{ marginLeft:8, fontSize:11, fontWeight:500, padding:'2px 8px', borderRadius:999, background: state.final ? '#e3f4ea' : '#fde9da', color: state.final ? '#0b7a4b' : '#c2500e' }}>{state.final ? 'Finalisée' : 'À finaliser'}</span>}</h3>
+        <p style={{ margin:'5px 0 0', fontSize:12, lineHeight:1.5, color:'#8b867e' }}>{description}</p>
       </div>
     </div>
     {state && <SalesEntryCard entry={state.sales_entry}/> }
     <EarlyDeclarationNote documents={state?.documents}/>
     {state?.available && <>
-      <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#687483' }}>
+      <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#8b867e' }}>
         <div>Partie commerciale : {state.author_name || 'commercial'}{state.updated_at ? ` · ${fmtDate(state.updated_at)}` : ''}</div>
         <div>Onboarding : {onboarding?.completed
           ? <>{onboarding.author_name || 'Client Success'}{onboarding.completed_at ? ` · ${fmtDate(onboarding.completed_at)}` : ''}{onboarding.weather ? ` · météo ${weatherRatingLabel(onboarding.weather,onboarding.weather_context)}` : ''}</>
-          : <span style={{ color:'#b45309', fontWeight:600 }}>météo d’onboarding en attente</span>}</div>
+          : <span style={{ color:'#c2500e', fontWeight:500 }}>météo d’onboarding en attente</span>}</div>
       </div>
       {canRate && <OnboardingRatingForm numero={numero} onSaved={onRatingSaved} />}
       <div style={{ display:'flex', flexWrap:'wrap', gap:8, marginTop:12 }}>
@@ -104,7 +104,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       </div>
       {pdf && <a href={pdf} target="_blank" rel="noopener noreferrer" style={{ display:'inline-block', fontSize:11, color:'#526b68', marginTop:9 }}>Ouvrir si le nouvel onglet a été bloqué</a>}
     </>}
-    {error && <p role="alert" style={{ margin:'10px 0 0', fontSize:12, color:'#b42318' }}>{error}</p>}
+    {error && <p role="alert" style={{ margin:'10px 0 0', fontSize:12, color:'#c5221f' }}>{error}</p>}
   </section>;
 }
 
@@ -113,8 +113,8 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
 // la météo d'onboarding. À l'ouverture les cartes glissent dans la poche ; au survol elles remontent ; la carte
 // « État du client » s'ouvre sur la transmission commerciale. La poche porte le statut et le PDF.
 const WALLET_TONES = {
-  sky: ['#dce6f7', '#2b4a7a'], sage: ['#d6ead4', '#3f7f4b'], lemon: ['#fef3b0', '#8f6f00'],
-  coral: ['#ffc1b6', '#bf4436'], peach: ['#ffd6a5', '#b45d14'], mist: ['#eceef3', '#5b6472'],
+  sky: ['#e4f0fd', '#1b6fd0'], sage: ['#d6ead4', '#3f7f4b'], lemon: ['#fef3b0', '#8f6f00'],
+  coral: ['#ffc1b6', '#bf4436'], peach: ['#ffd6a5', '#b45d14'], mist: ['#f1eee9', '#6b665f'],
 };
 const LEVEL_TONE = { favorable: 'sage', vigilance: 'lemon', risk: 'coral' };
 const WIco = ({ children }) => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{children}</svg>;
@@ -183,10 +183,10 @@ function IntegrationWallet({ state, error, busy, pdf, onPdf }) {
           {w > 0 && (
             <svg className="iw-pocket-svg" width={w} height="104" viewBox={`0 0 ${w} 104`} aria-hidden="true">
               <defs>
-                <linearGradient id={`iwl-${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#2a3046" /><stop offset="1" stopColor="#141929" /></linearGradient>
+                <linearGradient id={`iwl-${uid}`} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#4a4540" /><stop offset="1" stopColor="#1c1b19" /></linearGradient>
                 <filter id={`iws-${uid}`} x="-10%" y="-20%" width="120%" height="160%"><feGaussianBlur stdDeviation="9" /></filter>
               </defs>
-              <rect x="18" y="40" width={w - 36} height="64" rx="24" fill="rgba(18,27,53,.28)" filter={`url(#iws-${uid})`} />
+              <rect x="18" y="40" width={w - 36} height="64" rx="24" fill="rgba(43,41,39,.196)" filter={`url(#iws-${uid})`} />
               <path d={pocketPath(w, 104)} fill={`url(#iwl-${uid})`} />
               <path d={pocketPath(w, 104)} fill="none" stroke="#fff" strokeOpacity=".09" />
               <path d={pocketPath(w, 104, 7)} fill="none" stroke="#fff" strokeOpacity=".16" strokeDasharray="4 4" />

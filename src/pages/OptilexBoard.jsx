@@ -29,19 +29,21 @@ import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { sharedEmailOptions } from "../utils/boardContacts.js";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { CalendarCheck, CircleDashed, CloudSun, FileSignature, Maximize2, Minimize2, Scale, Store, UserRound } from "lucide-react";
 import apiClient from "../services/apiClient";
 import { isReadOnlyViewer, READ_ONLY_PROPS, READ_ONLY_TITLE } from "../utils/readOnlyRoles";
 // Météo client : primitives partagées avec la météo d'onboarding (fiche d'intégration, parcours).
 import { METEO_BANDS, meteoBandOf, meteoStyle, METEO_MEANING, MeteoIcon } from "../components/meteo.jsx";
 
 // ── Charte sobre (navy + neutre, style Attio/Linear) ─────────────────────────
-const NAVY = "#1e2330";
-const BORDER = "#e9ebf0";
-const MUTED = "#8a93a4";
-const TEXT = "#1e2330";
-const BG = "#f6f7f9";
+const NAVY = "#1c1b19";
+const CHARCOAL = "#2b2927"; // fonds pleins (bouton principal, case cochée) : charbon, l'encre reste au texte
+const BORDER = "#ece9e4";
+const MUTED = "#8b867e";
+const TEXT = "#1c1b19";
+const BG = "#f4f2ef";
 const CARD = "#ffffff";
-const GREEN = "#15794a";
+const GREEN = "#0b7a4b";
 
 export const ETAT_STYLE = {
   "Signé":            { bg: "#e2f6ea", fg: "#0b7a4b", dot: "#34a36e", bd: "#c3ebd3" },
@@ -87,7 +89,7 @@ const PROGRAM_ICONS = {
   parrainage: <g className="pg-shake"><path d="m11 17 2 2a1 1 0 1 0 3-3" /><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" /><path d="m21 3 1 11h-2" /><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" /><path d="M3 4h8" /></g>,
   temoignage: <><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.3-4.4a8 8 0 1 1 15.2-4.1Z" fill="currentColor" fillOpacity=".14" /><path className="pg-star" d="m12.3 7.8 1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.3-2.2 1.3.4-2.5-1.8-1.7 2.5-.3Z" fill="currentColor" stroke="none" /></>,
 };
-const PROGRAM_TONES = { ambassadeur: ["#e6d6f7", "#6b47b8"], parrainage: ["#d0f0ed", "#2a7b72"], temoignage: ["#f7e1e6", "#bd4469"] };
+const PROGRAM_TONES = { ambassadeur: ["#eae9fb", "#4a3fc4"], parrainage: ["#d9f3f7", "#0f7286"], temoignage: ["#fde9da", "#c2500e"] };
 const ProgramIcon = ({ kind, size = 16 }) => (
   <svg className={`pg pg-${kind}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{PROGRAM_ICONS[kind]}</svg>
 );
@@ -198,7 +200,7 @@ const ALERT_FILTERS = [
     icon: <><circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity=".14" /><path className="al-bang" d="M12 7.5v5.5M12 16.5h.01" /></> },
   { cat: "Inactifs", key: "idle", label: "Sans mission +2 mois", hint: "Le cabinet a déjà travaillé pour ce client, mais plus aucune mission depuis 60 jours", tile: "#ffe9cf", ink: "#b45d14",
     icon: <><rect x="3" y="8" width="13" height="11" rx="2.4" fill="currentColor" fillOpacity=".14" /><path d="M7 8V6.5A1.5 1.5 0 0 1 8.5 5h2A1.5 1.5 0 0 1 12 6.5V8" /><path className="al-z" d="M17 4h4l-4 4.5h4" strokeWidth="1.7" /></> },
-  { cat: "Pause", key: "pause", label: "En pause", hint: "Clients dont l'état est « Pause »", tile: "#e5ecf9", ink: "#2b4a7a",
+  { cat: "Pause", key: "pause", label: "En pause", hint: "Clients dont l'état est « Pause »", tile: "#e4f0fd", ink: "#1b6fd0",
     icon: <><circle cx="12" cy="12" r="9" fill="currentColor" fillOpacity=".14" /><path d="M10 9v6M14 9v6" /></> },
 ];
 const anniversaryDaysLeft = (r) => {
@@ -275,7 +277,7 @@ const fmtTranche = (t) => {
   if (m) return `${m[1]}+ salariés`;
   return s;
 };
-const AVATAR_COLORS = ["#2563eb", "#7c3aed", "#0891b2", "#059669", "#d97706", "#db2777", "#4f46e5", "#0d9488"];
+const AVATAR_COLORS = ["#1b6fd0", "#4a3fc4", "#0f7286", "#0b7a4b", "#c2500e", "#7a5a05", "#3f6b12", "#4a4540"];
 
 // ── Export CSV (extraction résiliés / en cours de résiliation, etc.) ─────────
 // Découpage prénom/nom "au feeling" : convention de la fiche RH = nom de famille
@@ -366,7 +368,7 @@ const VIEW_SLIDE = {
 };
 const VIEW_FADE = { enter: { opacity: 0 }, center: { opacity: 1, transition: { duration: 0.15 } }, exit: { opacity: 0, transition: { duration: 0.1 } } };
 
-const ROW_TD = { padding: "12px 14px", fontSize: 13, color: TEXT, borderTop: "1px solid #eef0f4", verticalAlign: "middle", whiteSpace: "nowrap" };
+const ROW_TD = { padding: "12px 14px", fontSize: 13, color: TEXT, borderTop: "1px solid #f1eee9", verticalAlign: "middle", whiteSpace: "nowrap" };
 
 // ── Secteur d'activité (dev 28/10/2026) ─────────────────────────────────────
 // Type d'entreprise du NDA (client_data.business_type), déduit du code NAF trouvé sur Pappers.
@@ -375,8 +377,8 @@ const secteurLabel = (v) => (v === "Micro créche" ? "Micro-crèche" : v);
 // Une icône dessinée par secteur de la liste du NDA, en deux tons : trait marine, volumes en bleu
 // Owner pâle ; seuls la croix de l'ambulance et celle de la pharmacie gardent leur couleur.
 // Secteur inconnu : l'immeuble de « Générales ».
-const SECTEUR_INK = "#27324f";
-const SECTEUR_FILL = "#e6ecf6";
+const SECTEUR_INK = "#4a4540";
+const SECTEUR_FILL = "#ebe8e3";
 const SECTEUR_ICONS = {
   "Ambulance": (f) => <>
     <rect x="2.5" y="7" width="11" height="10" rx="1.6" fill={f} />
@@ -520,8 +522,8 @@ function TabIcon({ tab, on }) {
   const draw = TAB_ICONS[tab];
   if (!draw) return null;
   const s = ETAT_STYLE[tab];
-  const ink = on ? "#fff" : s ? s.fg : "#3f4a5f";
-  const tint = on ? "rgba(255,255,255,0.22)" : s ? `${s.dot}38` : "#3f4a5f26";
+  const ink = s ? s.fg : on ? "#1c1b19" : "#55514b";
+  const tint = s ? `${s.dot}38` : "#55514b26";
   return (
     <svg className="ob-tab-ic" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round" aria-hidden
       style={{ color: ink }}>
@@ -553,8 +555,8 @@ const byDateSort = (accessor, dir) => (a, b) => {
 function SortArrow({ dir }) {
   return (
     <svg width="9" height="13" viewBox="0 0 10 14" style={{ flexShrink: 0, marginLeft: 2 }} aria-hidden>
-      <path d="M5 1 L9 5.5 L1 5.5 Z" fill={dir === "asc" ? NAVY : "#cdd4df"} />
-      <path d="M5 13 L1 8.5 L9 8.5 Z" fill={dir === "desc" ? NAVY : "#cdd4df"} />
+      <path d="M5 1 L9 5.5 L1 5.5 Z" fill={dir === "asc" ? NAVY : "#d8d3cb"} />
+      <path d="M5 13 L1 8.5 L9 8.5 Z" fill={dir === "desc" ? NAVY : "#d8d3cb"} />
     </svg>
   );
 }
@@ -622,7 +624,7 @@ function Avatar({ name, n, src, size = 30, round = false }) {
   const letter = (name || "?").trim().charAt(0).toUpperCase();
   if (src) return <img src={src} alt="" style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", flexShrink: 0 }} />;
   // Lettre de couleur sur fond pâle (dev 28/10/2026, « meilleur tableau ») : la couleur repère sans crier.
-  return <div style={{ width: size, height: size, borderRadius: round ? "50%" : Math.round(size * 0.32), background: `${c}1a`, boxShadow: `inset 0 0 0 1px ${c}24`, color: c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 700, flexShrink: 0 }}>{letter}</div>;
+  return <div style={{ width: size, height: size, borderRadius: round ? "50%" : Math.round(size * 0.32), background: `${c}1a`, boxShadow: `inset 0 0 0 1px ${c}24`, color: c, display: "flex", alignItems: "center", justifyContent: "center", fontSize: Math.round(size * 0.43), fontWeight: 500, flexShrink: 0 }}>{letter}</div>;
 }
 
 // ── Icônes de statut (dev 28/10/2026 : « meilleur état en svg ») ─────────────────
@@ -752,15 +754,15 @@ function EtatPicker({ etat, onPick, disabled }) {
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)", padding: 5, minWidth: 210, maxHeight: ETAT_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             {items.map(({ opt, label }) => {
               const sel = opt === etat;
               return (
                 <button key={label} type="button" onClick={() => { setOpen(false); if (!sel) pick(opt); }}
                   style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", textAlign: "left", border: "none",
-                    background: sel ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer",
-                    fontSize: 12.5, fontWeight: 600, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = "#f7f8fa"; }}
+                    background: sel ? "#f7f5f2" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer",
+                    fontSize: 12.5, fontWeight: 500, color: opt ? TEXT : MUTED, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = "#f7f5f2"; }}
                   onMouseLeave={(e) => { if (!sel) e.currentTarget.style.background = "transparent"; }}>
                   {opt ? <EtatIcon etat={opt} size={13} /> : <StatusGlyph kind="dashed" color={MUTED} size={13} />}
                   {label}
@@ -786,8 +788,8 @@ function EtatPicker({ etat, onPick, disabled }) {
 function MeteoBadge({ score, context, showLabel = true, inline = false }) {
   const s = weatherPresentation(score, context);
   if (!s) return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#b6bdc9", fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>
-      <span className="ob-meteo-tile" style={{ width: 26, height: 26, borderRadius: 8, border: "1.5px dashed #cbd2e0", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#cbd2e0", flexShrink: 0, boxSizing: "border-box" }}>?</span>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8, color: "#c9c4bc", fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" }}>
+      <span className="ob-meteo-tile" style={{ width: 26, height: 26, borderRadius: 8, border: "1.5px dashed #d8d3cb", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 13, color: "#d8d3cb", flexShrink: 0, boxSizing: "border-box" }}>?</span>
       {showLabel && "À noter"}
     </span>
   );
@@ -797,15 +799,15 @@ function MeteoBadge({ score, context, showLabel = true, inline = false }) {
         <MeteoIcon score={score} size={16} color={s.color} />
       </span>
       {showLabel && inline && (
-        <span style={{ fontSize: 13, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}
+        <span style={{ fontSize: 13, fontWeight: 500, color: s.color, whiteSpace: "nowrap" }}
           title={s.legacy ? `Note posée sur l'ancienne échelle : ${score}/5` : undefined}>
-          {s.label}<span style={{ fontWeight: 600, color: MUTED }}> · {score}/5{s.legacy ? " (ancienne)" : ""}</span>
+          {s.label}<span style={{ fontWeight: 500, color: MUTED }}> · {score}/5{s.legacy ? " (ancienne)" : ""}</span>
         </span>
       )}
       {showLabel && !inline && (
         <span style={{ display: "flex", flexDirection: "column", minWidth: 0, lineHeight: 1.2 }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: s.color, whiteSpace: "nowrap" }}>{s.label}</span>
-          <span style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, marginTop: 2, whiteSpace: "nowrap" }}
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: s.color, whiteSpace: "nowrap" }}>{s.label}</span>
+          <span style={{ fontSize: 10.5, fontWeight: 500, color: MUTED, marginTop: 2, whiteSpace: "nowrap" }}
             title={s.legacy ? `Note posée sur l'ancienne échelle : ${score}/5` : undefined}>
             {s.legacy ? `${score}/5 · ancienne` : `${score}/5`}
           </span>
@@ -842,10 +844,10 @@ function MeteoPicker({ score, context, onSave, disabled, triggerLabel, inline = 
   const ro = !readOnly ? {} : triggerLabel ? READ_ONLY_PROPS : { disabled: true, title: READ_ONLY_TITLE };
   return <span onClick={e=>e.stopPropagation()}><button ref={button} type="button" disabled={disabled} onClick={openFromTrigger} aria-label={triggerLabel || "Mettre à jour la météo"} className={triggerLabel ? "wc-add-weather" : "ob-meteo"} style={triggerLabel ? undefined : {border:0,background:'transparent',padding:0,textAlign:'left',font:'inherit',cursor:disabled||readOnly?'default':'pointer'}} {...ro}>{triggerLabel ? <><MeteoIcon score={5} size={18}/>{triggerLabel}</> : <MeteoBadge score={score} context={context} inline={inline}/>}</button>
     {createPortal(<AnimatePresence>{open && <motion.div key="meteo-overlay" role="presentation" initial={{opacity:0}} animate={{opacity:1,transition:{duration:0.22,ease:'easeOut'}}} exit={{opacity:0,transition:{duration:0.2,ease:'easeIn'}}}
-      style={{position:'fixed',inset:0,zIndex:10050,background:'rgba(18,27,53,0.34)',backdropFilter:'blur(3px)',WebkitBackdropFilter:'blur(3px)',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
+      style={{position:'fixed',inset:0,zIndex:10050,background:'rgba(28,27,25,.22)',backdropFilter:'blur(3px)',WebkitBackdropFilter:'blur(3px)',display:'grid',placeItems:'center',padding:16}} onMouseDown={e=>{if(e.target===e.currentTarget)close();}}>
       <motion.div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" className="ob-meteo-dialog"
         initial={enter} animate={{opacity:1,x:0,y:0,scale:1,transition:reduce?{duration:0.15}:{type:'spring',stiffness:420,damping:34,mass:0.9,opacity:{duration:0.16}}}} exit={leave}
-        style={{width:'min(580px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius:28,padding:'26px 26px 22px',boxShadow:'0 24px 70px rgba(18,27,53,0.22), 0 2px 6px rgba(18,27,53,0.06)',fontFamily:METEO_DIALOG_FONT}}>
+        style={{width:'min(580px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius: 22,padding:'26px 26px 22px',boxShadow:'0 24px 70px rgba(28,27,25,.14), 0 2px 6px rgba(43,41,39,.042)',fontFamily:METEO_DIALOG_FONT}}>
         <WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false)close();return ok;}} onCancel={close}/>
       </motion.div>
     </motion.div>}</AnimatePresence>,document.body)}
@@ -899,7 +901,7 @@ function FilterMenu({ label = "Filtre", cats, counts, selected, onToggle, onClea
         className={`ob-trigger${active ? " is-on" : ""}${open ? " is-open" : ""}`}>
         <FunnelIcon color={active ? "#fff" : MUTED} />
         {label}
-        {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
+        {active && <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
         <svg className="ob-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -907,20 +909,20 @@ function FilterMenu({ label = "Filtre", cats, counts, selected, onToggle, onClea
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div ref={menuRef} style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, maxHeight: FILTER_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+          <div ref={menuRef} style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)", padding: 5, minWidth: 236, maxHeight: FILTER_MENU_H, overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 8px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filtrer par état</span>
-              {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
+              <span style={{ fontSize: 11, fontWeight: 500, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>Filtrer par état</span>
+              {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#55514b", fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
             </div>
             {cats.map((cat) => {
               const on = selected.includes(cat);
               const n = counts[cat] || 0;
               return (
                 <button key={cat} type="button" onClick={() => onToggle(cat)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 600, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f7f5f2" : "transparent", borderRadius: 7, padding: "8px 10px", cursor: "pointer", fontSize: 12.5, fontWeight: 500, color: TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f5f2"; }}
                   onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? CHARCOAL : "#d8d3cb"}`, background: on ? CHARCOAL : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
                     {on && (
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6 9 17l-5-5" />
@@ -929,7 +931,7 @@ function FilterMenu({ label = "Filtre", cats, counts, selected, onToggle, onClea
                   </span>
                   <EtatIcon etat={cat} size={13} />
                   <span style={{ flex: 1 }}>{cat}</span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{n}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: MUTED }}>{n}</span>
                 </button>
               );
             })}
@@ -974,7 +976,7 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
         className={`ob-trigger${active ? " is-on" : ""}${open ? " is-open" : ""}`}>
         {icon(active ? "#fff" : MUTED)}
         {label}
-        {active && <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
+        {active && <span style={{ fontSize: 11, fontWeight: 500, color: "rgba(255,255,255,0.85)" }}>{selected.length}</span>}
         <svg className="ob-caret" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={active ? "rgba(255,255,255,0.75)" : MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
@@ -982,19 +984,19 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 5, minWidth: 236, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)", padding: 5, minWidth: 236, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "6px 8px 8px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{title}</span>
-              {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
+              <span style={{ fontSize: 11, fontWeight: 500, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{title}</span>
+              {active && <button type="button" onClick={onClear} style={{ border: "none", background: "transparent", color: "#55514b", fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Tout effacer</button>}
             </div>
             {items.map((it) => {
               const on = selected.includes(it.key);
               return (
                 <button key={it.key} type="button" onClick={() => onToggle(it.key)}
-                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f3f4f6" : "transparent", borderRadius: 7, padding: it.sub ? "6px 10px 6px 34px" : "8px 10px", cursor: "pointer", fontSize: it.sub ? 12 : 12.5, fontWeight: it.sub ? 500 : 600, color: it.sub ? MUTED : TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
-                  onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f8fa"; }}
+                  style={{ display: "flex", alignItems: "center", gap: 9, width: "100%", textAlign: "left", border: "none", background: on ? "#f7f5f2" : "transparent", borderRadius: 7, padding: it.sub ? "6px 10px 6px 34px" : "8px 10px", cursor: "pointer", fontSize: it.sub ? 12 : 12.5, fontWeight: it.sub ? 500 : 500, color: it.sub ? MUTED : TEXT, fontFamily: "inherit", whiteSpace: "nowrap" }}
+                  onMouseEnter={(e) => { if (!on) e.currentTarget.style.background = "#f7f5f2"; }}
                   onMouseLeave={(e) => { if (!on) e.currentTarget.style.background = "transparent"; }}>
-                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? NAVY : "#cbd2e0"}`, background: on ? NAVY : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
+                  <span style={{ width: 15, height: 15, borderRadius: 4, border: `1.5px solid ${on ? CHARCOAL : "#d8d3cb"}`, background: on ? CHARCOAL : "transparent", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.14s, border-color 0.14s" }}>
                     {on && (
                       <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.6" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 6 9 17l-5-5" />
@@ -1006,7 +1008,7 @@ function ChecklistMenu({ label, title, icon, items, selected, onToggle, onClear 
                     {it.label}
                     {it.hint && <span style={{ display: "block", fontSize: 10.5, fontWeight: 500, color: MUTED }}>{it.hint}</span>}
                   </span>
-                  <span style={{ fontSize: 11, fontWeight: 700, color: MUTED }}>{it.count}</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: MUTED }}>{it.count}</span>
                 </button>
               );
             })}
@@ -1058,19 +1060,19 @@ function SigDateFilter({ from, to, onChange, months = [], target = "signature", 
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 10, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 12, width: 250, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
+          <div style={{ position: "fixed", ...(pos.up ? { bottom: window.innerHeight - pos.top } : { top: pos.top }), left: pos.left, zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)", padding: 12, width: 250, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both", transformOrigin: pos.up ? "bottom left" : "top left" }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{isOnb ? "Onboarding entre" : "Signé le"}</span>
-              {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#2563eb", fontSize: 11.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
+              <span style={{ fontSize: 11, fontWeight: 500, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em" }}>{isOnb ? "Onboarding entre" : "Signé le"}</span>
+              {active && <button type="button" onClick={() => onChange({ from: "", to: "" })} style={{ border: "none", background: "transparent", color: "#55514b", fontSize: 11.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", padding: 0 }}>Effacer</button>}
             </div>
             {/* Cible du filtre : période de SIGNATURE (défaut) ou d'ONBOARDING. */}
-            <div style={{ display: "flex", gap: 4, marginBottom: 10, padding: 3, background: "#f3f4f6", borderRadius: 8 }}>
+            <div style={{ display: "flex", gap: 4, marginBottom: 10, padding: 3, background: "#f7f5f2", borderRadius: 8 }}>
               {[["signature", "Signature"], ["onboarding", "Onboarding"]].map(([val, lbl]) => (
                 <button key={val} type="button" onClick={() => onTarget?.(val)}
                   style={{ flex: 1, padding: "5px 0", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit",
-                    fontSize: 11.5, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                    fontSize: 11.5, fontWeight: 500, transition: "background 0.15s, color 0.15s",
                     background: target === val ? CARD : "transparent", color: target === val ? NAVY : MUTED,
-                    boxShadow: target === val ? "0 1px 2px rgba(17,24,39,0.10)" : "none" }}>
+                    boxShadow: target === val ? "0 1px 2px rgba(43,41,39,.07)" : "none" }}>
                   {lbl}
                 </button>
               ))}
@@ -1083,7 +1085,7 @@ function SigDateFilter({ from, to, onChange, months = [], target = "signature", 
             </select>
             <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "2px 0 10px" }}>
               <div style={{ flex: 1, height: 1, background: BORDER }} />
-              <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 600 }}>ou période</span>
+              <span style={{ fontSize: 10.5, color: MUTED, fontWeight: 500 }}>ou période</span>
               <div style={{ flex: 1, height: 1, background: BORDER }} />
             </div>
             <label style={{ fontSize: 11, color: MUTED, display: "block", marginBottom: 4 }}>Du</label>
@@ -1124,13 +1126,16 @@ const SEC_ICONS = {
 };
 // Titre de section du panneau : icône + libellé (remplace les titres nus).
 // Titre de bloc de la fiche : phrase simple, plus de capitales espacées (dev 29/10/2026, fiche plus claire).
-function SecTitle({ icon, children, style }) {
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 700, color: NAVY, marginBottom: 10, ...style }}>
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{SEC_ICONS[icon]}</svg>
+// `hint` : une phrase d'aide sous le titre, comme les blocs de la fiche Finance.
+function SecTitle({ icon, children, style, hint }) {
+  const title = (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 14, fontWeight: 500, color: NAVY, letterSpacing: "-.005em", marginBottom: 10, ...(hint ? { marginBottom: 0 } : style) }}>
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#a8a39b" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>{SEC_ICONS[icon]}</svg>
       {children}
     </div>
   );
+  if (!hint) return title;
+  return <div style={{ minWidth: 0, marginBottom: 12, ...style }}>{title}<p className="ob-sec-hint">{hint}</p></div>;
 }
 
 // Sous-titre de la barre « Convention Opti'Lex » : quand elle est partie, depuis combien de temps, ou quand elle partira.
@@ -1149,11 +1154,11 @@ function sigInfo(status, sentAt, signedAt, scheduledAt) {
   // Pas de contrat lié mais une date de signature (fiche client interne, remplie à la
   // déclaration de vente) : le client est signé, on l'affiche au lieu d'un "—" trompeur.
   if (!status && signedAt) return { label: "Signé", sub: fmt(signedAt), color: GREEN, kind: "done" };
-  if (status === "ongoing") return { label: "Envoyé", sub: fmt(sentAt) + " · en attente", color: "#b45309", kind: "half" };
-  if (status === "scheduled") return { label: "Planifié", sub: fmt(scheduledAt), color: "#5b6472", kind: "dashed" };
-  if (status === "expired") return { label: "Expiré", sub: "", color: "#b42318", kind: "cross" };
-  if (status === "canceled") return { label: "Annulé", sub: "", color: "#b42318", kind: "cross" };
-  if (status === "failed") return { label: "Échec", sub: "", color: "#b42318", kind: "cross" };
+  if (status === "ongoing") return { label: "Envoyé", sub: fmt(sentAt) + " · en attente", color: "#c2500e", kind: "half" };
+  if (status === "scheduled") return { label: "Planifié", sub: fmt(scheduledAt), color: "#6b665f", kind: "dashed" };
+  if (status === "expired") return { label: "Expiré", sub: "", color: "#c5221f", kind: "cross" };
+  if (status === "canceled") return { label: "Annulé", sub: "", color: "#c5221f", kind: "cross" };
+  if (status === "failed") return { label: "Échec", sub: "", color: "#c5221f", kind: "cross" };
   return null;
 }
 function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
@@ -1164,13 +1169,13 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
       <div style={{ display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.25 }}>
         <span style={{ marginTop: 1 }}><StatusGlyph kind="done" color={GREEN} /></span>
         <div>
-          <div style={{ fontSize: 12.5, fontWeight: 600, color: GREEN }}>Inclus</div>
+          <div style={{ fontSize: 12.5, fontWeight: 500, color: GREEN }}>Inclus</div>
           <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>au contrat Owner</div>
         </div>
       </div>
     );
   }
-  if (!i) return <span style={{ color: "#cbd2e0" }}>—</span>;
+  if (!i) return <span style={{ color: "#d8d3cb" }}>—</span>;
   // Expirée : pastille corail et sablier qui se secoue à l'apparition, pour la repérer d'un coup d'œil (29/10/2026).
   if (status === "expired") {
     return (
@@ -1184,7 +1189,7 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
     <div style={{ display: "flex", alignItems: "flex-start", gap: 7, lineHeight: 1.25 }}>
       <span style={{ marginTop: 1 }}><StatusGlyph kind={i.kind} color={i.color} /></span>
       <div>
-        <div style={{ fontSize: 12.5, fontWeight: 600, color: i.color }}>{i.label}</div>
+        <div style={{ fontSize: 12.5, fontWeight: 500, color: i.color }}>{i.label}</div>
         {i.sub && <div style={{ fontSize: 11, color: MUTED, marginTop: 1 }}>{i.sub}</div>}
       </div>
     </div>
@@ -1204,23 +1209,23 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
           <Avatar name={primaryName(r)} n={r.sheet_num} size={32} />
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
+              <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
               {r.rdv_onboarding_done && <span className="ob-pass is-icon" title={passTitle(r)}><OnboardedPass size={16} /></span>}
               {isInactif(r) && (
                 <span title="Aucune mission suivie par le cabinet depuis 60 jours"
-                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: "#b45309", background: "#fff3e3", padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                  style={{ flexShrink: 0, fontSize: 10, fontWeight: 500, color: "#c2500e", background: "#fde9da", padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
                   Inactif{r.days_since_last_mission != null ? ` · ${r.days_since_last_mission} j` : ""}
                 </span>
               )}
               {renewal && (() => {
                 const days = anniversaryDaysLeft(r);
                 if (days == null) return null;
-                const tone = days <= 30 ? { fg: "#b42318", bg: "#fdecec", dot: "#ef4444" }
-                  : days <= 90 ? { fg: "#b45309", bg: "#fff3e3", dot: "#f59e0b" }
-                  : { fg: "#3730a3", bg: "#eef2ff", dot: "#6366f1" };
+                const tone = days <= 30 ? { fg: "#c5221f", bg: "#fde6e6", dot: "#e0504c" }
+                  : days <= 90 ? { fg: "#c2500e", bg: "#fde9da", dot: "#e08a2e" }
+                  : { fg: "#4a3fc4", bg: "#eae9fb", dot: "#6c62d8" };
                 return (
                   <span title={`Anniversaire du contrat dans ${days} jour${days > 1 ? "s" : ""}`}
-                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 700, color: tone.fg, background: tone.bg, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
+                    style={{ flexShrink: 0, display: "inline-flex", alignItems: "center", gap: 4, fontSize: 10, fontWeight: 500, color: tone.fg, background: tone.bg, padding: "1px 7px", borderRadius: 10, whiteSpace: "nowrap" }}>
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="none" aria-hidden>
                       <circle cx="12" cy="12" r="9" stroke={tone.dot} strokeWidth="2.4" />
                       <path d="M12 7.5V12l3 2" stroke={tone.dot} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
@@ -1234,7 +1239,7 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
           </div>
         </div>
       </td>
-      <td style={{ ...td, color: r.secteur_activite ? TEXT : "#cbd2e0" }}>
+      <td style={{ ...td, color: r.secteur_activite ? TEXT : "#d8d3cb" }}>
         {r.secteur_activite ? (
           <div className="ob-sector" title={`Secteur d'activité : ${secteurLabel(r.secteur_activite)}`}>
             <SectorIcon secteur={r.secteur_activite} size={20} />
@@ -1253,15 +1258,15 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
         <EtatPicker etat={displayEtat(r)} disabled={!r.numero_client || readOnly}
           onPick={(v) => { const saving = changeEtat(r.numero_client, { etat: v }); if (ETAT_DATE_CONFIG[v]) onSelect(rk); return saving; }} />
         {isEtatPending(r) && r.etat_date && (
-          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 700, color: "#b45309", marginTop: 5, lineHeight: 1.3 }}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 10.5, fontWeight: 500, color: "#c2500e", marginTop: 5, lineHeight: 1.3 }}
             title={`${r.etat_manuel} prévue le ${fmt(r.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}>
-            <StatusGlyph kind="clock" color="#b45309" size={11} />{r.etat_manuel} · prévu {fmt(r.etat_date)}
+            <StatusGlyph kind="clock" color="#c2500e" size={11} />{r.etat_manuel} · prévu {fmt(r.etat_date)}
           </div>
         )}
         {(() => {
           const h = etatHint(r);
           return h ? (
-            <div style={{ fontSize: 10.5, fontWeight: 600, color: h.urgent ? "#b45309" : "#a3a9b6", marginTop: 3 }}>{h.text}</div>
+            <div style={{ fontSize: 10.5, fontWeight: 500, color: h.urgent ? "#c2500e" : "#a8a39b", marginTop: 3 }}>{h.text}</div>
           ) : null;
         })()}
       </td>
@@ -1277,7 +1282,7 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
           disabled={!r.numero_client || isFinanceTeam() || readOnly}
           onSave={(d) => patch(r.numero_client, { rdv_onboarding_date_manual: d })} />
         {r.rdv_onboarding_done && r.rdv_onboarding_done_date && (
-          <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 600, color: GREEN }}>
+          <div title="Onboarding réalisé saisi à la main (ancien client)" style={{ marginTop: 3, fontSize: 10.5, fontWeight: 500, color: GREEN }}>
             Réalisé le {fmtDT(r.rdv_onboarding_done_date)}
           </div>
         )}
@@ -1288,11 +1293,11 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
           return (noShow || recaler || toConfirm) ? (
             <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 3 }}>
               {toConfirm && (
-                <div title="Onboarding à confirmer : en attente de qualification par le Client Success (fiche du client)" style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#eef2ff", color: "#4338ca", fontSize: 10.5, fontWeight: 700 }}>À confirmer</div>
+                <div title="Onboarding à confirmer : en attente de qualification par le Client Success (fiche du client)" style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#eae9fb", color: "#4a3fc4", fontSize: 10.5, fontWeight: 500 }}>À confirmer</div>
               )}
               {noShow && <OnboardingNoShowBadge date={r.rdv_onboarding_date_manual || r.rdv_onboarding_date} />}
               {recaler && (
-                <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fff4e0", color: "#b45309", fontSize: 10.5, fontWeight: 700 }}>À recaler</div>
+                <div title={r.onboarding_reschedule_note || "Onboarding à recaler, sans date"} style={{ display: "inline-block", padding: "2px 7px", borderRadius: 999, background: "#fde9da", color: "#c2500e", fontSize: 10.5, fontWeight: 500 }}>À recaler</div>
               )}
             </div>
           ) : null;
@@ -1776,11 +1781,13 @@ export default function OptilexBoard({ embed = false }) {
 
   // En-tête léger (le filet du bas est une ombre : une bordure ne suit pas un en-tête collant) ; sa hauteur
   // fixe est celle que l'ascenseur saute (.ob-table-wrap).
-  const th = { textAlign: "left", padding: "0 14px", height: 40, boxSizing: "border-box", fontSize: 11, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", whiteSpace: "nowrap", position: "sticky", top: 0, background: "#fbfcfd", boxShadow: `inset 0 -1px 0 ${BORDER}`, zIndex: 1 };
+  const th = { textAlign: "left", padding: "0 14px", height: 40, boxSizing: "border-box", fontSize: 13, fontWeight: 500, color: "#55514b", whiteSpace: "nowrap", position: "sticky", top: 0, background: CARD, boxShadow: "inset 0 -1px 0 #e8e4de", zIndex: 1 };
+  const thIn = { display: "inline-flex", alignItems: "center", gap: 7 };
+  const thIc = { size: 14, color: "#a8a39b", strokeWidth: 1.75, "aria-hidden": true };
   const td = ROW_TD;
 
   return (
-    <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", color: TEXT }}>
+    <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", fontFeatureSettings: "'cv11','ss01'", color: TEXT }} className="ob-root">
       <style>{`
         .ob-alert-chip .ob-chip-ic{color:var(--al-ink)}
         .ob-alert-chip.is-on{background:var(--al-tile);border-color:transparent;color:var(--al-ink)}
@@ -1792,43 +1799,43 @@ export default function OptilexBoard({ embed = false }) {
         .ob-alert-chip:hover .al-z{animation:obAlZ .8s ease-in-out}
         @keyframes obAlZ{0%,100%{transform:none;opacity:1}50%{transform:translate(1px,-2px) scale(1.15);opacity:.5}}
         /* Agenda du client (même mise en page que les autres fenêtres de la fiche). */
-        .ag-modal{position:relative;display:flex;flex-direction:column;width:min(680px,100%);max-height:86vh;overflow:hidden;border-radius:28px;background:${CARD};box-shadow:0 24px 70px rgba(18,27,53,.22),0 2px 6px rgba(18,27,53,.06)}
-        .ag-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 22px 16px 26px;border-bottom:1px solid #eef0f3}
-        .ag-head h3{margin:0;font-size:17px;font-weight:750;letter-spacing:-.01em;color:${NAVY}}
+        .ag-modal{position:relative;display:flex;flex-direction:column;width:min(680px,100%);max-height:86vh;overflow:hidden;border-radius:22px;background:${CARD};box-shadow:0 24px 70px rgba(28,27,25,.14),0 2px 6px rgba(43,41,39,.042)}
+        .ag-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:20px 22px 16px 26px;border-bottom:1px solid #f4f2ee}
+        .ag-head h3{margin:0;font-size:17px;font-weight:500;letter-spacing:-.01em;color:${NAVY}}
         .ag-head p{margin:2px 0 0;font-size:12.5px;color:${MUTED};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ag-close{display:grid;place-items:center;width:32px;height:32px;border:0;background:transparent;padding:0;color:${MUTED};cursor:pointer}
         .ag-close svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ag-close:hover{color:${NAVY}}
         .ag-close:hover svg{transform:rotate(90deg)}
-        .ag-body{overflow-y:auto;padding:16px 18px 18px;background:#f6f7f9}
+        .ag-body{overflow-y:auto;padding:16px 18px 18px;background:#f4f2ef}
         .ag-day{font-size:13px;text-transform:capitalize}
         .ag-list{display:flex;flex-direction:column;gap:6px}
-        .ag-item{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 12px 6px 6px;border:1px solid #ebedf1;border-radius:14px;background:#fbfbfc;animation:obAgIn .4s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(.15s + var(--ag-i) * .04s);transition:border-color .15s,background .15s}
-        .ag-item:hover{border-color:#dfe3ea;background:#fff}
+        .ag-item{display:flex;align-items:center;gap:12px;min-height:52px;padding:6px 12px 6px 6px;border:1px solid #f1eee9;border-radius:14px;background:#faf9f7;animation:obAgIn .4s cubic-bezier(.16,1,.3,1) backwards;animation-delay:calc(.15s + var(--ag-i) * .04s);transition:border-color .15s,background .15s}
+        .ag-item:hover{border-color:#e8e4de;background:#fff}
         @keyframes obAgIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-        .ag-time{display:grid;place-items:center;flex-shrink:0;width:58px;height:40px;border-radius:10px;background:#f1f3f6;font-size:13.5px;font-weight:700;font-variant-numeric:tabular-nums;color:${NAVY}}
+        .ag-time{display:grid;place-items:center;flex-shrink:0;width:58px;height:40px;border-radius:10px;background:#f4f2ee;font-size:13.5px;font-weight:500;font-variant-numeric:tabular-nums;color:${NAVY}}
         .ag-bar{flex-shrink:0;width:3px;align-self:stretch;margin:4px 0;border-radius:2px;background:var(--ag-tone)}
         .ag-tx{display:flex;flex-direction:column;gap:1px;flex:1;min-width:0}
-        .ag-tx strong{font-size:13.5px;font-weight:650;color:${NAVY};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ag-tx strong{font-size:13.5px;font-weight:500;color:${NAVY};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ag-tx small{font-size:12px;color:${MUTED};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .ag-item.is-cancelled .ag-time,.ag-item.is-cancelled .ag-tx strong{color:#a3abba}
+        .ag-item.is-cancelled .ag-time,.ag-item.is-cancelled .ag-tx strong{color:#a8a39b}
         .ag-item.is-cancelled .ag-tx strong{text-decoration:line-through}
         .ob-contact{gap:8px}
         /* Témoignage : petite fenêtre « un mot pour Morgane ». */
         .tm-anchor{position:relative;display:inline-flex}
-        .tm-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:330px;padding:16px;border:1px solid #e9ebf0;border-radius:20px;background:${CARD};box-shadow:0 14px 36px rgba(18,27,53,.16),0 2px 6px rgba(18,27,53,.06);transform-origin:top right;font-weight:500}
+        .tm-pop{position:absolute;top:calc(100% + 8px);right:0;z-index:40;width:330px;padding:16px;border:1px solid #ece9e4;border-radius:20px;background:${CARD};box-shadow:0 14px 34px rgba(28,27,25,.10),0 2px 6px rgba(28,27,25,.04);transform-origin:top right;font-weight:500}
         .tm-head{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px}
         .tm-head>div{display:flex;flex-direction:column;gap:2px}
-        .tm-head strong{font-size:13.5px;font-weight:700;color:${NAVY}}
-        .tm-head small{font-size:12px;line-height:1.45;color:#6b7385}
-        .tm-ic{display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;border-radius:10px;background:#f7e1e6;color:#bd4469}
-        .tm-pop textarea{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #e3e7ee;border-radius:12px;font:inherit;font-size:13px;line-height:1.5;color:${TEXT};resize:vertical;outline:0;transition:border-color .15s,box-shadow .15s}
-        .tm-pop textarea:focus{border-color:#9db7e3;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-        .tm-error{margin:8px 0 0;font-size:12px;color:#b42318}
+        .tm-head strong{font-size:13.5px;font-weight:500;color:${NAVY}}
+        .tm-head small{font-size:12px;line-height:1.45;color:#8b867e}
+        .tm-ic{display:grid;place-items:center;flex-shrink:0;width:34px;height:34px;border-radius:10px;background:#fde9da;color:#c2500e}
+        .tm-pop textarea{box-sizing:border-box;width:100%;padding:10px 12px;border:1px solid #e8e4de;border-radius:12px;font:inherit;font-size:13px;line-height:1.5;color:${TEXT};resize:vertical;outline:0;transition:border-color .15s,box-shadow .15s}
+        .tm-pop textarea:focus{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
+        .tm-error{margin:8px 0 0;font-size:12px;color:#c5221f}
         .tm-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:10px}
         .tm-ghost,.tm-go{flex-shrink:0;white-space:nowrap}
-        .tm-ghost{height:32px;padding:0 12px;border:1px solid #e3e7ee;border-radius:9px;background:${CARD};font:inherit;font-size:12.5px;font-weight:600;color:${TEXT};cursor:pointer}
-        .tm-go{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border:0;border-radius:9px;background:${NAVY};font:inherit;font-size:12.5px;font-weight:650;color:#fff;cursor:pointer}
+        .tm-ghost{height:32px;padding:0 12px;border:1px solid #e8e4de;border-radius:9px;background:${CARD};font:inherit;font-size:12.5px;font-weight:500;color:${TEXT};cursor:pointer}
+        .tm-go{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 13px;border:0;border-radius:9px;background:#2b2927;font:inherit;font-size:12.5px;font-weight:500;color:#fff;cursor:pointer}
         .tm-go svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
         .tm-go:hover:not(:disabled) svg{transform:translate(2px,-2px) rotate(-6deg)}
         .tm-go:disabled{opacity:.6;cursor:progress}
@@ -1839,59 +1846,106 @@ export default function OptilexBoard({ embed = false }) {
         .ob-contact .bcl-more{opacity:.0;transition:opacity .15s,border-color .15s,color .15s}
         .ob-prop:hover .ob-contact .bcl-more,.ob-contact .bcl-more[aria-expanded="true"],.ob-contact .bcl-more:focus-visible{opacity:1}
         @media (hover:none){.ob-contact .bcl-more{opacity:1}}
-        .ob-exp{display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 6px;border-radius:999px;background:#ffe2dc;color:#bf4436;font-size:12px;font-weight:700}
+        .ob-exp{display:inline-flex;align-items:center;gap:5px;padding:2px 9px 2px 6px;border-radius:999px;background:#ffe2dc;color:#bf4436;font-size:12px;font-weight:500}
         .ob-dp-convention{margin-bottom:18px}
-        .ob-dp-wallet{margin:4px 0 26px}
+        .ob-dp-wallet{margin:4px 0 0}
         @keyframes obMenuIn{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:none}}
         @keyframes obRowIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
         @keyframes obFadeUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
         @keyframes obShimmer{from{background-position:200% 0}to{background-position:-200% 0}}
-        .ob-sk{background:linear-gradient(90deg,#eef1f6 25%,#f7f8fa 50%,#eef1f6 75%);background-size:200% 100%;animation:obShimmer 1.4s ease-in-out infinite;display:inline-block;flex-shrink:0}
-        .ob-chev{display:inline-flex;color:#c3cad6;transition:transform .18s ease,color .18s ease}
-        tr:hover .ob-chev{transform:translateX(3px);color:#1e2330}
+        .ob-sk{background:linear-gradient(90deg,#f4f2ee 25%,#f7f5f2 50%,#f4f2ee 75%);background-size:200% 100%;animation:obShimmer 1.4s ease-in-out infinite;display:inline-block;flex-shrink:0}
+        .ob-chev{display:inline-flex;color:#cfc9c0;transition:transform .18s ease,color .18s ease}
+        tr:hover .ob-chev{transform:translateX(3px);color:#1c1b19}
         .ob-sec{animation:obFadeUp .32s cubic-bezier(0.16,1,0.3,1) both}
-        /* Fiche client (dev 29/10/2026) : en-tête, propriétés comme une fiche de tâche, onglets de suivi. */
-        /* Croix ronde posée sur le voile, à gauche du panneau (600 px) ; dans le panneau en petit écran. */
-        .ob-dp-close{position:fixed;top:18px;right:calc(min(600px, 100vw) + 14px);z-index:9999;display:grid;place-items:center;width:38px;height:38px;border:0;border-radius:50%;background:${CARD};color:${NAVY};box-shadow:0 8px 22px rgba(18,27,53,.2),0 1px 3px rgba(18,27,53,.08);cursor:pointer}
+        /* Fiche client (dev 10/11/2026) : le gabarit de la fiche Finance. Carte blanche flottante à dix pixels du
+           bord, en-tête (qui, où il en est, trois repères), propriétés en lignes fines, onglets qui restent collés. */
+        .ob-detail-panel{position:fixed;top:10px;right:10px;z-index:9999;display:flex;flex-direction:column;width:clamp(600px,42vw,720px);max-width:calc(100vw - 20px);height:calc(100dvh - 20px);overflow:hidden;border:1px solid #ece9e4;border-radius:22px;background:${CARD};box-shadow:0 0 0 5px rgba(255,255,255,.5),-24px 0 60px rgba(43,41,39,.13),0 10px 30px rgba(43,41,39,.08);font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;transition:width .34s cubic-bezier(.22,1,.36,1),height .34s cubic-bezier(.22,1,.36,1),top .34s cubic-bezier(.22,1,.36,1),right .34s cubic-bezier(.22,1,.36,1),border-radius .34s cubic-bezier(.22,1,.36,1)}
+        .ob-detail-panel.is-full{top:0;right:0;width:100vw;max-width:100vw;height:100dvh;border-color:transparent;border-radius:0;box-shadow:none}
+        @media (max-width:680px){.ob-detail-panel{top:0;right:0;width:100vw;max-width:100vw;height:100dvh;border-color:transparent;border-radius:0}}
+        @media (prefers-reduced-motion:reduce){.ob-detail-panel{transition:none}}
+        .ob-dp-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+        .ob-dp-scroll::-webkit-scrollbar{width:12px;height:12px}
+        .ob-dp-scroll::-webkit-scrollbar-track{background:transparent;margin:16px 0}
+        .ob-dp-scroll::-webkit-scrollbar-thumb{background-color:#e3ded6;border:4px solid transparent;border-radius:999px;background-clip:padding-box}
+        .ob-dp-scroll:hover::-webkit-scrollbar-thumb{background-color:#cfc9c0}
+        .ob-dp-scroll::-webkit-scrollbar-thumb:hover{background-color:#a8a39b}
+        @supports not selector(::-webkit-scrollbar){.ob-dp-scroll{scrollbar-width:thin;scrollbar-color:#d8d3cb transparent}}
+        /* Croix ronde posée sur le voile, à gauche du panneau ; dans le panneau en petit écran, dans l'en-tête en plein écran. */
+        .ob-dp-close{position:fixed;top:24px;right:calc(clamp(600px,42vw,720px) + 22px);z-index:9999;display:grid;place-items:center;width:38px;height:38px;padding:0;border:1px solid #ece9e4;border-radius:50%;background:${CARD};color:#4a4540;box-shadow:0 8px 22px rgba(43,41,39,.16),0 1px 3px rgba(43,41,39,.08);cursor:pointer;transition:color .15s ease,box-shadow .2s ease}
+        .ob-dp-close:hover{color:${NAVY};box-shadow:0 10px 28px rgba(43,41,39,.22),0 1px 3px rgba(43,41,39,.1)}
+        .ob-dp-close.is-hidden{display:none}
         .ob-dp-close svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-dp-close:hover svg{transform:rotate(90deg)}
         @media (max-width:680px){.ob-dp-close{top:12px;right:12px;z-index:10000;width:34px;height:34px}}
-        .ob-dp-close-sr{position:absolute;top:10px;right:12px;z-index:3;padding:6px 10px;border:0;border-radius:8px;background:${NAVY};color:#fff;font:inherit;font-size:12px;font-weight:600;cursor:pointer;opacity:0;pointer-events:none}
-        .ob-dp-close-sr:focus-visible{opacity:1;pointer-events:auto;outline:2px solid #9db7e3;outline-offset:2px}
-        .ob-dp-body{padding:24px 24px 48px}
+        /* En-tête : pastille ronde, nom, société, étiquettes, puis trois repères en tuiles. */
+        .ob-fh{margin-bottom:24px}
+        .ob-fh-top{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+        .ob-fh-id{display:flex;align-items:center;gap:14px;min-width:0}
+        .ob-fh-name{margin:0;font-size:22px;font-weight:500;line-height:1.25;letter-spacing:-.02em;color:${TEXT};display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
+        .ob-fh-sub{margin-top:2px;font-size:13.5px;color:${MUTED};overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .ob-fh-actions{display:flex;align-items:center;gap:6px;flex-shrink:0}
+        .ob-fh-ring{display:grid;place-items:center;width:34px;height:34px;padding:0;border:1px solid #e8e4de;border-radius:50%;background:${CARD};color:${MUTED};box-shadow:0 1px 2px rgba(43,41,39,.06);cursor:pointer;transition:color .15s,border-color .15s,transform .15s}
+        .ob-fh-ring:hover{color:${NAVY};border-color:#d8d3cb}
+        .ob-fh-ring:active{transform:scale(.9)}
+        .ob-fh-ring svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
+        .ob-fh-ring:hover svg{transform:scale(1.14)}
+        .ob-fh-ring.is-close:hover svg{transform:rotate(90deg)}
+        .ob-fh-meta{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:14px}
+        .ob-fh-chip{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border:1px solid #e3ded6;border-radius:7px;background:#f1eee9;color:#4a4540;font-size:12.5px;font-weight:500;white-space:nowrap}
+        .ob-fh-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:16px}
+        .ob-fh-tile{display:flex;flex-direction:column;gap:6px;min-width:0;padding:14px 14px 13px;border:1px solid ${BORDER};border-radius:16px;background:${CARD};transition:border-color .18s,box-shadow .18s}
+        .ob-fh-tile:hover{border-color:#e3ded6;box-shadow:0 6px 18px rgba(43,41,39,.07)}
+        .ob-fh-tile-k{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:${MUTED}}
+        .ob-fh-tile-k svg{flex-shrink:0;color:#b3aea6;transition:transform .32s cubic-bezier(.34,1.56,.64,1),color .18s}
+        .ob-fh-tile:hover .ob-fh-tile-k svg{transform:translateY(-1px) scale(1.12);color:${NAVY}}
+        .ob-fh-tile-v{font-size:20px;font-weight:500;line-height:1.2;letter-spacing:-.015em;color:${TEXT};font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ob-fh-tile-n{font-size:12px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        @media (max-width:680px){.ob-fh-top{padding-right:40px}.ob-fh-actions{display:none}}
+        @media (max-width:520px){.ob-fh-tiles{grid-template-columns:1fr}}
+        .ob-sec-hint{margin:3px 0 0;font-size:12.5px;font-weight:400;line-height:1.45;color:${MUTED}}
+        .ob-dp-close-sr{position:absolute;top:10px;right:12px;z-index:3;padding:6px 10px;border:0;border-radius:8px;background:#2b2927;color:#fff;font:inherit;font-size:12px;font-weight:500;cursor:pointer;opacity:0;pointer-events:none}
+        .ob-dp-close-sr:focus-visible{opacity:1;pointer-events:auto;outline:2px solid #d8d3cb;outline-offset:2px}
+        .ob-dp-body{--dp-x:28px;--dp-y:26px;padding:var(--dp-y) var(--dp-x) 56px}
+        .ob-detail-panel.is-full .ob-dp-body{--dp-x:40px;--dp-y:34px;max-width:1240px;margin:0 auto;padding-bottom:72px}
+        /* Plein écran large : la fiche à gauche, le suivi (onglets) à droite. */
+        @media (min-width:1100px){
+          .ob-detail-panel.is-full .ob-dp-cols{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.05fr);column-gap:52px;align-items:start}
+          .ob-detail-panel.is-full .ob-dp-side .ob-tabs{margin:-20px 0 24px;padding-left:0;padding-right:0}
+        }
         .ob-dp-block{margin-bottom:24px}
         .ob-props{display:flex;flex-direction:column}
         .ob-props{gap:2px}
         .ob-props-group{display:flex;flex-direction:column;gap:2px}
-        .ob-props-group+.ob-props-group{margin-top:12px;padding-top:12px;border-top:1px solid #f0f2f5}
-        .ob-prop{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;column-gap:16px;min-height:40px;margin:0 -10px;padding:4px 10px;border-radius:9px;transition:background .15s}
-        .ob-prop:hover{background:#f7f8fa}
+        .ob-props-group+.ob-props-group{margin-top:12px;padding-top:12px;border-top:1px solid #f1eee9}
+        .ob-props-title{padding:2px 0 6px;font-size:10.5px;font-weight:500;color:#a8a39b;text-transform:uppercase;letter-spacing:.09em}
+        .ob-prop{display:grid;grid-template-columns:130px minmax(0,1fr);align-items:center;column-gap:16px;min-height:40px;margin:0 -10px;padding:4px 10px;border-radius:10px;transition:background .15s}
+        .ob-prop:hover{background:#f7f5f2}
         .ob-prop-vline{display:flex;align-items:center;gap:4px;min-width:0}
         .ob-prop-vline>:first-child{min-width:0}
         /* Ligne qui peut grandir (dates d'effet sous l'état) : contenu en haut, mais marges égales en haut et en bas,
            pour que la zone de survol reste centrée sur une seule ligne (dev 29/10/2026). */
         .ob-prop.is-top{align-items:start;padding-top:8px;padding-bottom:8px}
-        .ob-prop-k{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:500;color:${MUTED};white-space:nowrap}
+        .ob-prop-k{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:400;color:${MUTED};white-space:nowrap}
         .ob-prop.is-wrap .ob-prop-k{white-space:normal;line-height:1.25}
-        .ob-prop-k svg{flex-shrink:0;color:#a3abba;transition:transform .32s cubic-bezier(.34,1.56,.64,1),color .18s}
+        .ob-prop-k svg{flex-shrink:0;color:#b3aea6;transition:transform .32s cubic-bezier(.34,1.56,.64,1),color .18s}
         .ob-prop:hover .ob-prop-k svg{transform:translateY(-1px) scale(1.12);color:${NAVY}}
-        .ob-prop-v{min-width:0;font-size:13.5px;font-weight:600;color:${TEXT};overflow-wrap:anywhere}
+        .ob-prop-v{min-width:0;font-size:13.5px;font-weight:500;color:${TEXT};overflow-wrap:anywhere}
         .ob-pv-line{display:inline-flex;align-items:center;gap:7px;flex-wrap:wrap;max-width:100%}
         .ob-pv-sub{font-size:12px;font-weight:500;color:${MUTED}}
-        .ob-pv-none{font-weight:500;color:#b6bdc9}
-        .ob-pv-more{margin-left:8px;padding:0;border:0;background:none;font:inherit;font-size:12px;font-weight:500;color:#8a93a3;cursor:pointer;text-decoration:underline;text-underline-offset:2px}.ob-pv-more:hover{color:#2f6fde}
+        .ob-pv-none{font-weight:500;color:#c9c4bc}
+        .ob-pv-more{margin-left:8px;padding:0;border:0;background:none;font:inherit;font-size:12px;font-weight:500;color:#8b867e;cursor:pointer;text-decoration:underline;text-underline-offset:2px}.ob-pv-more:hover{color:#1c1b19}
         .ob-pv-text{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .ob-contract-line{display:flex;align-items:center;gap:12px;min-width:0}
 
-        .ob-prop-edit{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 2px;color:${MUTED};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:color .16s}
+        .ob-prop-edit{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:4px 2px;color:${MUTED};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;transition:color .16s}
         .ob-prop-edit svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-prop-edit:hover{color:${NAVY}}
         .ob-prop-edit:hover svg{transform:rotate(-12deg) translateY(-1px)}
-        .ob-prog{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 8px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:#3d4556;font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
+        .ob-prog{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 11px 0 8px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:#55514b;font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;transition:background .18s,border-color .18s,color .18s}
         .ob-prog:disabled{cursor:default}
-        .ob-prog:not(:disabled):hover{border-color:#d5dae3;color:var(--pg-ink)}
+        .ob-prog:not(:disabled):hover{border-color:#e3ded6;color:var(--pg-ink)}
         .ob-prog.is-on{border-color:transparent;background:var(--pg-tile);color:var(--pg-ink)}
-        .ob-prog-ic{display:grid;place-items:center;color:#a3abba;transition:color .18s}
+        .ob-prog-ic{display:grid;place-items:center;color:#a8a39b;transition:color .18s}
         .ob-prog:not(:disabled):hover .ob-prog-ic,.ob-prog.is-on .ob-prog-ic{color:var(--pg-ink)}
         .ob-prog.is-on .ob-prog-ic{animation:obPgPop .5s cubic-bezier(.34,1.56,.64,1)}
         @keyframes obPgPop{0%{transform:scale(.5) rotate(-20deg)}60%{transform:scale(1.25) rotate(6deg)}100%{transform:none}}
@@ -1906,26 +1960,29 @@ export default function OptilexBoard({ embed = false }) {
         .pg-star{transform-box:fill-box;transform-origin:center}
         .ob-prog:not(:disabled):hover .pg-star{animation:obPgStar .7s cubic-bezier(.34,1.56,.64,1)}
         @keyframes obPgStar{0%{transform:none}50%{transform:scale(1.35) rotate(72deg)}100%{transform:rotate(144deg)}}
-        .ob-tabs{display:flex;gap:20px;margin:4px 0 18px;border-bottom:1px solid ${BORDER};overflow-x:auto;scrollbar-width:none}
+        .ob-tabs{position:sticky;top:calc(-1 * var(--dp-y));z-index:6;display:flex;gap:20px;margin:0 calc(-1 * var(--dp-x)) 20px;padding:calc(var(--dp-y) + 4px) var(--dp-x) 0;background:${CARD};border-bottom:1px solid ${BORDER};overflow-x:auto;scrollbar-width:none}
+        .ob-detail-panel.is-full .ob-tabs{gap:28px;margin-bottom:24px}
         .ob-tabs::-webkit-scrollbar{display:none}
-        .ob-tab{position:relative;display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;padding:10px 0 12px;font:inherit;font-size:13.5px;font-weight:600;color:${MUTED};cursor:pointer;white-space:nowrap;transition:color .16s}
-        .ob-tab:hover,.ob-tab.is-on{color:${NAVY}}
-        .ob-tab-n{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#eef1f6;color:${NAVY};font-size:11px;font-weight:700;transition:background .16s,color .16s}
-        .ob-tab.is-on .ob-tab-n{background:${NAVY};color:#fff}
+        .ob-tab{position:relative;display:inline-flex;align-items:center;gap:7px;border:0;background:transparent;padding:10px 0 12px;font:inherit;font-size:13.5px;font-weight:500;color:${MUTED};cursor:pointer;white-space:nowrap;transition:color .16s}
+        .ob-tab:hover{color:#4a4540}
+        .ob-tab.is-on{color:${NAVY}}
+        .ob-tab-n{display:inline-grid;place-items:center;min-width:18px;height:18px;padding:0 5px;border-radius:999px;background:#f1eee9;color:#4a4540;font-size:11px;font-weight:500;font-variant-numeric:tabular-nums;transition:background .16s,color .16s}
+        .ob-tab.is-on .ob-tab-n{background:#2b2927;color:#fff}
         .ob-tab-line{position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:${NAVY}}
-        .ob-tabpanel{animation:ob-detail-enter .2s ease-out}
+        .ob-tabpanel{animation:obPanelIn .26s cubic-bezier(.16,1,.3,1) both}
+        @keyframes obPanelIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
         .ob-steps{border:1px solid ${BORDER};border-radius:12px;overflow:hidden}
         .ob-step{display:flex;align-items:center;gap:12px;padding:11px 14px}
         .ob-step+.ob-step{border-top:1px solid ${BORDER}}
-        .ob-step-ic{flex-shrink:0;color:#c0c7d4}
+        .ob-step-ic{flex-shrink:0;color:#cfc9c0}
         .ob-step.is-done .ob-step-ic{color:${GREEN}}
-        .ob-step-t{font-size:13px;font-weight:600;color:${MUTED}}
+        .ob-step-t{font-size:13px;font-weight:500;color:${MUTED}}
         .ob-step.is-done .ob-step-t{color:${NAVY}}
         .ob-step-s{margin-top:1px;font-size:11.5px;color:${MUTED}}
-        .ob-step-r{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;color:#c0c7d4;white-space:nowrap}
+        .ob-step-r{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:500;color:#cfc9c0;white-space:nowrap}
         .ob-step.is-done .ob-step-r{color:${GREEN}}
         /* Passe « Onboardé » : se penche et brille au survol. */
-        .ob-pass{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;vertical-align:middle;margin-left:10px;padding:3px 9px 3px 6px;border-radius:999px;background:#e9f9f0;color:${GREEN};font-size:12px;font-weight:700;letter-spacing:0;cursor:default}
+        .ob-pass{display:inline-flex;align-items:center;gap:5px;flex-shrink:0;vertical-align:middle;margin-left:10px;padding:3px 9px 3px 6px;border-radius:999px;background:#e2f6ea;color:${GREEN};font-size:12px;font-weight:500;letter-spacing:0;cursor:default}
         .ob-pass.is-icon{margin-left:0;padding:0;background:transparent}
         .ob-pass-svg{display:block;overflow:visible;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
         .ob-pass:hover .ob-pass-svg,.ob-row:hover .ob-pass .ob-pass-svg{transform:rotate(-10deg) translateY(-1px) scale(1.1)}
@@ -1936,13 +1993,13 @@ export default function OptilexBoard({ embed = false }) {
            pointillés avec la fusée, grandes dates, bandeau bleu, lancements, grosses encoches (masque à la hauteur
            de la perforation, contour suivi par l'ombre du conteneur), souche et son code-barres pleine largeur. */
         .ob-tkw{margin-bottom:24px}
-        .ob-tk{position:relative;border-radius:24px}
+        .ob-tk{position:relative;border-radius:22px}
         .ob-tk-shape{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
         .ob-tk-top{position:relative;padding:20px 24px 22px}
-        .ob-tk-line{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#6b7385}
-        .ob-tk-o{flex-shrink:0;width:8px;height:8px;border:1.4px solid #6b7385;border-radius:50%}
-        .ob-tk-o.is-full{background:#6b7385}
-        .ob-tk-dots{flex:1;height:0;border-top:1.6px dotted #9aa3b2}
+        .ob-tk-line{display:flex;align-items:center;gap:7px;font-size:10px;font-weight:500;letter-spacing:.08em;text-transform:uppercase;color:#8b867e}
+        .ob-tk-o{flex-shrink:0;width:8px;height:8px;border:1.4px solid #8b867e;border-radius:50%}
+        .ob-tk-o.is-full{background:#8b867e}
+        .ob-tk-dots{flex:1;height:0;border-top:1.6px dotted #a8a39b}
         .ob-tk-rocket{flex-shrink:0;display:block;color:${NAVY};transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
         .ob-tk:hover .ob-tk-rocket{transform:translateX(4px)}
         .ob-tk-flame{transform-box:fill-box;transform-origin:100% 50%}
@@ -1954,142 +2011,142 @@ export default function OptilexBoard({ embed = false }) {
         .ob-tk-codes>div{display:flex;flex-direction:column;min-width:0}
         .ob-tk-codes>div.is-right{align-items:flex-end;text-align:right}
         .ob-tk-code-big{font-size:34px;line-height:1.05;font-weight:500;letter-spacing:-.02em;color:${NAVY};white-space:nowrap}
-        .ob-tk-city{margin-top:6px;font-size:12px;line-height:1.35;color:#6b7385}
+        .ob-tk-city{margin-top:6px;font-size:12px;line-height:1.35;color:#8b867e}
         .ob-tk-mid{display:flex;flex-direction:column;align-items:center;gap:6px;padding-top:4px}
         .ob-tk-dur{font-size:11px;font-weight:500;color:${TEXT};white-space:nowrap}
-        .ob-tk-status{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;background:${NAVY};color:#fff;font-size:11px;font-weight:650;white-space:nowrap;cursor:default}
+        .ob-tk-status{display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:999px;background:#2b2927;color:#fff;font-size:11px;font-weight:500;white-space:nowrap;cursor:default}
         .ob-tk-status svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
         .ob-tk-status:hover svg{transform:rotate(-8deg) scale(1.14)}
         .ob-tk-flag{transform-box:fill-box;transform-origin:0 100%}
         @keyframes obFlag{0%,100%{transform:skewY(0)}50%{transform:skewY(-7deg)}}
         .ob-tk-status:hover .ob-tk-flag{animation:obFlag .55s ease-in-out 2}
-        .ob-tk-status.is-warn{background:#b45309}
+        .ob-tk-status.is-warn{background:#c2500e}
         .ob-tk-status.is-done{background:${GREEN}}
-        .ob-tk-status.is-idle{background:#8a93a4}
+        .ob-tk-status.is-idle{background:#8b867e}
         .ob-tk-times{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
         .ob-tk-times>div{display:flex;flex-direction:column}
         .ob-tk-times>div.is-right{align-items:flex-end;text-align:right}
-        .ob-tk-times strong{font-size:15px;font-weight:700;color:${NAVY}}
-        .ob-tk-times span{margin-top:2px;font-size:11px;color:#8a93a4}
-        .ob-tk-band{display:grid;grid-template-columns:1.3fr 1fr 1fr .9fr;gap:10px;margin-top:18px;padding:12px 16px;border-radius:12px;background:#b9cdee}
+        .ob-tk-times strong{font-size:15px;font-weight:500;color:${NAVY}}
+        .ob-tk-times span{margin-top:2px;font-size:11px;color:#8b867e}
+        .ob-tk-band{display:grid;grid-template-columns:1.3fr 1fr 1fr .9fr;gap:10px;margin-top:18px;padding:12px 16px;border-radius:12px;background:#c9e0fa}
         .ob-tk.is-done .ob-tk-band{background:#bfe3cd}
         .ob-tk-band>div{display:flex;flex-direction:column;gap:3px;min-width:0}
-        .ob-tk-band span{font-size:11px;font-weight:500;color:#2c3a55}
-        .ob-tk-band strong{display:flex;align-items:center;gap:6px;min-height:22px;font-size:15px;font-weight:700;color:${NAVY};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ob-tk-band span{font-size:11px;font-weight:500;color:#4a4540}
+        .ob-tk-band strong{display:flex;align-items:center;gap:6px;min-height:22px;font-size:15px;font-weight:500;color:${NAVY};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .ob-tk-band a{display:inline-flex;align-items:center;gap:3px;color:${NAVY};text-decoration:none}
         .ob-tk-band a svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-tk-band a:hover svg{transform:translate(1px,-1px) scale(1.1)}
-        .ob-tk-band .ob-copy.has-text{font-size:15px;font-weight:700;color:${NAVY}}
-        .ob-tk-band .ob-copy.has-text .ob-copy-ic{opacity:1;color:#2c3a55}
+        .ob-tk-band .ob-copy.has-text{font-size:15px;font-weight:500;color:${NAVY}}
+        .ob-tk-band .ob-copy.has-text .ob-copy-ic{opacity:1;color:#4a4540}
         .ob-tk-legs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
         .ob-tk-leg{display:flex;flex-direction:column;gap:3px;min-width:0}
         .ob-tk-leg:nth-child(2){align-items:center;text-align:center}
         .ob-tk-leg:nth-child(3){align-items:flex-end;text-align:right}
-        .ob-tk-leg>span:first-child{font-size:11px;color:#6b7385}
-        .ob-tk-leg strong{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:700;color:${NAVY};font-variant-numeric:tabular-nums;white-space:nowrap}
-        .ob-tk-leg strong.is-none{font-weight:600;color:#b6bdc9}
+        .ob-tk-leg>span:first-child{font-size:11px;color:#8b867e}
+        .ob-tk-leg strong{display:flex;align-items:center;gap:5px;font-size:14px;font-weight:500;color:${NAVY};font-variant-numeric:tabular-nums;white-space:nowrap}
+        .ob-tk-leg strong.is-none{font-weight:500;color:#c9c4bc}
         .ob-tk-legact{display:flex;gap:10px}
-        .ob-tk-link{border:0;background:transparent;padding:0;font:inherit;font-size:12px;font-weight:650;color:#535bad;cursor:pointer}
+        .ob-tk-link{border:0;background:transparent;padding:0;font:inherit;font-size:12px;font-weight:500;color:#55514b;cursor:pointer}
         .ob-tk-link:hover{text-decoration:underline}
-        .ob-tk-link.is-danger{color:#b42318}
+        .ob-tk-link.is-danger{color:#c5221f}
         .ob-tk-stubwrap{position:relative;z-index:3;transform-origin:30% 0}
         .ob-tk-stubshape{position:absolute;left:0;top:0;overflow:visible;pointer-events:none}
         .ob-tk-perf{position:relative;height:0}
-        .ob-tk-scissors{position:absolute;top:-12px;z-index:2;overflow:visible;filter:drop-shadow(0 2px 3px rgba(18,27,53,.25))}
-        .ob-tk-cutline{position:absolute;left:30px;right:30px;top:-1px;height:2px;background:#1e2330;transform-origin:left center}
+        .ob-tk-scissors{position:absolute;top:-12px;z-index:2;overflow:visible;filter:drop-shadow(0 2px 3px rgba(43,41,39,.175))}
+        .ob-tk-cutline{position:absolute;left:30px;right:30px;top:-1px;height:2px;background:#2b2927;transform-origin:left center}
         .ob-tk-seal{display:block;width:88px;height:88px;margin:-14px auto -6px;pointer-events:none;mix-blend-mode:multiply}
         .ob-seal{display:block;opacity:.9}
         .ob-tk-after{display:flex;align-items:center;flex-wrap:wrap;gap:12px 18px;margin:14px 6px 0}
         .ob-tk-after .ob-tk-link{display:inline-flex;align-items:center;gap:6px}
-        .ob-tk-perf::after{content:"";position:absolute;left:30px;right:30px;top:-1px;border-top:2px dotted #b6bdc9}
+        .ob-tk-perf::after{content:"";position:absolute;left:30px;right:30px;top:-1px;border-top:2px dotted #c9c4bc}
         .ob-tk-actions{display:flex;align-items:center;flex-wrap:wrap;gap:8px 14px;margin-top:12px}
         .ob-tk-stub{position:relative;padding:22px 24px 20px}
         .ob-tk-stubrow{display:flex;align-items:center;justify-content:space-between;gap:18px}
         .ob-tk-stubact{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
         .ob-tk-codebox{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:1;min-width:0}
-        .ob-tk-barcode{display:block;width:230px;max-width:100%;height:52px;color:#111827}
-        .ob-tk-num{font-size:10px;letter-spacing:.3em;color:#8a93a4;font-variant-numeric:tabular-nums}
+        .ob-tk-barcode{display:block;width:230px;max-width:100%;height:52px;color:#1c1b19}
+        .ob-tk-num{font-size:10px;letter-spacing:.3em;color:#8b867e;font-variant-numeric:tabular-nums}
         .ob-tk-cta-ic{flex-shrink:0}
         @keyframes obLift{0%,100%{transform:none}40%{transform:translateY(-2px) rotate(-8deg)}75%{transform:translateY(.5px)}}
         .ob-tk-cta:hover .ob-tk-cta-ic{animation:obLift .9s cubic-bezier(.45,0,.55,1)}
-        .ob-tk-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:11px;background:${NAVY};color:#fff;font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;box-shadow:0 6px 16px rgba(18,27,53,.18)}
-        .ob-tk-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:650;color:${NAVY};cursor:pointer;transition:border-color .15s}
-        .ob-tk-chip:hover{border-color:#d5dae3}
-        .ob-tk-resched{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:650;color:${NAVY};cursor:pointer;transition:border-color .15s,background-color .15s,transform .15s}
-        .ob-tk-resched svg{flex-shrink:0;color:#535bad}
+        .ob-tk-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:11px;background:#2b2927;color:#fff;font:inherit;font-size:13.5px;font-weight:500;cursor:pointer;box-shadow:0 6px 16px rgba(43,41,39,.126)}
+        .ob-tk-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:500;color:${NAVY};cursor:pointer;transition:border-color .15s}
+        .ob-tk-chip:hover{border-color:#e3ded6}
+        .ob-tk-resched{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:500;color:${NAVY};cursor:pointer;transition:border-color .15s,background-color .15s,transform .15s}
+        .ob-tk-resched svg{flex-shrink:0;color:#55514b}
         .ob-tk-resched-hand{transform-origin:16px 16px;transition:transform .7s cubic-bezier(.34,1.56,.64,1)}
-        .ob-tk-resched:hover{border-color:#d5dae3;background:#f6f7fb}
+        .ob-tk-resched:hover{border-color:#e3ded6;background:#faf9f7}
         .ob-tk-resched:hover .ob-tk-resched-hand{transform:rotate(360deg)}
         .ob-tk-resched:active{transform:scale(.97)}
-        .ob-tk-resched:focus-visible{outline:2px solid #535bad;outline-offset:2px}
+        .ob-tk-resched:focus-visible{outline:2px solid #55514b;outline-offset:2px}
         @media (prefers-reduced-motion: reduce){.ob-tk-resched,.ob-tk-resched-hand{transition:none}.ob-tk-resched:hover .ob-tk-resched-hand{transform:none}}
         .ob-tk-manual{display:block;margin-top:14px;border:0;background:transparent;padding:0;font:inherit;font-size:12px;color:${MUTED};text-decoration:underline;cursor:pointer}
         .ob-tk-manualform{margin-top:12px;padding:12px;border:1px solid ${BORDER};border-radius:10px;background:${CARD};color:${TEXT}}
-        .ob-tk-manualform label{display:block;font-size:12px;font-weight:650;color:${TEXT}}
+        .ob-tk-manualform label{display:block;font-size:12px;font-weight:500;color:${TEXT}}
         .ob-tk-manualform input{display:block;margin-top:6px;padding:7px 10px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};font:inherit;font-size:13px;color:${TEXT}}
-        .ob-dp-empty{padding:14px 16px;border-radius:10px;border:1px dashed ${BORDER};background:#fafbfc;font-size:13px;line-height:1.5;color:${MUTED}}
+        .ob-dp-empty{padding:18px;border-radius:12px;border:1px dashed #e3ded6;font-size:12.5px;line-height:1.5;color:${MUTED};text-align:center}
         /* Copie rapide : l'icône apparaît au survol de la ligne ; une bulle confirme. */
-        .ob-copy{position:relative;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;border:0;background:transparent;padding:0;font:inherit;color:#a3abba;cursor:pointer;transition:color .15s}
+        .ob-copy{position:relative;display:inline-flex;align-items:center;gap:6px;flex-shrink:0;border:0;background:transparent;padding:0;font:inherit;color:#a8a39b;cursor:pointer;transition:color .15s}
         .ob-copy-ic{display:grid;place-items:center;width:24px;height:24px;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .15s}
         .ob-copy:not(.has-text) .ob-copy-ic{opacity:0}
         .ob-prop:hover .ob-copy .ob-copy-ic,.ob-copy:focus-visible .ob-copy-ic,.ob-copy.is-done .ob-copy-ic{opacity:1}
         .ob-copy:hover{color:${NAVY}}
         .ob-copy:hover .ob-copy-ic{transform:translateY(-1px) scale(1.12)}
         .ob-copy.is-done,.ob-copy.is-done:hover{color:${GREEN}}
-        .ob-copy.is-fail{color:#b42318}
-        .ob-copy.has-text{color:${TEXT};font-size:12px;font-weight:600}
+        .ob-copy.is-fail{color:#c5221f}
+        .ob-copy.has-text{color:${TEXT};font-size:12px;font-weight:500}
         .ob-copy.has-text .ob-copy-ic{width:18px;height:18px;opacity:0}
         .ob-copy.has-text:hover .ob-copy-ic,.ob-copy.has-text.is-done .ob-copy-ic{opacity:1}
-        .ob-copy-tip{position:absolute;left:50%;bottom:calc(100% + 6px);z-index:5;padding:3px 8px;border-radius:6px;background:${NAVY};color:#fff;font-size:11px;font-weight:600;white-space:nowrap;pointer-events:none}
+        .ob-copy-tip{position:absolute;left:50%;bottom:calc(100% + 6px);z-index:5;padding:3px 8px;border-radius:6px;background:#2b2927;color:#fff;font-size:11px;font-weight:500;white-space:nowrap;pointer-events:none}
         @media (hover:none){.ob-copy .ob-copy-ic{opacity:1!important}}
         /* Fil d'échanges : zone de saisie avec sa barre, messages aérés, menu « ⋯ », réponses en fil. */
         .ob-composer{border:1px solid ${BORDER};border-radius:12px;background:${CARD};transition:border-color .16s,box-shadow .16s}
-        .ob-composer:focus-within{border-color:#9db7e3;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+        .ob-composer:focus-within{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
         .ob-composer-ta{display:block;width:100%;min-height:58px;border:0;outline:0;resize:none;background:transparent;padding:12px 14px 8px;font:inherit;font-size:13.5px;line-height:1.55;color:${TEXT}}
-        .ob-composer-ta::placeholder{color:#a3abba}
-        .ob-composer-bar{display:flex;align-items:center;gap:8px;padding:8px 10px 10px 12px;border-top:1px solid #f0f2f5}
-        .ob-composer-tool{display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;padding:0;color:${MUTED};font:inherit;font-size:16px;font-weight:600;cursor:pointer;transition:color .15s,transform .3s cubic-bezier(.34,1.56,.64,1)}
+        .ob-composer-ta::placeholder{color:#a8a39b}
+        .ob-composer-bar{display:flex;align-items:center;gap:8px;padding:8px 10px 10px 12px;border-top:1px solid #f4f2ee}
+        .ob-composer-tool{display:grid;place-items:center;width:28px;height:28px;border:0;background:transparent;padding:0;color:${MUTED};font:inherit;font-size:16px;font-weight:500;cursor:pointer;transition:color .15s,transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-composer-tool:hover{color:${NAVY};transform:translateY(-1px) scale(1.15)}
-        .ob-composer .wc-add-weather{padding:5px 10px 5px 8px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};color:${TEXT};font-size:12px;font-weight:600}
-        .ob-composer .wc-add-weather:hover{background:${CARD};border-color:#d5dae3}
-        .ob-composer .wc-add-weather svg{width:16px;height:16px;color:#b45309;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
+        .ob-composer .wc-add-weather{padding:5px 10px 5px 8px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};color:${TEXT};font-size:12px;font-weight:500}
+        .ob-composer .wc-add-weather:hover{background:${CARD};border-color:#e3ded6}
+        .ob-composer .wc-add-weather svg{width:16px;height:16px;color:#c2500e;transition:transform .4s cubic-bezier(.34,1.56,.64,1)}
         .ob-composer .wc-add-weather:hover svg{transform:rotate(35deg) scale(1.12)}
-        .ob-composer-hint{margin-left:auto;font-size:11px;color:#b6bdc9;white-space:nowrap}
-        .ob-composer-send{padding:7px 16px;border:0;border-radius:9px;background:${NAVY};color:#fff;font:inherit;font-size:12.5px;font-weight:650;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,transform .15s}
+        .ob-composer-hint{margin-left:auto;font-size:11px;color:#c9c4bc;white-space:nowrap}
+        .ob-composer-send{padding:7px 16px;border:0;border-radius:9px;background:#2b2927;color:#fff;font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s,transform .15s}
         .ob-composer-send:not(:disabled):active{transform:scale(.97)}
-        .ob-composer-send:disabled{background:#eceef2;color:#a3abba;cursor:default}
-        .ob-thread-notice{margin:10px 2px 0;font-size:12px;font-weight:600;color:${GREEN}}
-        .ob-thread-error{margin:10px 2px 0;font-size:12px;color:#b42318}
-        .ob-thread-error button{margin-left:6px;border:0;background:transparent;padding:0;font:inherit;font-weight:700;color:#b42318;text-decoration:underline;cursor:pointer}
+        .ob-composer-send:disabled{background:#f1eee9;color:#a8a39b;cursor:default}
+        .ob-thread-notice{margin:10px 2px 0;font-size:12px;font-weight:500;color:${GREEN}}
+        .ob-thread-error{margin:10px 2px 0;font-size:12px;color:#c5221f}
+        .ob-thread-error button{margin-left:6px;border:0;background:transparent;padding:0;font:inherit;font-weight:500;color:#c5221f;text-decoration:underline;cursor:pointer}
         .ob-thread-empty{margin:18px 2px;font-size:12.5px;color:${MUTED}}
-        .ob-thread-more{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:10px;padding:9px 0;border:1px solid ${BORDER};border-radius:10px;background:${CARD};font:inherit;font-size:12.5px;font-weight:600;color:${TEXT};cursor:pointer;transition:border-color .15s,background .15s}
-        .ob-thread-more:hover{border-color:#d5dae3;background:#fafbfc}
+        .ob-thread-more{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:10px;padding:9px 0;border:1px solid ${BORDER};border-radius:10px;background:${CARD};font:inherit;font-size:12.5px;font-weight:500;color:${TEXT};cursor:pointer;transition:border-color .15s,background .15s}
+        .ob-thread-more:hover{border-color:#e3ded6;background:#faf9f7}
         .ob-thread-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:20px 0 4px}
-        .ob-thread-count{font-size:12.5px;font-weight:600;color:${MUTED}}
-        .ob-seg-mini{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:#f2f4f7}
-        .ob-seg-mini button{position:relative;border:0;background:transparent;padding:4px 11px;border-radius:7px;font:inherit;font-size:12px;font-weight:600;color:${MUTED};cursor:pointer;transition:color .15s}
+        .ob-thread-count{font-size:12.5px;font-weight:500;color:${MUTED}}
+        .ob-seg-mini{display:inline-flex;gap:2px;padding:2px;border-radius:9px;background:#f7f5f2}
+        .ob-seg-mini button{position:relative;border:0;background:transparent;padding:4px 11px;border-radius:7px;font:inherit;font-size:12px;font-weight:500;color:${MUTED};cursor:pointer;transition:color .15s}
         .ob-seg-mini button.is-on,.ob-seg-mini button:hover{color:${TEXT}}
         .ob-seg-mini button>span:last-child{position:relative;z-index:1}
-        .ob-seg-mini-pill{position:absolute;inset:0;z-index:0;border-radius:7px;background:${CARD};box-shadow:0 1px 2px rgba(17,24,39,.12)}
+        .ob-seg-mini-pill{position:absolute;inset:0;z-index:0;border-radius:7px;background:${CARD};box-shadow:0 1px 2px rgba(43,41,39,.084)}
         /* Échanges en cartes (réf. de carte de commentaire) : en-tête avatar · nom · ancienneté · ⋯, contenu aligné
            sur le nom, réponses reliées par un fil. Survol : la carte se pose un peu plus nettement. */
         .ob-thread{display:flex;flex-direction:column;gap:10px;margin-top:12px}
-        .ob-xc{padding:14px 16px 12px;border:1px solid #eceef2;border-radius:18px;background:${CARD};box-shadow:0 1px 2px rgba(18,27,53,.03);transition:border-color .2s,box-shadow .2s}
-        .ob-xc:hover{border-color:#e1e5ec;box-shadow:0 4px 14px rgba(18,27,53,.05)}
+        .ob-xc{padding:14px 16px 12px;border:1px solid #f1eee9;border-radius:18px;background:${CARD};box-shadow:0 1px 2px rgba(43,41,39,.021);transition:border-color .2s,box-shadow .2s}
+        .ob-xc:hover{border-color:#e8e4de;box-shadow:0 4px 14px rgba(43,41,39,.035)}
         .ob-xc-head{display:flex;align-items:center;gap:8px;min-height:30px}
         .ob-xc-head>:first-child{margin-right:2px}
-        .ob-xc-author{font-size:13.5px;font-weight:650;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+        .ob-xc-author{font-size:13.5px;font-weight:500;color:${TEXT};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .ob-xc-author.is-small{font-size:12.5px}
         .ob-xc-time{min-width:0;font-size:12px;color:${MUTED};white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
         .ob-xc-head .ob-menu{margin-left:auto}
         .ob-xc-in{padding-left:40px}
-        .ob-xc-text{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.6;color:#3d4556}
-        .ob-xc-chip{display:inline-flex;align-items:center;gap:6px;margin:4px 0 6px;padding:3px 10px 3px 7px;border-radius:999px;font-size:12px;font-weight:650;white-space:nowrap}
+        .ob-xc-text{margin-top:2px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:13.5px;line-height:1.6;color:#55514b}
+        .ob-xc-chip{display:inline-flex;align-items:center;gap:6px;margin:4px 0 6px;padding:3px 10px 3px 7px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap}
         .ob-xc-chip .mi{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
         .ob-xc:hover .ob-xc-chip .mi{transform:rotate(-8deg) scale(1.08)}
-        .ob-xc-qual .wc-summary{margin:2px 0 0;border:0;border-radius:14px;background:#f5f6f8}
+        .ob-xc-qual .wc-summary{margin:2px 0 0;border:0;border-radius:14px;background:#f7f5f2}
         .ob-xc-qual .wc-summary>div{padding:10px 14px}
-        .ob-xc-qual .wc-summary>div+div{border-top:1px solid #eceef2}
+        .ob-xc-qual .wc-summary>div+div{border-top:1px solid #f1eee9}
         .ob-xc-qual .wc-summary dt{font-size:11px;color:${MUTED}}
         .ob-xc-foot{display:flex;align-items:flex-start;gap:10px;margin-top:10px}
         .ob-xc-foot .br{flex:1;margin-top:0}
@@ -2101,14 +2158,14 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xr:hover .ob-xr-tools .br-add,.ob-xr-tools .br-add[aria-expanded="true"]{opacity:1}
         @media (hover:none){.ob-xr-tools .br-add{opacity:1}}
         .ob-xr.is-fresh{animation:obFresh 1.8s cubic-bezier(.22,1,.36,1)}
-        @keyframes obFresh{0%{opacity:0;transform:translateY(-6px);background:#e6eefc}18%{opacity:1;transform:none;background:#e6eefc}100%{background:#f9fafb}}
+        @keyframes obFresh{0%{opacity:0;transform:translateY(-6px);background:#fbf1c2}18%{opacity:1;transform:none;background:#fbf1c2}100%{background:#faf9f7}}
         /* Réponse sous le message : une ligne de saisie avec son avatar et l'envoi en avion. */
         .ob-xi{overflow:hidden}
-        .ob-xi-box{display:flex;align-items:flex-end;gap:8px;margin-top:10px;padding:6px 6px 6px 8px;border:1px solid #e3e7ee;border-radius:14px;background:${CARD};transition:border-color .15s,box-shadow .15s}
-        .ob-xi-box:focus-within{border-color:#9db7e3;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+        .ob-xi-box{display:flex;align-items:flex-end;gap:8px;margin-top:10px;padding:6px 6px 6px 8px;border:1px solid #e8e4de;border-radius:14px;background:${CARD};transition:border-color .15s,box-shadow .15s}
+        .ob-xi-box:focus-within{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
         .ob-xi-box>:first-child{margin-bottom:4px}
         .ob-xi-ta{flex:1;min-width:0;min-height:30px;max-height:160px;padding:5px 2px;border:0;outline:0;resize:none;background:transparent;font:inherit;font-size:13.5px;line-height:1.5;color:${TEXT}}
-        .ob-xi-send{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:0;border-radius:50%;background:${NAVY};color:#fff;cursor:pointer;transition:background .15s,opacity .15s}
+        .ob-xi-send{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:0;border-radius:50%;background:#2b2927;color:#fff;cursor:pointer;transition:background .15s,opacity .15s}
         .ob-xi-send svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
         .ob-xi-send:hover:not(:disabled) svg{transform:translate(2px,-2px) rotate(-8deg)}
         .ob-xi-send:disabled{opacity:.3;cursor:default}
@@ -2116,15 +2173,15 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xc .br-add{opacity:0;transition:opacity .15s,color .15s,border-color .15s}
         .ob-xc:hover .br-add,.ob-xc:focus-within .br-add,.ob-xc .br-add[aria-expanded="true"]{opacity:1}
         @media (hover:none){.ob-xc .br-add{opacity:1}}
-        .ob-composer.is-drag{border-color:#9db7e3;background:#f6f9ff}
-        .ob-xc-reply{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:2px 0;font:inherit;font-size:12.5px;font-weight:650;color:${MUTED};cursor:pointer;transition:color .15s}
+        .ob-composer.is-drag{border-color:#d8d3cb;background:#faf9f7}
+        .ob-xc-reply{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:2px 0;font:inherit;font-size:12.5px;font-weight:500;color:${MUTED};cursor:pointer;transition:color .15s}
         .ob-xc-reply svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-xc-reply:hover{color:${NAVY}}
         .ob-xc-reply:hover svg{transform:translateX(-2px) rotate(-8deg)}
         /* « Voir plus » : le texte s'arrête en fondu, s'ouvre en douceur. */
         .ob-clamp-in{overflow:hidden;transition:max-height .38s cubic-bezier(.22,1,.36,1)}
         .ob-clamp.is-clamped .ob-clamp-in{-webkit-mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent);mask-image:linear-gradient(180deg,#000 calc(100% - 26px),transparent)}
-        .ob-clamp-more{display:inline-flex;align-items:center;gap:4px;margin-top:4px;border:0;background:transparent;padding:2px 0;font:inherit;font-size:12.5px;font-weight:650;color:${NAVY};cursor:pointer}
+        .ob-clamp-more{display:inline-flex;align-items:center;gap:4px;margin-top:4px;border:0;background:transparent;padding:2px 0;font:inherit;font-size:12.5px;font-weight:500;color:${NAVY};cursor:pointer}
         .ob-clamp-more svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-clamp-more:hover svg{transform:translateY(1px)}
         .ob-clamp-more[aria-expanded="true"] svg{transform:rotate(180deg)}
@@ -2132,63 +2189,63 @@ export default function OptilexBoard({ embed = false }) {
         .ob-stack{display:inline-flex;flex-shrink:0}
         .ob-stack>span{display:block;margin-left:-7px;border-radius:50%;box-shadow:0 0 0 2px ${CARD}}
         .ob-stack>span:first-child{margin-left:0}
-        .ob-xt{margin-top:12px;padding-top:12px;border-top:1px solid #f0f2f5}
+        .ob-xt{margin-top:12px;padding-top:12px;border-top:1px solid #f4f2ee}
         .ob-xt-sum{display:flex;align-items:center;gap:10px;border:0;background:transparent;padding:0;font:inherit;font-size:12.5px;color:${MUTED};cursor:pointer;text-align:left}
-        .ob-xt-sum b{font-weight:650;color:${TEXT}}
+        .ob-xt-sum b{font-weight:500;color:${TEXT}}
         .ob-xt-sum>svg{flex-shrink:0;transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-xt-sum[aria-expanded="true"]>svg{transform:rotate(180deg)}
         .ob-xt-sum:hover b{color:${NAVY}}
         .ob-xt-list{display:flex;flex-direction:column;gap:8px;padding:8px 0 0 30px;overflow:hidden}
-        .ob-xr{position:relative;padding:10px 12px;border:1px solid #eef0f4;border-radius:14px;background:#f9fafb}
-        .ob-xr::before{content:"";position:absolute;left:-20px;top:-8px;width:14px;height:31px;border-left:1.5px solid #dfe3ea;border-bottom:1.5px solid #dfe3ea;border-bottom-left-radius:10px}
-        .ob-xr:not(:last-child)::after{content:"";position:absolute;left:-20px;top:22px;bottom:-9px;border-left:1.5px solid #dfe3ea}
+        .ob-xr{position:relative;padding:10px 12px;border:1px solid #f4f2ee;border-radius:14px;background:#faf9f7}
+        .ob-xr::before{content:"";position:absolute;left:-20px;top:-8px;width:14px;height:31px;border-left:1.5px solid #e8e4de;border-bottom:1.5px solid #e8e4de;border-bottom-left-radius:10px}
+        .ob-xr:not(:last-child)::after{content:"";position:absolute;left:-20px;top:22px;bottom:-9px;border-left:1.5px solid #e8e4de}
         .ob-xr .ob-xc-head{min-height:24px}
         .ob-xr-in{padding-left:31px}
-        .ob-dot{display:inline-block;flex-shrink:0;width:3px;height:3px;border-radius:50%;background:#cbd2e0}
+        .ob-dot{display:inline-block;flex-shrink:0;width:3px;height:3px;border-radius:50%;background:#d8d3cb}
         .ob-msg-edit{margin-top:6px;border:1px solid ${BORDER};border-radius:10px;background:${CARD};transition:border-color .16s,box-shadow .16s}
-        .ob-msg-edit:focus-within{border-color:#9db7e3;box-shadow:0 0 0 3px rgba(37,99,235,.10)}
+        .ob-msg-edit:focus-within{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
         .ob-msg-edit .ob-composer-ta{min-height:0;padding:10px 12px 6px}
         .ob-msg-edit .ob-msg-panel-bar{padding:0 8px 8px}
-        .ob-msg-panel{margin-top:10px;padding:12px;border:1px solid ${BORDER};border-radius:10px;background:#fafbfc}
+        .ob-msg-panel{margin-top:10px;padding:12px;border:1px solid ${BORDER};border-radius:10px;background:#faf9f7}
         .ob-msg-panel-bar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}
-        .ob-msg-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px 10px;border-radius:9px;background:#fdf2f1;font-size:12.5px;font-weight:600;color:${TEXT}}
+        .ob-msg-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px 10px;border-radius:9px;background:#fdf2f1;font-size:12.5px;font-weight:500;color:${TEXT}}
         .ob-msg-confirm>span{margin-right:auto}
-        .ob-btn-ghost{padding:6px 12px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer}
-        .ob-btn-ghost:hover{border-color:#d5dae3}
-        .ob-btn-danger{padding:6px 12px;border:0;border-radius:8px;background:#b42318;color:#fff;font:inherit;font-size:12.5px;font-weight:650;cursor:pointer}
+        .ob-btn-ghost{padding:6px 12px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
+        .ob-btn-ghost:hover{border-color:#e3ded6}
+        .ob-btn-danger{padding:6px 12px;border:0;border-radius:8px;background:#c5221f;color:#fff;font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
         .ob-btn-danger:disabled{opacity:.6;cursor:default}
         .ob-menu{position:relative;display:inline-flex}
-        .ob-menu-btn{display:grid;place-items:center;width:28px;height:24px;border:0;background:transparent;padding:0;color:#a3abba;cursor:pointer;transition:color .15s}
+        .ob-menu-btn{display:grid;place-items:center;width:28px;height:24px;border:0;background:transparent;padding:0;color:#a8a39b;cursor:pointer;transition:color .15s}
         .ob-menu-btn svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-menu-btn:hover,.ob-menu-btn[aria-expanded="true"]{color:${NAVY}}
         .ob-menu-btn:hover svg{transform:scale(1.18)}
-        .ob-menu-pop{position:absolute;right:0;top:calc(100% + 4px);z-index:20;min-width:200px;padding:4px;border:1px solid ${BORDER};border-radius:10px;background:${CARD};box-shadow:0 10px 30px rgba(18,27,53,.14);transform-origin:top right}
-        .ob-menu-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:12.5px;font-weight:600;color:${TEXT};text-align:left;cursor:pointer}
+        .ob-menu-pop{position:absolute;right:0;top:calc(100% + 4px);z-index:20;min-width:200px;padding:5px;border:1px solid ${BORDER};border-radius:14px;background:${CARD};box-shadow:0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04);transform-origin:top right}
+        .ob-menu-item{display:flex;align-items:center;gap:9px;width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;font:inherit;font-size:12.5px;font-weight:500;color:${TEXT};text-align:left;cursor:pointer}
         .ob-menu-item svg{color:${MUTED}}
-        .ob-menu-item:hover{background:#f4f6f9}
-        .ob-menu-item.is-danger,.ob-menu-item.is-danger svg{color:#b42318}
-        .ob-menu-item.is-danger:hover{background:#fdecec}
+        .ob-menu-item:hover{background:#f7f5f2}
+        .ob-menu-item.is-danger,.ob-menu-item.is-danger svg{color:#c5221f}
+        .ob-menu-item.is-danger:hover{background:#fde6e6}
         /* Barre de filtres : une carte, une ligne par famille, un libellé par ligne. */
-        .ob-filters{container-type:inline-size;background:${CARD};border:1px solid ${BORDER};border-radius:14px;padding:0 14px;margin-bottom:14px;box-shadow:0 1px 2px rgba(17,24,39,0.03)}
+        .ob-filters{container-type:inline-size;background:${CARD};border:1px solid ${BORDER};border-radius:22px;padding:3px 18px;margin-bottom:14px}
         .ob-frow{display:flex;align-items:center;flex-wrap:wrap;gap:10px 12px;padding:10px 0}
-        .ob-frows{border-top:1px solid ${BORDER}}
-        .ob-frow--alerts{border-top:1px solid ${BORDER}}
-        .ob-frows>.ob-frow+.ob-frow{border-top:1px solid ${BORDER}}
-        .ob-flabel{flex:0 0 56px;font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:${MUTED}}
+        .ob-frows{border-top:1px solid #f1eee9}
+        .ob-frow--alerts{border-top:1px solid #f1eee9}
+        .ob-frows>.ob-frow+.ob-frow{border-top:1px solid #f1eee9}
+        .ob-flabel{flex:0 0 56px;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:#a8a39b}
         .ob-fgroup{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
         @container (min-width: 1400px){
           .ob-frows{display:flex;align-items:center;gap:24px}
           .ob-frows>.ob-frow+.ob-frow{border-top:0;margin-left:auto}
           .ob-frow--refine .ob-flabel{flex:none}
         }
-        .ob-n{font-size:11px;font-weight:700;color:${MUTED};font-variant-numeric:tabular-nums;transition:color .18s}
+        .ob-n{font-size:11px;font-weight:500;color:${MUTED};font-variant-numeric:tabular-nums;transition:color .18s}
         /* États : contrôle segmenté, la pastille marine glisse d'un onglet à l'autre. */
-        .ob-seg{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px;padding:3px;background:#f2f4f7;border-radius:11px}
-        .ob-seg-btn{position:relative;border:0;background:transparent;border-radius:8px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:600;color:${TEXT};cursor:pointer;white-space:nowrap;transition:background .16s,color .18s}
-        .ob-seg-btn:not(.is-on):hover{background:rgba(255,255,255,0.85)}
-        .ob-seg-btn.is-on{color:#fff}
-        .ob-seg-btn.is-on .ob-n{color:rgba(255,255,255,0.7)}
-        .ob-seg-pill{position:absolute;inset:0;background:${NAVY};border-radius:8px;z-index:0;box-shadow:0 1px 3px rgba(17,24,39,0.18)}
+        .ob-seg{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px;padding:3px;background:#ebe8e3;border-radius:12px}
+        .ob-seg-btn{position:relative;border:0;background:transparent;border-radius:9px;padding:6px 12px;font:inherit;font-size:12.5px;font-weight:500;color:#55514b;cursor:pointer;white-space:nowrap;transition:background .16s,color .18s}
+        .ob-seg-btn:not(.is-on):hover{background:rgba(255,255,255,.55)}
+        .ob-seg-btn.is-on{color:#1c1b19}
+        .ob-seg-btn.is-on .ob-n{color:#8b867e}
+        .ob-seg-pill{position:absolute;inset:0;background:#fff;border-radius:9px;z-index:0;box-shadow:0 1px 2px rgba(43,41,39,.06),0 0 0 1px rgba(43,41,39,.04)}
         .ob-seg-txt{position:relative;z-index:1;display:flex;align-items:center;gap:7px}
         /* Icônes des onglets : rebond à l'activation, un geste propre à chacune au survol. */
         .ob-tab-ic{flex-shrink:0;margin-right:-1px;overflow:visible;transition:color .18s}
@@ -2211,15 +2268,15 @@ export default function OptilexBoard({ embed = false }) {
         .ob-ti-gavel{transform-box:view-box;transform-origin:4px 19.2px}
         .ob-seg-btn:hover .ob-ti-gavel{animation:obTiStrike .6s cubic-bezier(.34,1.3,.64,1)}
         /* Météo : puces à bascule, l'icône se redresse au survol. */
-        .ob-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s,color .18s}
-        .ob-chip:not(.is-on):hover{background:#f7f8fa;border-color:#d5dae3}
+        .ob-chip{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .18s,border-color .18s,color .18s}
+        .ob-chip:not(.is-on):hover{background:#f7f5f2;border-color:#e3ded6}
         .ob-chip-ic{display:inline-flex;transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
         .ob-chip:hover .ob-chip-ic{transform:translateY(-1px) scale(1.14)}
         /* Menus : rectangle arrondi, la flèche pivote à l'ouverture. */
-        .ob-trigger{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:10px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
-        .ob-trigger:not(.is-on):not(:disabled):hover{background:#f7f8fa;border-color:#d5dae3}
+        .ob-trigger{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:10px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
+        .ob-trigger:not(.is-on):not(:disabled):hover{background:#f7f5f2;border-color:#e3ded6}
         .ob-trigger.is-open{border-color:${NAVY}}
-        .ob-trigger.is-on{background:${NAVY};border-color:${NAVY};color:#fff}
+        .ob-trigger.is-on{background:#2b2927;border-color:${NAVY};color:#fff}
         .ob-trigger:disabled{opacity:.55;cursor:default;color:${MUTED}}
         .ob-trigger>svg:first-child{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-trigger:not(:disabled):hover>svg:first-child{transform:translateY(-1px) scale(1.1)}
@@ -2228,36 +2285,35 @@ export default function OptilexBoard({ embed = false }) {
         /* Filtres posés : une étiquette par filtre. */
         .ob-toolbar{display:flex;align-items:center;gap:12px;margin-bottom:12px;min-height:38px}
         .ob-left{display:flex;align-items:center;gap:10px;margin-right:8px}
-        .ob-left>span{font-size:10.5px;font-weight:700;line-height:1.25;letter-spacing:.08em;text-transform:uppercase;color:#9ca3af;text-align:right}
+        .ob-left>span{font-size:10.5px;font-weight:500;line-height:1.25;letter-spacing:.08em;text-transform:uppercase;color:#a8a39b;text-align:right}
         .ob-left-label{display:block;max-width:112px}
         .ob-left-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;will-change:transform,opacity}
         .ob-active{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px;flex:1;min-width:0;padding:0 4px}
-        .ob-tag{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:#eef1f6;color:${TEXT};font-size:12px;font-weight:600;white-space:nowrap}
-        .ob-tag small{font-size:11px;font-weight:600;color:${MUTED}}
+        .ob-tag{display:inline-flex;align-items:center;gap:6px;padding:3px 4px 3px 10px;border-radius:999px;background:#f4f2ee;color:${TEXT};font-size:12px;font-weight:500;white-space:nowrap}
+        .ob-tag small{font-size:11px;font-weight:500;color:${MUTED}}
         .ob-tag button{display:grid;place-items:center;width:18px;height:18px;border:0;border-radius:50%;background:transparent;color:${MUTED};cursor:pointer;transition:background .14s,color .14s}
-        .ob-tag button:hover{background:#dfe4ec;color:${TEXT}}
-        .ob-clear{border:0;background:transparent;padding:0 4px;color:#2563eb;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+        .ob-tag button:hover{background:#e8e4de;color:${TEXT}}
+        .ob-clear{border:0;background:transparent;padding:0 4px;color:#55514b;font:inherit;font-size:12px;font-weight:500;cursor:pointer}
         /* Tableau : une carte ; l'ascenseur vit dedans (pas de piste, pouce fin et arrondi), commence sous
            l'en-tête collant (40 px) et s'arrête avant les coins arrondis. */
-        .ob-table-wrap{background:${CARD};border:1px solid ${BORDER};border-radius:14px;overflow:auto;max-height:calc(100vh - 190px);box-shadow:0 1px 2px rgba(17,24,39,0.03)}
+        .ob-table-wrap{background:${CARD};border:1px solid ${BORDER};border-radius:14px;overflow:auto;max-height:calc(100vh - 190px)}
         .ob-table-wrap.is-sliding{overflow-x:hidden}
         .ob-table-wrap::-webkit-scrollbar{width:12px;height:12px}
         .ob-table-wrap::-webkit-scrollbar-track{background:transparent}
         .ob-table-wrap::-webkit-scrollbar-track:vertical{margin:40px 0 10px}
         .ob-table-wrap::-webkit-scrollbar-track:horizontal{margin:0 12px}
-        .ob-table-wrap::-webkit-scrollbar-thumb{background-color:#dde1e8;border:4px solid transparent;border-radius:999px;background-clip:padding-box}
-        .ob-table-wrap:hover::-webkit-scrollbar-thumb{background-color:#c4cad5}
-        .ob-table-wrap::-webkit-scrollbar-thumb:hover{background-color:#a9b1bf}
+        .ob-table-wrap::-webkit-scrollbar-thumb{background-color:#e3ded6;border:4px solid transparent;border-radius:999px;background-clip:padding-box}
+        .ob-table-wrap:hover::-webkit-scrollbar-thumb{background-color:#cfc9c0}
+        .ob-table-wrap::-webkit-scrollbar-thumb:hover{background-color:#a8a39b}
         .ob-table-wrap::-webkit-scrollbar-corner{background:transparent}
-        @supports not selector(::-webkit-scrollbar){.ob-table-wrap{scrollbar-width:thin;scrollbar-color:#cfd5df transparent}}
+        @supports not selector(::-webkit-scrollbar){.ob-table-wrap{scrollbar-width:thin;scrollbar-color:#d8d3cb transparent}}
         .ob-row{cursor:pointer;transition:background .14s}
-        .ob-row:hover{background:#f8f9fb}
-        .ob-row.is-sel{background:#eff3fb}
-        .ob-row.is-sel>td:first-child{box-shadow:inset 3px 0 0 ${NAVY}}
-        .ob-edit{color:${MUTED};opacity:0;transition:opacity .16s}
+        .ob-row:hover{background:#faf9f7}
+        .ob-row.is-sel{background:#f4f2ee}
+                .ob-edit{color:${MUTED};opacity:0;transition:opacity .16s}
         .ob-row:hover .ob-edit{opacity:.7}
         /* No show : une petite carte ; le fantôme flotte au-dessus de son ombre, cligne des yeux, fait « bouh » au survol. */
-        .ob-noshow{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 5px;border-radius:8px;background:#fdeeee;box-shadow:inset 0 0 0 1px #f7d4d1;color:#b42318;font-size:11px;font-weight:700;white-space:nowrap;transition:background .18s,box-shadow .18s}
+        .ob-noshow{display:inline-flex;align-items:center;gap:6px;padding:2px 9px 2px 5px;border-radius:8px;background:#fdeeee;box-shadow:inset 0 0 0 1px #f7d4d1;color:#c5221f;font-size:11px;font-weight:500;white-space:nowrap;transition:background .18s,box-shadow .18s}
         .ob-noshow:hover{background:#fbe2e0;box-shadow:inset 0 0 0 1px #f1bdb8}
         @keyframes obGhostFloat{0%,100%{transform:translateY(.4px) rotate(-4deg)}50%{transform:translateY(-2.4px) rotate(4deg)}}
         @keyframes obGhostShadow{0%,100%{transform:scaleX(1);opacity:.22}50%{transform:scaleX(.6);opacity:.09}}
@@ -2307,7 +2363,7 @@ export default function OptilexBoard({ embed = false }) {
         {saveError && (
           <motion.div initial={{ opacity: 0, y: -10, x: "-50%" }} animate={{ opacity: 1, y: 0, x: "-50%" }} exit={{ opacity: 0, y: -10, x: "-50%" }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            role="alert" style={{ maxWidth: "min(620px, calc(100vw - 32px))", lineHeight: 1.5, position: "fixed", top: 16, left: "50%", zIndex: 10060, background: "#b42318", color: "#fff", padding: "9px 16px", borderRadius: 10, fontSize: 12.5, fontWeight: 600, boxShadow: "0 8px 24px rgba(180,35,24,0.32)", display: "flex", alignItems: "center", gap: 8 }}>
+            role="alert" style={{ maxWidth: "min(620px, calc(100vw - 32px))", lineHeight: 1.5, position: "fixed", top: 16, left: "50%", zIndex: 10060, background: "#c5221f", color: "#fff", padding: "9px 16px", borderRadius: 10, fontSize: 12.5, fontWeight: 500, boxShadow: "0 8px 24px rgba(180,35,24,0.32)", display: "flex", alignItems: "center", gap: 8 }}>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
@@ -2316,7 +2372,7 @@ export default function OptilexBoard({ embed = false }) {
           </motion.div>
         )}
       </AnimatePresence>
-      <div style={{ fontSize: 22, fontWeight: 700, color: NAVY, marginBottom: 18 }}>Board Cabinet partenaire</div>
+      <div style={{ fontSize: 24, fontWeight: 500, letterSpacing: "-0.02em", color: NAVY, marginBottom: 18 }}>Board Cabinet partenaire</div>
       {/* Barre de filtres (dev 28/10/2026 : « séparer les choses ») : trois familles nommées, chacune sa forme.
           États = contrôle segmenté (la pastille glisse d'un onglet à l'autre), Météo = puces à bascule,
           Affiner = menus. Le filtrage ne change pas : mêmes onglets, mêmes unions, mêmes menus qu'avant. */}
@@ -2372,7 +2428,7 @@ export default function OptilexBoard({ embed = false }) {
             <div className="ob-fgroup" role="group" aria-label="Météo client">
               {["5", "4", "3", "2", "1", "none"].map((b, i) => {
                 const st = b === "none"
-                  ? { label: "Non noté", bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" }
+                  ? { label: "Non noté", bg: "#f4f2ee", fg: MUTED, dot: "#d8d3cb" }
                   : { label: WEATHER[b].label, bg: WEATHER[b].bg, fg: WEATHER[b].color, dot: WEATHER[b].color };
                 const on = meteoFilter.includes(b);
                 return (
@@ -2484,9 +2540,9 @@ export default function OptilexBoard({ embed = false }) {
               <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
             </svg>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rechercher un client…"
-              onFocus={(e) => { e.target.style.borderColor = NAVY; }}
-              onBlur={(e) => { e.target.style.borderColor = BORDER; }}
-              style={{ ...inputStyle, width: 260, padding: "9px 12px 9px 33px", transition: "border-color 0.18s" }} />
+              onFocus={(e) => { e.target.style.borderColor = "#d8d3cb"; e.target.style.boxShadow = "0 0 0 4px rgba(43,41,39,.05)"; }}
+              onBlur={(e) => { e.target.style.borderColor = BORDER; e.target.style.boxShadow = "none"; }}
+              style={{ ...inputStyle, width: 260, padding: "9px 12px 9px 33px", borderRadius: 11, transition: "border-color 0.18s, box-shadow 0.18s" }} />
           </span>
           <motion.button type="button" className="ob-trigger" onClick={handleExportCsv} disabled={filtered.length === 0} whileTap={{ scale: 0.96 }}
             title="Exporter la vue filtrée au format CSV" style={{ padding: "8px 14px" }}>
@@ -2531,16 +2587,16 @@ export default function OptilexBoard({ embed = false }) {
                 </colgroup>
                 <thead>
                   <tr>
-                    <th style={th}>Client</th>
-                    <th style={th}>Secteur</th>
-                    <th style={th}>Météo</th>
-                    <th style={th}>État</th>
+                    <th style={th}><span style={thIn}><UserRound {...thIc} />Client</span></th>
+                    <th style={th}><span style={thIn}><Store {...thIc} />Secteur</span></th>
+                    <th style={th}><span style={thIn}><CloudSun {...thIc} />Météo</span></th>
+                    <th style={th}><span style={thIn}><CircleDashed {...thIc} />État</span></th>
                     <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("owner_signed")} title="Trier par date de signature">
-                      <span style={{ display: "inline-flex", alignItems: "center" }}>Contrat Owner<SortArrow dir={effectiveSort.col === "owner_signed" ? effectiveSort.dir : null} /></span>
+                      <span style={thIn}><FileSignature {...thIc} />Contrat Owner<SortArrow dir={effectiveSort.col === "owner_signed" ? effectiveSort.dir : null} /></span>
                     </th>
-                    <th style={th}>Contrat Opti'Lex</th>
+                    <th style={th}><span style={thIn}><Scale {...thIc} />Contrat Opti'Lex</span></th>
                     <th style={{ ...th, cursor: "pointer", userSelect: "none" }} onClick={() => clickSort("onboarding")} title="Trier par date d'onboarding">
-                      <span style={{ display: "inline-flex", alignItems: "center" }}>Onboarding<SortArrow dir={effectiveSort.col === "onboarding" ? effectiveSort.dir : null} /></span>
+                      <span style={thIn}><CalendarCheck {...thIc} />Onboarding<SortArrow dir={effectiveSort.col === "onboarding" ? effectiveSort.dir : null} /></span>
                     </th>
                     <th style={th}></th>
                   </tr>
@@ -2558,11 +2614,11 @@ export default function OptilexBoard({ embed = false }) {
                   {filtered.length === 0 && (
                     <tr style={{ animation: "obRowIn 0.3s cubic-bezier(0.16,1,0.3,1) both" }}>
                       <td colSpan={8} style={{ ...td, textAlign: "center", padding: "52px 0" }}>
-                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#cbd2e0" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
+                        <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#d8d3cb" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ marginBottom: 8 }}>
                           <circle cx="11" cy="11" r="8" /><path d="m21 21-4.35-4.35" />
                         </svg>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, color: MUTED }}>Aucun client</div>
-                        <div style={{ fontSize: 12, color: "#b6bdc9", marginTop: 3 }}>Modifiez vos filtres ou votre recherche.</div>
+                        <div style={{ fontSize: 13.5, fontWeight: 500, color: MUTED }}>Aucun client</div>
+                        <div style={{ fontSize: 12, color: "#c9c4bc", marginTop: 3 }}>Modifiez vos filtres ou votre recherche.</div>
                       </td>
                     </tr>
                   )}
@@ -2585,7 +2641,7 @@ export default function OptilexBoard({ embed = false }) {
 function OptilexAlertBadge() {
   return (
     <span title="RDV d'intégration à venir, mais le contrat Opti'Lex n'est pas signé"
-      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fff3e3", color: "#b45309", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fde9da", color: "#c2500e", fontSize: 10.5, fontWeight: 500, whiteSpace: "nowrap" }}>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" />
       </svg>
@@ -2599,7 +2655,7 @@ function OptilexAlertBadge() {
 function IntegrationOverdueBadge() {
   return (
     <span title="RDV d'intégration en retard : la date est passée mais il n'a pas été marqué « effectué »"
-      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fdecec", color: "#c0392b", fontSize: 10.5, fontWeight: 700, whiteSpace: "nowrap" }}>
+      style={{ display: "inline-flex", alignItems: "center", gap: 4, marginTop: 4, padding: "2px 7px", borderRadius: 10, background: "#fde6e6", color: "#c0392b", fontSize: 10.5, fontWeight: 500, whiteSpace: "nowrap" }}>
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
         <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
       </svg>
@@ -2688,8 +2744,8 @@ function OnboardingToConfirm({ row, onDone, onNotDone }) {
   const [day, setDay] = useState(() => String(row.rdv_onboarding_done_date || "").slice(0, 10)
     || (planned && planned <= todayParis ? planned : todayParis));
   return (
-    <div style={{ border: "1px solid #c7d2fe", background: "#f5f7ff", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: "#3730a3" }}>Onboarding à confirmer</div>
+    <div style={{ border: "1px solid #d6d4f6", background: "#f6f5fd", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
+      <div style={{ fontSize: 13, fontWeight: 500, color: "#4a3fc4" }}>Onboarding à confirmer</div>
       <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
         En attente de qualification : {row.rdv_onboarding_done ? "coché réalisé sans action du Client Success" : "le Client Success est intervenu, l'onboarding n'est pas coché"}.
         Le client n'est pas prévenu.
@@ -2853,10 +2909,10 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
           <svg className="ob-tk-shape" width={shape.w} height={shape.h} viewBox={`0 0 ${shape.w} ${shape.h}`} aria-hidden="true">
             <defs>
               <filter id={shadowId} x="-10%" y="-10%" width="120%" height="125%">
-                <feDropShadow dx="0" dy="10" stdDeviation="11" floodColor="#121b35" floodOpacity="0.09" />
+                <feDropShadow dx="0" dy="10" stdDeviation="11" floodColor="#1c1b19" floodOpacity="0.09" />
               </filter>
             </defs>
-            <path d={shapePath} fill="#fff" stroke="rgba(18,27,53,0.13)" strokeWidth="1" filter={`url(#${shadowId})`} />
+            <path d={shapePath} fill="#fff" stroke="rgba(43,41,39,.091)" strokeWidth="1" filter={`url(#${shadowId})`} />
           </svg>
         )}
         <div className="ob-tk-top">
@@ -2962,7 +3018,7 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
               {stubFill && (
                 <svg className="ob-tk-stubshape" width={shape.w} height={stubH} viewBox={`0 0 ${shape.w} ${stubH}`} aria-hidden="true">
                   <path d={stubFill} fill="#fff" />
-                  <path d={stubEdge} fill="none" stroke="rgba(18,27,53,0.13)" strokeWidth="1" />
+                  <path d={stubEdge} fill="none" stroke="rgba(43,41,39,.091)" strokeWidth="1" />
                 </svg>
               )}
               <div ref={perfRef} className="ob-tk-perf" aria-hidden="true">
@@ -3029,7 +3085,7 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
   );
 }
 // Ciseaux qui découpent la souche le long de la perforation.
-const TK_SCISSORS = <g fill="none" stroke="#1e2330" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3" fill="#fff" /><circle cx="6" cy="18" r="3" fill="#fff" /><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" /></g>;
+const TK_SCISSORS = <g fill="none" stroke="#2b2927" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3" fill="#fff" /><circle cx="6" cy="18" r="3" fill="#fff" /><path d="M20 4 8.12 15.88M14.47 14.48 20 20M8.12 8.12 12 12" /></g>;
 function EmailSelect({ row, patch, onSaved, bare = false }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
@@ -3098,21 +3154,21 @@ function EmailSelect({ row, patch, onSaved, bare = false }) {
       {!bare && <div style={{ fontSize: 11, color: MUTED, marginBottom: 3 }}>Email</div>}
       <button ref={btnRef} type="button" onClick={toggle} title={canOpen ? "Choisir l'adresse des envois Opti'Lex" : undefined}
         style={{ display: "flex", alignItems: "center", gap: 6, width: bare ? "auto" : "100%", maxWidth: "100%", textAlign: "left", background: "transparent", border: "none", padding: 0, cursor: canOpen ? "pointer" : "default", fontFamily: "inherit", minWidth: 0 }}>
-        <span style={{ fontSize: bare ? 13.5 : 14, fontWeight: 600, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current || "—"}</span>
+        <span style={{ fontSize: bare ? 13.5 : 14, fontWeight: 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{current || "—"}</span>
         {canOpen && <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, transform: open ? "rotate(180deg)" : "none", transition: "transform 0.16s" }}><polyline points="6 9 12 15 18 9" /></svg>}
       </button>
       {open && pos && createPortal(
         <>
           <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 10050 }} />
-          <div style={{ position: "fixed", top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 240), zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 12, boxShadow: "0 8px 28px rgba(17,24,39,0.14)", padding: 6, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both" }}>
-            <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", padding: "6px 8px 4px" }}>Email des envois Opti'Lex</div>
+          <div style={{ position: "fixed", top: pos.top, left: pos.left, minWidth: Math.max(pos.width, 240), zIndex: 10051, background: CARD, border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: "0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)", padding: 6, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", animation: "obMenuIn 0.15s cubic-bezier(0.16,1,0.3,1) both" }}>
+            <div style={{ fontSize: 10.5, fontWeight: 500, color: MUTED, textTransform: "uppercase", letterSpacing: "0.04em", padding: "6px 8px 4px" }}>Email des envois Opti'Lex</div>
             {opts.map((o) => {
               const on = o.email.toLowerCase() === current.toLowerCase();
               return (
                 <button key={o.email} type="button" disabled={saving} onClick={() => choose(o.email)}
-                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", textAlign: "left", padding: "8px", borderRadius: 8, border: "none", background: on ? "#eff3fb" : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, width: "100%", textAlign: "left", padding: "8px", borderRadius: 8, border: "none", background: on ? "#f4f2ee" : "transparent", cursor: "pointer", fontFamily: "inherit" }}>
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: "block", fontSize: 13, fontWeight: on ? 700 : 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.email}</span>
+                    <span style={{ display: "block", fontSize: 13, fontWeight: on ? 500 : 500, color: TEXT, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{o.email}</span>
                     <span style={{ fontSize: 11, color: MUTED }}>{o.source}</span>
                   </span>
                   {on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><polyline points="20 6 9 17 4 12" /></svg>}
@@ -3124,7 +3180,7 @@ function EmailSelect({ row, patch, onSaved, bare = false }) {
                 <input type="email" value={newEmail} disabled={saving} onClick={(ev) => ev.stopPropagation()} onChange={(ev) => setNewEmail(ev.target.value)} placeholder="Ajouter un email…"
                   style={{ flex: 1, minWidth: 0, fontSize: 13, padding: "7px 9px", border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: "inherit", color: TEXT, outline: "none", background: CARD }} />
                 <button type="submit" disabled={saving || !newEmail.trim()}
-                  style={{ flexShrink: 0, fontSize: 13, fontWeight: 600, padding: "7px 12px", border: "none", borderRadius: 8, background: NAVY, color: "#fff", cursor: (saving || !newEmail.trim()) ? "default" : "pointer", opacity: (saving || !newEmail.trim()) ? 0.5 : 1 }}>Ajouter</button>
+                  style={{ flexShrink: 0, fontSize: 13, fontWeight: 500, padding: "7px 12px", border: "none", borderRadius: 8, background: CHARCOAL, color: "#fff", cursor: (saving || !newEmail.trim()) ? "default" : "pointer", opacity: (saving || !newEmail.trim()) ? 0.5 : 1 }}>Ajouter</button>
               </form>
             </div>
           </div>
@@ -3381,7 +3437,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
-        <SecTitle icon="infos" style={{ marginBottom: 0 }}>Informations client</SecTitle>
+        <SecTitle icon="infos" style={{ marginBottom: 0 }} hint="Le suivi, les coordonnées et les contrats du client.">Informations client</SecTitle>
         {num && !editing && !isFinanceTeam() && (
           <button type="button" className="ob-prop-edit" onClick={startEdit} title="Modifier le nom, la tranche, le téléphone et le SIREN" {...(isBoardReadOnly() ? READ_ONLY_PROPS : {})}>
             <PencilIcon size={13} />Modifier
@@ -3404,15 +3460,16 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           )}
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12 }}>
             <button type="button" onClick={() => setEditing(false)}
-              style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
+              style={{ padding: "8px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: MUTED, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Annuler</button>
             <button type="button" onClick={save}
-              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: NAVY, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>Enregistrer</button>
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: CHARCOAL, color: "#fff", fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Enregistrer</button>
           </div>
         </div>
       ) : (
         <div className="ob-props">
           {/* Suivi */}
           <div className="ob-props-group">
+            <div className="ob-props-title">Suivi</div>
             <PropRow icon="situation" label="Situation" top={2}><EtatSection row={row} num={num} changeEtat={changeEtat} bare /></PropRow>
             <PropRow icon="meteo" label="Météo">
               <span className="ob-pv-line" title="À mettre à jour à chaque échange avec le client, avant ou après l'onboarding.">
@@ -3443,6 +3500,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           </div>
           {/* Coordonnées : à copier d'un clic (bouton au survol de la ligne) */}
           <div className="ob-props-group">
+            <div className="ob-props-title">Coordonnées</div>
             {/* Infos de base (dev 29/10/2026 : « on n'a plus le nom et tout ») : nom, société, numéro, copiables. */}
             {/* Nom, prénom et ville du client (dev 10/11/2026) : ceux du NDA, jamais devinés. Sans prénom et nom séparés
                 dans le NDA, le nom connu reste affiché, signalé « à séparer » ; prénom et ville « à compléter » (ensemble). */}
@@ -3480,6 +3538,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           </div>
           {/* Contrats : l'état et ses dates ; les dossiers et leurs PDF vivent dans l'onglet Intégration (dev 29/10/2026). */}
           <div className="ob-props-group">
+            <div className="ob-props-title">Contrats</div>
             {contractFolderItems(row).map((it) => (
               <PropRow key={it.key} icon="contrat" label={`Contrat ${it.label}`}
                 top={it.key === "optilex" && (isIntegrationOverdue(row) || integrationAlert(row)) ? 1 : 0}>
@@ -3505,19 +3564,19 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
 // `disabled` (rôles en lecture seule) : la valeur reste affichée, les deux boutons sont désactivés.
 function StatusToggle({ value, onChange, labels = ["Non", "Oui"], disabled = false }) {
   return (
-    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#eef1f6", borderRadius: 9, minWidth: 150, userSelect: "none", flexShrink: 0 }}
+    <div style={{ position: "relative", display: "grid", gridTemplateColumns: "1fr 1fr", background: "#f4f2ee", borderRadius: 9, minWidth: 150, userSelect: "none", flexShrink: 0 }}
       {...(disabled ? { title: READ_ONLY_TITLE, "data-read-only": "true" } : {})}>
       <motion.div
         animate={{ x: value ? "100%" : "0%", backgroundColor: value ? GREEN : NAVY }}
         transition={{ type: "spring", stiffness: 480, damping: 34 }}
-        style={{ position: "absolute", top: 0, left: 0, width: "50%", height: "100%", borderRadius: 9, zIndex: 0, boxShadow: "0 1px 3px rgba(30,35,48,0.18)" }}
+        style={{ position: "absolute", top: 0, left: 0, width: "50%", height: "100%", borderRadius: 9, zIndex: 0, boxShadow: "0 1px 3px rgba(43,41,39,.126)" }}
       />
       {labels.map((lab, i) => {
         const active = (i === 1) === !!value;
         return (
           <button key={i} type="button" onClick={() => onChange(i === 1)} disabled={disabled}
             style={{ position: "relative", zIndex: 1, border: "none", background: "transparent", cursor: "pointer",
-              padding: "7px 6px", fontSize: 12.5, fontWeight: 600, fontFamily: "inherit",
+              padding: "7px 6px", fontSize: 12.5, fontWeight: 500, fontFamily: "inherit",
               color: active ? "#fff" : MUTED, transition: "color 0.25s",
               display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 5, whiteSpace: "nowrap" }}>
             {i === 1 && (
@@ -3539,7 +3598,7 @@ function StatusToggle({ value, onChange, labels = ["Non", "Oui"], disabled = fal
 function TableDateEdit({ value, onSave, disabled }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
-  if (disabled) return <span style={{ color: value ? TEXT : "#cbd2e0" }}>{fmtDT(value) || "—"}</span>;
+  if (disabled) return <span style={{ color: value ? TEXT : "#d8d3cb" }}>{fmtDT(value) || "—"}</span>;
   if (editing) {
     return (
       <input type="date" autoFocus defaultValue={toDateInput(value)}
@@ -3553,7 +3612,7 @@ function TableDateEdit({ value, onSave, disabled }) {
     <button type="button" title="Saisir/modifier la date d'onboarding"
       onClick={(e) => { e.stopPropagation(); setEditing(true); }}
       style={{ border: "none", background: "transparent", padding: 0, cursor: "pointer", fontFamily: "inherit", fontSize: "inherit",
-        display: "inline-flex", alignItems: "center", gap: 6, color: value ? TEXT : "#cbd2e0" }}>
+        display: "inline-flex", alignItems: "center", gap: 6, color: value ? TEXT : "#d8d3cb" }}>
       {fmtDT(value) || "—"}
       <span className="ob-edit" style={{ display: "inline-flex", lineHeight: 0 }}><PencilIcon /></span>
     </button>
@@ -3567,7 +3626,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#fafbfc" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, padding: "10px 12px", borderRadius: 10, border: `1px solid ${BORDER}`, background: "#faf9f7" }}>
       <div style={{ minWidth: 0 }}>
         <div style={{ fontSize: 11, color: MUTED }}>{label}</div>
         {editing ? (
@@ -3577,7 +3636,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
             style={{ ...inputStyle, width: 156, padding: "6px 9px", fontSize: 13, marginTop: 2 }} />
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: date ? TEXT : "#cbd2e0" }}>{fmtDT(date) || "—"}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: date ? TEXT : "#d8d3cb" }}>{fmtDT(date) || "—"}</div>
             {onDate && (
               <button type="button" onClick={() => setEditing(true)} title="Saisir/modifier la date"
                 style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}
@@ -3592,7 +3651,7 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
         {onCancel && <button type="button" className="ob-detail-link" onClick={onCancel} style={{ color: CANCEL_RED }} {...(readOnly ? READ_ONLY_PROPS : {})}>Annuler ce rendez-vous</button>}
         {meetLink && (
           <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 700, textDecoration: "none" }}>
+            style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 500, textDecoration: "none" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8Z" /><rect width="14" height="12" x="2" y="6" rx="2" /></svg>
             Rejoindre le Meet
           </a>
@@ -3614,7 +3673,7 @@ function RdvLink({ url }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 5 }}>
       <a href={url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
-        style={{ fontSize: 11.5, fontWeight: 600, color: NAVY, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
+        style={{ fontSize: 11.5, fontWeight: 500, color: NAVY, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 4 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
           <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
@@ -3622,7 +3681,7 @@ function RdvLink({ url }) {
         Lien de prise de RDV
       </a>
       <button type="button" onClick={copy}
-        style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 11, fontWeight: 600, color: copied ? GREEN : MUTED, padding: 0, fontFamily: "inherit" }}>
+        style={{ border: "none", background: "transparent", cursor: "pointer", fontSize: 11, fontWeight: 500, color: copied ? GREEN : MUTED, padding: 0, fontFamily: "inherit" }}>
         {copied ? "copié ✓" : "copier"}
       </button>
     </div>
@@ -3663,16 +3722,16 @@ function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
   };
 
   if (loading) return <div style={{ fontSize: 13, color: MUTED }}>Chargement du lien…</div>;
-  if (!data?.available || !link) return <div style={{ fontSize: 13, color: "#cbd2e0" }}>Lien de signature indisponible.</div>;
+  if (!data?.available || !link) return <div style={{ fontSize: 13, color: "#d8d3cb" }}>Lien de signature indisponible.</div>;
 
   const done = relance === "sent";
   return (
     <div>
       <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
         <input readOnly value={link} onFocus={(e) => e.target.select()}
-          style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11.5, color: MUTED, background: "#fafbfc" }} />
+          style={{ ...inputStyle, flex: 1, minWidth: 0, fontSize: 11.5, color: MUTED, background: "#faf9f7" }} />
         <button onClick={copy}
-          style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 8, border: "none", background: copied ? GREEN : NAVY, color: "#fff", fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
+          style={{ flexShrink: 0, padding: "8px 14px", borderRadius: 8, border: "none", background: copied ? GREEN : NAVY, color: "#fff", fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s" }}>
           {copied ? "Copié ✓" : "Copier"}
         </button>
       </div>
@@ -3686,8 +3745,8 @@ function OptilexSignatureBlock({ email, chosenEmail, refreshKey }) {
             onMouseLeave={() => { if (relance !== "sending") setConfirming(false); }}
             disabled={relance === "sending" || done}
             style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-              padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-              background: done ? GREEN : confirming ? "#b42318" : "transparent",
+              padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+              background: done ? GREEN : confirming ? "#c5221f" : "transparent",
               color: done || confirming ? "#fff" : NAVY, cursor: relance === "sending" || done ? "default" : "pointer", transition: "all 0.2s" }}>
             {!done && relance !== "sending" && <MailIcon />}
             {done ? "Rappel envoyé ✓" : relance === "sending" ? "Envoi…" : relance === "error" ? "Échec, réessayer" : confirming ? "Confirmer l'envoi du rappel" : "Relancer le client"}
@@ -3737,8 +3796,8 @@ function ForceSendBlock({ email, scheduledAt, onForced }) {
           onMouseLeave={() => { if (!sending) setConfirming(false); }}
           disabled={sending || done}
           style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-            background: done ? GREEN : confirming ? "#b42318" : "transparent",
+            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+            background: done ? GREEN : confirming ? "#c5221f" : "transparent",
             color: done || confirming ? "#fff" : NAVY, cursor: sending || done ? "default" : "pointer", transition: "all 0.2s" }}>
           {!done && !sending && <MailIcon />}
           {done ? "Contrat envoye ✓" : sending ? "Envoi…" : state === "error" ? "Echec, reessayer" : confirming ? "Confirmer l'envoi immediat" : "Forcer l'envoi du contrat Opti'Lex"}
@@ -3795,8 +3854,8 @@ function RenewBlock({ email, sentAt, onRenewed, bare = false }) {
         <button onClick={confirming ? doRenew : () => setConfirming(true)}
           disabled={sending || done}
           style={{ width: "100%", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8,
-            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 600, fontFamily: "inherit",
-            background: done ? GREEN : confirming ? "#b42318" : "transparent",
+            padding: "10px 0", borderRadius: 9, border: confirming ? "none" : `1px solid ${NAVY}`, fontSize: 13, fontWeight: 500, fontFamily: "inherit",
+            background: done ? GREEN : confirming ? "#c5221f" : "transparent",
             color: done || confirming ? "#fff" : NAVY, cursor: sending || done ? "default" : "pointer", transition: "all 0.2s" }}>
           {!done && !sending && <MailIcon />}
           {done ? "Contrat renouvelé ✓" : sending ? "Envoi…" : state === "error" ? "Échec, réessayer" : confirming ? "Confirmer le renouvellement" : "Renouveler le contrat Opti'Lex"}
@@ -3875,7 +3934,7 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false }) {
         Situation enregistrée dans le board. La finance doit en traiter les conséquences sur les montants ; elle ne valide pas le changement de situation.
       </div>}
       {num && isEtatPending(row) && (
-        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fff3e3", color: "#b45309", fontSize: 12, fontWeight: 600, lineHeight: 1.45 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, padding: "6px 10px", borderRadius: 8, background: "#fde9da", color: "#c2500e", fontSize: 12, fontWeight: 500, lineHeight: 1.45 }}>
           <span style={{ flexShrink: 0 }}>⏳</span>
           {row.etat_date
             ? `${row.etat_manuel} prévue le ${fmt(row.etat_date)} — pas encore effective.`
@@ -3893,7 +3952,7 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false }) {
       {(() => {
         const h = etatHint(row);
         return h && h.urgent ? (
-          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, fontSize: 12, fontWeight: 600, color: "#b45309" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 9, fontSize: 12, fontWeight: 500, color: "#c2500e" }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
             </svg>
@@ -3966,9 +4025,9 @@ function EtatHistory({ num, version }) {
               style={{ position: "relative", paddingBottom: i === items.length - 1 ? 0 : 15 }}>
               {/* Même icône d'état que le tableau et les onglets (dev 29/10/2026), posée sur le fil. */}
               <span style={{ position: "absolute", left: -22, top: 1, padding: 1, borderRadius: "50%", background: CARD, lineHeight: 0 }}><EtatIcon etat={h.etat} size={12} /></span>
-              <div style={{ fontSize: 13, fontWeight: 600, color: st.fg || TEXT }}>{h.etat}</div>
+              <div style={{ fontSize: 13, fontWeight: 500, color: st.fg || TEXT }}>{h.etat}</div>
               <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{etatHistDates(h)}</div>
-              <div style={{ fontSize: 10.5, color: "#aab2c0", marginTop: 1 }}>
+              <div style={{ fontSize: 10.5, color: "#a8a39b", marginTop: 1 }}>
                 {etatAuthor(h) ? `${etatAuthor(h)} · ` : ""}{timeAgo(h.created_at)}
               </div>
             </motion.div>
@@ -4052,13 +4111,13 @@ function ClientAgendaModal({ row, num, onClose }) {
     .sort((a, b) => String(a.when).localeCompare(String(b.when)))[0];
   const doneCount = items.filter((it) => it.done).length;
   const shortDay = (it) => { const k = String(it.when).slice(0, 10); try { return new Date(`${k}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }).replace(".", ""); } catch { return k; } };
-  const toneOf = (it) => (it.cancelled ? "#c3c9d3" : it.kind === "jurist" ? "#8b6fd6" : it.type === "Owner" ? NAVY : "#3e7d5a");
+  const toneOf = (it) => (it.cancelled ? "#cfc9c0" : it.kind === "jurist" ? "#6c62d8" : it.type === "Owner" ? NAVY : "#3e7d5a");
 
   // Même mise en page que « Faire l'onboarding » et « Créances » (dev 29/10/2026, « better this pop up same way »).
   return createPortal(
     <div className="ag" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={onClose}
-        style={{ position: "absolute", inset: 0, background: "rgba(18,27,53,0.34)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }} />
+        style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }} />
       <motion.div className="ag-modal" role="dialog" aria-modal="true" aria-label="Agenda du client"
         initial={{ opacity: 0, scale: 0.94, y: 14 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ type: "spring", stiffness: 420, damping: 34 }}>
         <header className="ag-head">
@@ -4093,7 +4152,7 @@ function ClientAgendaModal({ row, num, onClose }) {
                       <small>{it.kind === "jurist" ? (it.juriste || "Juriste") + (it.cancelled ? " · annulé" : "") : it.type}</small>
                     </div>
                     {it.kind === "standard" && <Tag tone={it.done ? GREEN : MUTED}>{it.done ? "Effectué" : "À venir"}</Tag>}
-                    {it.cancelled && <Tag tone="#b42318">Annulé</Tag>}
+                    {it.cancelled && <Tag tone="#c5221f">Annulé</Tag>}
                   </div>
                 ))}
               </div>
@@ -4106,8 +4165,94 @@ function ClientAgendaModal({ row, num, onClose }) {
   );
 }
 
+// ── En-tête de la fiche (dev 10/11/2026) : le gabarit de la fiche Finance. Qui est le client, où il en est, et trois
+//    repères lus d'un coup d'œil. Rien ne s'y règle : la situation, la météo et les coordonnées se modifient juste
+//    dessous, dans les propriétés.
+const ONBOARDING_TILE = { done: "Réalisé", venir: "À venir", confirm: "À confirmer", todo: "À faire", noshow: "No show" };
+// Ancienneté depuis la signature du contrat Owner : « 12 jours », « 7 mois », « 1 an 2 mois ».
+function sinceSigned(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  const [ty, tm, td] = _todayParisISO().split("-").map(Number);
+  let months = (ty - y) * 12 + (tm - m) - (td < d ? 1 : 0);
+  if (months < 1) {
+    const days = Math.max(0, Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 86400000));
+    return days === 0 ? "Aujourd'hui" : `${days} jour${days > 1 ? "s" : ""}`;
+  }
+  const years = Math.floor(months / 12);
+  months %= 12;
+  if (!years) return `${months} mois`;
+  return `${years} an${years > 1 ? "s" : ""}${months ? ` ${months} mois` : ""}`;
+}
+function FicheTile({ i, label, icon, value, note, reduce }) {
+  return (
+    <motion.div className="ob-fh-tile" initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.34, delay: 0.04 + i * 0.05, ease: [0.16, 1, 0.3, 1] } }}
+      whileHover={reduce ? undefined : { y: -2, transition: { duration: 0.18 } }}>
+      <span className="ob-fh-tile-k">{label}{icon}</span>
+      <span className="ob-fh-tile-v" title={typeof value === "string" ? value : undefined}>{value}</span>
+      <span className="ob-fh-tile-n" title={note}>{note}</span>
+    </motion.div>
+  );
+}
+function FicheHeader({ row, full, onToggleFull, onClose }) {
+  const reduce = useReducedMotion();
+  const num = row.numero_client;
+  const name = primaryName(row);
+  const company = companyName(row);
+  const etat = displayEtat(row);
+  const weather = weatherPresentation(row.meteo_score, row.meteo_context);
+  const situation = onboardingSituation(row, _todayParisISO(), { exited: isOutOfOnboarding(etat) });
+  const onboardingDate = onboardingDateOf(row);
+  const onboardingNote = situation === "done" ? (onboardingDate ? `le ${fmt(onboardingDate)}` : "date non renseignée")
+    : situation === "venir" ? `prévu le ${fmt(onboardingDate)}`
+    : situation === "confirm" ? "en attente de qualification"
+    : situation ? (onboardingDate ? `rendez-vous du ${fmt(onboardingDate)}` : "aucune date posée")
+    : num ? "hors parcours" : "vente non déclarée";
+  const signed = sigDateOf(row);
+  return (
+    <header className="ob-fh">
+      <div className="ob-fh-top">
+        <motion.div className="ob-fh-id" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}>
+          <Avatar name={name} n={row.sheet_num} size={48} round />
+          <div style={{ minWidth: 0 }}>
+            <h1 className="ob-fh-name">{name}</h1>
+            {company && company !== name && <div className="ob-fh-sub">{company}</div>}
+          </div>
+        </motion.div>
+        <div className="ob-fh-actions">
+          <button type="button" className="ob-fh-ring" onClick={onToggleFull} title={full ? "Revenir au panneau" : "Afficher en plein écran"} aria-label={full ? "Revenir au panneau" : "Afficher en plein écran"}>
+            {full ? <Minimize2 size={15} strokeWidth={1.9} /> : <Maximize2 size={15} strokeWidth={1.9} />}
+          </button>
+          {full && (
+            <button type="button" className="ob-fh-ring is-close" onClick={onClose} title="Fermer" aria-label="Fermer la fiche">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden><path d="M18 6 6 18M6 6l12 12" /></svg>
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="ob-fh-meta">
+        {etat && <EtatBadge etat={etat} withIcon />}
+        {num && <span className="ob-fh-chip">Client n° {num}</span>}
+        {row.secteur_activite && <span className="ob-fh-chip"><SectorIcon secteur={row.secteur_activite} size={15} />{secteurLabel(row.secteur_activite)}</span>}
+      </div>
+      <div className="ob-fh-tiles">
+        <FicheTile i={0} reduce={reduce} label="Météo"
+          icon={weather ? <MeteoIcon score={row.meteo_score} size={16} color={weather.color} /> : <CloudSun size={15} strokeWidth={1.9} />}
+          value={weather ? weather.label : "À noter"}
+          note={weather ? `${row.meteo_score}/5${row.meteo_at ? ` · ${timeAgo(row.meteo_at)}` : weather.legacy ? " · ancienne échelle" : ""}` : "aucune note posée"} />
+        <FicheTile i={1} reduce={reduce} label="Onboarding" icon={<CalendarCheck size={15} strokeWidth={1.9} />}
+          value={situation ? ONBOARDING_TILE[situation] : "—"} note={onboardingNote} />
+        <FicheTile i={2} reduce={reduce} label="Client depuis" icon={<FileSignature size={15} strokeWidth={1.9} />}
+          value={signed ? sinceSigned(signed) : "—"} note={signed ? `signé le ${fmt(signed)}` : "contrat Owner non signé"} />
+      </div>
+    </header>
+  );
+}
+
 export function DetailPanel({ row, onClose, reload, reloadRatings, patch, changeEtat, etatHistVersion, recordMeteo, meteoHistVersion }) {
   const num = row.numero_client;
+  // Plein écran : la même fiche sur toute la fenêtre, fiche à gauche et suivi à droite sur grand écran.
+  const [full, setFull] = useState(false);
   // Rôles en lecture seule (RH) : la fiche se lit, aucun contrôle d'écriture (voir isBoardReadOnly).
   const readOnly = isBoardReadOnly();
   // Rafraîchit le bloc signature Opti'Lex après un changement d'email (le destinataire du
@@ -4168,12 +4313,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {/* RDV + statut "effectué" */}
           <div className="ob-sec" style={{ animationDelay: "0.2s" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-            <SecTitle icon="rdv" style={{ marginBottom: 0 }}>Rendez-vous</SecTitle>
+            <SecTitle icon="rdv" style={{ marginBottom: 0 }} hint="L'onboarding Owner et les rendez-vous du cabinet.">Rendez-vous</SecTitle>
             {num && (
               <motion.button type="button" whileTap={{ scale: 0.96 }} onClick={() => setAgendaOpen(true)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f5f2"; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-                style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
                 Voir l'agenda
               </motion.button>
@@ -4206,9 +4351,9 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               {!!num && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date)
                 && ["admin", "ceo", "customer_success_manager", "finance_team"].includes((apiClient.getUser() || {}).role) && (
                 <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={() => setReschedOpen("onboarding")}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f8fa"; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = "#f7f5f2"; }}
                   onMouseLeave={(e) => { e.currentTarget.style.background = CARD; }}
-                  style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                  style={{ alignSelf: "flex-start", marginTop: -2, display: "flex", alignItems: "center", gap: 6, padding: "5px 11px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 12, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /></svg>
                   Recaler le RDV onboarding
                 </motion.button>
@@ -4243,8 +4388,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   return (
     <>
       <motion.div onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}
-        style={{ position: "fixed", inset: 0, background: "rgba(18,27,53,0.24)", zIndex: 9998 }} />
-      <motion.button type="button" className="ob-dp-close" onClick={onClose} title="Fermer" aria-hidden="true" tabIndex={-1}
+        style={{ position: "fixed", inset: 0, background: "rgba(28,27,25,.22)", zIndex: 9998 }} />
+      <motion.button type="button" className={`ob-dp-close${full ? " is-hidden" : ""}`} onClick={onClose} title="Fermer" aria-hidden="true" tabIndex={-1}
         initial={{ opacity: 0, scale: 0.7, x: 12 }} animate={{ opacity: 1, scale: 1, x: 0, transition: { delay: 0.1, type: "spring", stiffness: 520, damping: 30 } }}
         exit={{ opacity: 0, scale: 0.8, transition: { duration: 0.12 } }}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
@@ -4253,12 +4398,16 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
         initial={{ x: 36, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
         exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
         transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-        className="ob-detail-panel" role="dialog" aria-modal="true" aria-hidden={agendaOpen || !!reschedOpen || !!cancelOpen || undefined} aria-label="Détails du client" style={{ position: "fixed", top: 0, right: 0, height: "100dvh", width: 600, maxWidth: "100vw", background: CARD, zIndex: 9999, boxShadow: "-12px 0 40px rgba(18,27,53,0.12)", overflowY: "auto", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-        {/* Plus d'en-tête (dev 29/10/2026, « this all up should be removed ») : la fiche commence par ce qui compte ;
-            le nom, la société et la périodicité vivent dans les propriétés. Fermeture : la croix ronde posée à
-            gauche du panneau (décorative) et, pour le clavier et les lecteurs d'écran, ce bouton qui apparaît au focus. */}
+        className={`ob-detail-panel${full ? " is-full" : ""}`} role="dialog" aria-modal="true" aria-hidden={agendaOpen || !!reschedOpen || !!cancelOpen || undefined} aria-label="Détails du client">
+        {/* En-tête revenu (dev 10/11/2026) sur le modèle de la fiche Finance ; le nom, la société et la périodicité
+            restent aussi dans les propriétés. Fermeture : la croix ronde posée à gauche du panneau (décorative) et,
+            pour le clavier et les lecteurs d'écran, ce bouton qui apparaît au focus. */}
         <button type="button" className="ob-dp-close-sr" onClick={onClose}>Fermer la fiche</button>
+        <div className="ob-dp-scroll">
         <div className="ob-dp-body">
+          <FicheHeader row={row} full={full} onToggleFull={() => setFull((v) => !v)} onClose={onClose} />
+          <div className="ob-dp-cols">
+          <div className="ob-dp-main">
           {/* Convention Opti'Lex pas signée (planifiée, envoyée, expirée) : en tête, pour que tout le monde le voie
               tout de suite ; le Client Success prévient le cabinet (jamais de relance directe), la direction et le
               cabinet renouvellent une convention expirée (dev 29/10/2026). */}
@@ -4281,6 +4430,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {/* Fiche d'intégration remontée sous le rendez-vous (dev 29/10/2026, « more up ») : le portefeuille. */}
           {!!num && <div className="ob-dp-block ob-dp-wallet"><BoardIntegrationSheet key={`sheet-${num || row.id}`} numero={num} onRated={reloadRatings} compact /></div>}
 
+          </div>
+          <div className="ob-dp-side">
           <div className="ob-tabs" role="tablist" aria-label="Suivi du client">
             {tabs.map((t) => (
               <button key={t.key} type="button" role="tab" id={`ob-tab-${t.key}`} aria-selected={tab === t.key} aria-controls={`ob-panel-${t.key}`}
@@ -4304,7 +4455,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           <div role="tabpanel" id="ob-panel-integration" aria-labelledby="ob-tab-integration" hidden={tab !== "integration"} className="ob-tabpanel">
             {/* Les conventions en dossiers : au clic la feuille sort du dossier et devient le PDF. */}
             <div style={{ marginBottom: 24 }}>
-              <SecTitle icon="signature">Contrats</SecTitle>
+              <SecTitle icon="signature" hint="Au clic, la feuille sort du dossier et s'ouvre.">Contrats</SecTitle>
               <ContractFolders contractId={row.contract_id} items={contractFolderItems(row)} group={`integration-${num || row.id}`} />
             </div>
             {["admin", "optilex"].includes(role) && row.owner_status === "done" && (row.optilex_status === "scheduled" || row.optilex_status === "awaiting_owner_signature") && (
@@ -4320,7 +4471,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             {/* Parcours des 4 e-mails Opti'Lex automatisés : enveloppe grise = pas parti, verte = envoyé et sa date. */}
             {hasOptilexTrack && (
               <div style={{ marginBottom: 22 }}>
-                <SecTitle icon="emails">E-mails Opti'Lex</SecTitle>
+                <SecTitle icon="emails" hint="Les quatre e-mails automatiques du cabinet et leur date d'envoi.">E-mails Opti'Lex</SecTitle>
                 <div className="ob-steps">
                   {emailStep("Accueil", "À l'envoi du contrat Opti'Lex", row.optilex_welcome_email_at)}
                   {emailStep("Livret", "À la signature du contrat", row.optilex_livret_email_at)}
@@ -4347,7 +4498,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           <div role="tabpanel" id="ob-panel-facturation" aria-labelledby="ob-tab-facturation" hidden={tab !== "facturation"} className="ob-tabpanel">
             {num ? (
               <>
-                <SecTitle icon="facturation">Suivi facturation</SecTitle>
+                <SecTitle icon="facturation" hint="Les jalons de facturation Owner et Opti'Lex, puis le rendez-vous à deux mois.">Suivi facturation</SecTitle>
                 <JalonRow label="Statut facturation Owner" editable={!isFinanceTeam()} readOnly={readOnly} done={row.facturation_honoraires_done} date={row.facturation_honoraires_date}
                   onToggle={(v) => patch(num, { facturation_honoraires_done: v })} onDate={(d) => patch(num, { facturation_honoraires_date: d })} />
                 <JalonRow label="Statut facturation Opti'Lex" editable={!isFinanceTeam()} readOnly={readOnly} done={row.setup_facturation_done} date={row.setup_facturation_date}
@@ -4369,6 +4520,8 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             <EtatHistory num={num} version={etatHistVersion} />
           </div>
 
+          </div>
+          </div>
           {agendaOpen && <ClientAgendaModal row={row} num={num} onClose={() => setAgendaOpen(false)} />}
           {onboardingOpen && <OnboardingFlowModal row={row} num={num} patch={patch} onClose={() => setOnboardingOpen(false)}
             onRescheduleWithDate={() => setReschedOpen("onboarding")} onReschedule={(kind) => setReschedOpen(kind)}
@@ -4378,6 +4531,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {transferTo && <TransferOnboardingModal row={row} num={num} target={transferTo} current={onboardingHost?.host} slot={onboardingHost?.slot}
             onClose={() => setTransferTo(null)} onDone={() => { setTransferTo(null); setApptVersion((v) => v + 1); reload(); }} />}
           {cancelOpen && <CancelLaunchModal kind={cancelOpen} row={row} num={num} onClose={() => setCancelOpen(false)} onDone={() => { setCancelOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
+        </div>
         </div>
       </motion.div>
     </>
@@ -4407,7 +4561,7 @@ function HostFace({ name, photo, size = 20, ring = false }) {
   return photo ? (
     <img src={photo} alt={name || ""} draggable={false} style={{ ...base, objectFit: "cover" }} />
   ) : (
-    <span aria-hidden="true" style={{ ...base, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#e9eef6", color: NAVY, fontSize: Math.round(size * 0.48), fontWeight: 800 }}>
+    <span aria-hidden="true" style={{ ...base, display: "inline-flex", alignItems: "center", justifyContent: "center", background: "#f1eee9", color: NAVY, fontSize: Math.round(size * 0.48), fontWeight: 500 }}>
       {(name || "?").slice(0, 1).toUpperCase()}
     </span>
   );
@@ -4439,13 +4593,13 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
   };
   return createPortal(
     <div className="ob-transfer-modal" role="dialog" aria-modal="true" aria-label={`Transférer le rendez-vous à ${target.name}`} style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        style={{ position: "relative", width: "min(440px, 100%)", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", padding: "20px 22px" }}>
+        style={{ position: "relative", width: "min(440px, 100%)", background: CARD, borderRadius: 22, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(28,27,25,.14)", padding: "20px 22px" }}>
         {done ? (
           <div style={{ textAlign: "center", padding: "10px 0" }}>
             <div style={{ display: "inline-flex" }}><HostFace name={target.name} photo={target.photo} size={44} /></div>
-            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 800, color: GREEN }}>Rendez-vous transféré à {target.name}</div>
+            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 500, color: GREEN }}>Rendez-vous transféré à {target.name}</div>
             <div style={{ marginTop: 4, fontSize: 12.5, color: MUTED }}>Il est dans son agenda. Le client n’a rien reçu.</div>
           </div>
         ) : (
@@ -4455,19 +4609,19 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={MUTED} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12h14" /><path d="m13 6 6 6-6 6" /></svg>
               <HostFace name={target.name} photo={target.photo} size={34} />
               <div style={{ minWidth: 0, marginLeft: 4 }}>
-                <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Transférer le rendez-vous à {target.name}</div>
+                <div style={{ fontSize: 15, fontWeight: 500, color: NAVY }}>Transférer le rendez-vous à {target.name}</div>
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}{slot ? ` · ${fmtDT(slot)}` : ""}</div>
               </div>
             </div>
             <div style={{ marginTop: 14, fontSize: 13, color: TEXT, lineHeight: 1.55 }}>
               Le rendez-vous passe de l’agenda {current ? deName(current.name) : "de l’animateur actuel"} à celui {deName(target.name)}, au même créneau et avec le même lien Meet, même si {target.name} a déjà un rendez-vous à cette heure. La facturation ne bouge pas. Le client ne reçoit rien.
             </div>
-            {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#b42318", lineHeight: 1.5 }}>{error}</div>}
+            {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#c5221f", lineHeight: 1.5 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
               <button type="button" disabled={saving} onClick={onClose}
-                style={{ padding: "9px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Annuler</button>
+                style={{ padding: "9px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Annuler</button>
               <motion.button type="button" whileTap={{ scale: 0.97 }} disabled={saving} onClick={confirm}
-                style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
                 {saving ? "Transfert…" : `Transférer à ${target.name}`}
               </motion.button>
             </div>
@@ -4541,12 +4695,12 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   return createPortal(
     <div className="ob-reschedule-modal" role="dialog" aria-modal="true" aria-label="Reprogrammer le rendez-vous" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }}
-        style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+        style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        style={{ position: "relative", width: "min(640px, 100%)", maxHeight: "82vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", overflow: "hidden" }}>
+        style={{ position: "relative", width: "min(640px, 100%)", maxHeight: "82vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 22, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(28,27,25,.14)", overflow: "hidden" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Reprogrammer le rendez-vous {kind === "onboarding" ? "onboarding" : kind}</div>
+            <div style={{ fontSize: 15, fontWeight: 500, color: NAVY }}>Reprogrammer le rendez-vous {kind === "onboarding" ? "onboarding" : kind}</div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num} · le client sera notifié du nouveau créneau
             </div>
@@ -4563,7 +4717,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
               return (
                 <button key={o.name} type="button" role="radio" aria-checked={active} disabled={saving || uncertain}
                   onClick={() => { if (!active) { setChosenHost(o.name); setSel(null); } }}
-                  style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 11px 4px 5px", borderRadius: 999, border: `1px solid ${active ? NAVY : BORDER}`, background: active ? NAVY : CARD, color: active ? "#fff" : NAVY, fontSize: 12.5, fontWeight: 650, cursor: active ? "default" : "pointer", fontFamily: "inherit", transition: "all .12s ease" }}>
+                  style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "4px 11px 4px 5px", borderRadius: 999, border: `1px solid ${active ? CHARCOAL : BORDER}`, background: active ? CHARCOAL : CARD, color: active ? "#fff" : NAVY, fontSize: 12.5, fontWeight: 500, cursor: active ? "default" : "pointer", fontFamily: "inherit", transition: "all .12s ease" }}>
                   <HostFace name={o.name} photo={o.photo} size={22} ring={active} />
                   {o.name}{o.name === currentHost ? <span style={{ fontWeight: 500, opacity: 0.7 }}> · actuel</span> : null}
                 </button>
@@ -4573,10 +4727,10 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
         )}
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={saving || uncertain || start <= todayIso()}
-            style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY, cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? `${hostName || "animateur"} + facturation` : kind} · heure de Paris</span>
+            style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 500, color: start <= todayIso() ? MUTED : NAVY, cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
+          <span style={{ fontSize: 12.5, fontWeight: 500, color: NAVY }}>Créneaux libres · {kind === "onboarding" ? `${hostName || "animateur"} + facturation` : kind} · heure de Paris</span>
           <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
-            style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
+            style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px", fontSize: 12, fontWeight: 500, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>
         <div style={{ padding: "14px 20px", overflowY: "auto", flex: 1 }}>
           {loading ? (
@@ -4593,7 +4747,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
             }
             return shown.map((d) => (
               <div key={d.date} style={{ marginBottom: 14 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, color: MUTED, textTransform: "capitalize", marginBottom: 7 }}>{dayLabel(d.date)}</div>
+                <div style={{ fontSize: 11.5, fontWeight: 500, color: MUTED, textTransform: "capitalize", marginBottom: 7 }}>{dayLabel(d.date)}</div>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                   {d.slots.map((s) => {
                     const on = sel && sel.date === d.date && sel.slot === s.t;
@@ -4605,10 +4759,10 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
                         title={host || undefined}
                         style={{ padding: "6px 12px", borderRadius: 8,
                           border: `1px solid ${on ? GREEN : (s.free ? BORDER : "transparent")}`,
-                          background: on ? GREEN : (s.free ? CARD : "#f3f4f6"),
-                          color: on ? "#fff" : (s.free ? NAVY : "#c3cad6"),
+                          background: on ? GREEN : (s.free ? CARD : "#f7f5f2"),
+                          color: on ? "#fff" : (s.free ? NAVY : "#cfc9c0"),
                           textDecoration: s.free ? "none" : "line-through",
-                          fontSize: 12.5, fontWeight: 600, cursor: s.free ? "pointer" : "default", fontFamily: "inherit", transition: "all .12s ease" }}>
+                          fontSize: 12.5, fontWeight: 500, cursor: s.free ? "pointer" : "default", fontFamily: "inherit", transition: "all .12s ease" }}>
                         {s.t}
                         {/* Animateur : sa photo comme sur le calendrier du sales, sinon son prénom. */}
                         {photo ? (
@@ -4626,11 +4780,11 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
           })()}
         </div>
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.5 }}>
+          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#c5221f" : MUTED, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.5 }}>
             {error || (sel ? `Nouveau créneau : ${dayLabel(sel.date)} à ${sel.slot}` : "Sélectionne un créneau")}
           </span>
           <motion.button type="button" whileTap={sel ? { scale: 0.97 } : undefined} disabled={!sel || saving} onClick={confirm}
-            style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: sel ? GREEN : "#e5e8ee", color: sel ? "#fff" : MUTED, fontSize: 13, fontWeight: 700, cursor: sel && !saving ? "pointer" : "default", fontFamily: "inherit", flexShrink: 0 }}>
+            style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: sel ? GREEN : "#ece9e4", color: sel ? "#fff" : MUTED, fontSize: 13, fontWeight: 500, cursor: sel && !saving ? "pointer" : "default", fontFamily: "inherit", flexShrink: 0 }}>
             {saving ? "Recalage…" : (uncertain ? "Vérifier ce créneau" : "Confirmer le recalage")}
           </motion.button>
         </div>
@@ -4643,7 +4797,7 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
 // Annulation d'un RDV de lancement fiscal / social depuis le board (dev 2026-09-30). Même moteur
 // que l'espace client : événement retiré de l'agenda du juriste (client prévenu par Google, juriste
 // par e-mail), droit de réserver rendu au client. Pas de délai de 24 h ici ; un RDV passé reste consommé.
-const CANCEL_RED = "#b42318";
+const CANCEL_RED = "#c5221f";
 const launchCancellable = (date, done) => {
   if (!date || done) return false;
   const today = new Date().toLocaleDateString("fr-CA", { timeZone: "Europe/Paris" });
@@ -4675,10 +4829,10 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Annuler le rendez-vous de lancement" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={close}
-        style={{ position: "absolute", inset: 0, background: "rgba(17,24,39,0.42)" }} />
+        style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)" }} />
       <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
-        style={{ position: "relative", width: "min(460px, 100%)", background: CARD, borderRadius: 16, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(17,24,39,0.28)", padding: "20px 22px" }}>
-        <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>{done ? "Rendez-vous annulé" : `Annuler le rendez-vous de lancement ${kind}`}</div>
+        style={{ position: "relative", width: "min(460px, 100%)", background: CARD, borderRadius: 22, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(28,27,25,.14)", padding: "20px 22px" }}>
+        <div style={{ fontSize: 15, fontWeight: 500, color: NAVY }}>{done ? "Rendez-vous annulé" : `Annuler le rendez-vous de lancement ${kind}`}</div>
         <div style={{ fontSize: 12, color: MUTED, marginTop: 3, overflowWrap: "anywhere" }}>{label}{date ? ` · ${fmtDT(date)}` : ""}</div>
         <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.55, margin: "14px 0 0" }}>
           {done
@@ -4689,13 +4843,13 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18, flexWrap: "wrap" }}>
           {done ? (
             <motion.button type="button" whileTap={{ scale: 0.97 }} onClick={onDone} autoFocus
-              style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>Fermer</motion.button>
+              style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: CHARCOAL, color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", fontFamily: "inherit" }}>Fermer</motion.button>
           ) : (
             <>
               <button type="button" disabled={saving} onClick={onClose}
-                style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 600, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Garder le rendez-vous</button>
+                style={{ padding: "9px 16px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Garder le rendez-vous</button>
               <motion.button type="button" whileTap={saving ? undefined : { scale: 0.97 }} disabled={saving} onClick={confirm}
-                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: CANCEL_RED, color: "#fff", fontSize: 13, fontWeight: 700, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: CANCEL_RED, color: "#fff", fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
                 {saving ? "Annulation…" : "Annuler le rendez-vous"}
               </motion.button>
             </>
@@ -4719,7 +4873,7 @@ function JalonRow({ label, done, date, onToggle, onDate, alwaysDate = false, tog
         <div style={{ fontSize: 13.5, fontWeight: 500, color: TEXT }}>{label}</div>
         {editable
           ? <StatusToggle value={!!done} onChange={onToggle} labels={toggleLabels} disabled={readOnly} />
-          : <span style={{ fontSize: 12.5, fontWeight: 600, color: done ? GREEN : MUTED }}>{(toggleLabels || ["Non", "Oui"])[done ? 1 : 0]}</span>}
+          : <span style={{ fontSize: 12.5, fontWeight: 500, color: done ? GREEN : MUTED }}>{(toggleLabels || ["Non", "Oui"])[done ? 1 : 0]}</span>}
       </div>
       <AnimatePresence initial={false}>
         {showDate && (
@@ -4843,7 +4997,7 @@ function useRatingEditor(rating, numero, { onEdited, onDeleted, onConflict }) {
 function RatingEditorForm({ rating, ed }) {
   return (
     <motion.div className="ob-msg-panel" initial={{ opacity: 0, y: -3 }} animate={{ opacity: 1, y: 0 }}>
-      {ed.mode === 'edit' ? <label style={{ display: "block", fontSize: 12, fontWeight: 600, color: TEXT }}>
+      {ed.mode === 'edit' ? <label style={{ display: "block", fontSize: 12, fontWeight: 500, color: TEXT }}>
         Commentaire de la notation {rating.score}/5
         <textarea aria-label="Modifier le commentaire de notation" value={ed.draft} onChange={(e) => ed.setDraft(e.target.value)}
           maxLength={4000} rows={3} disabled={ed.busy} autoFocus
