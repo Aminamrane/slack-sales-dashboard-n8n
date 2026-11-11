@@ -8,8 +8,9 @@
 //     noter ou corriger une météo reste dans le board ;
 //   - les notes internes finance (/api/v1/finance-periods/client/{id}/comments) : jamais montrées au cabinet,
 //     épinglables, et l'on y répond comme à un message (11/11/2026 : « pourquoi ils ne peuvent pas répondre à
-//     l'interne ? »). Une réponse est une note dont `parent_id` désigne la note. Leur route n'accepte que du
-//     texte : ni mention ni pièce jointe ni réaction.
+//     l'interne ? »). Une réponse est une note dont `parent_id` désigne la note. On y mentionne un collègue de la
+//     finance ou de la direction (annuaire /notes/mentionables, jamais le cabinet) : il reçoit une notification
+//     dans le CRM, sans e-mail. Ni pièce jointe ni réaction.
 // La saisie dit toujours à qui l'on écrit. Rôles en lecture seule : tout se lit, rien ne s'écrit.
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
@@ -175,7 +176,8 @@ const editItems = (t, key, body) => [
 ];
 
 // Réponse sous le message : une ligne de saisie dans la carte ; l'auteur du message est prévenu comme une mention.
-function InlineReply({ t, placeholder, onSend, people = t.people }) {
+const NOTE_HINT = 'Mentionner : la personne sera prévenue dans le CRM';
+function InlineReply({ t, placeholder, onSend, people = t.people, mentionHint }) {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const send = async () => {
@@ -190,7 +192,7 @@ function InlineReply({ t, placeholder, onSend, people = t.people }) {
     <Motion.div className="fx-reply" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.24, ease: EASE }}>
       <div className="fx-reply-box">
         <Avatar name={t.myName} size={22} />
-        <MentionTextarea value={text} onChange={setText} people={people} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
+        <MentionTextarea value={text} onChange={setText} people={people} mentionHint={mentionHint} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
           aria-label="Votre réponse" maxLength={4000}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
@@ -229,7 +231,7 @@ function NoteReply({ n, t }) {
         menu={!t.readOnly && n.can_moderate && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, n.body)} />} />
       <div className="fx-sub-in">
         {t.edit.key === key ? <EditBox t={t} />
-          : <Clamp max={88} measureKey={n.body}><div className="fx-text">{n.body}</div></Clamp>}
+          : <Clamp max={88} measureKey={n.body}><div className="fx-text"><MentionedText text={n.body} mentions={t.noteMentions} /></div></Clamp>}
         {t.confirming === key && <DeleteConfirm t={t} entryKey={key} what="cette réponse" />}
       </div>
     </div>
@@ -329,17 +331,17 @@ function NoteCard({ e, t }) {
         ]} />} />
       <div className="fx-in">
         {t.edit.key === e.key ? <EditBox t={t} />
-          : <Clamp max={88} measureKey={e.body}><div className="fx-text">{e.body}</div></Clamp>}
+          : <Clamp max={88} measureKey={e.body}><div className="fx-text"><MentionedText text={e.body} mentions={t.noteMentions} /></div></Clamp>}
         {t.confirming === e.key && <DeleteConfirm t={t} entryKey={e.key} what={e.replies.length ? 'cette note et ses réponses' : 'cette note'} />}
         {!e._pending && (
           <footer className="fx-foot is-end">
             <button type="button" className="fx-answer" aria-expanded={t.replying === e.key} onClick={() => t.toggleReply(e.key)}
-              title="Répondre en interne : le cabinet ne voit pas la réponse" {...t.ro}><CornerUpLeft size={14} />Répondre</button>
+              title="Répondre en interne : le cabinet ne voit pas la réponse, l’auteur de la note est prévenu dans le CRM" {...t.ro}><CornerUpLeft size={14} />Répondre</button>
           </footer>
         )}
         {e.replies.length > 0 && <Replies note replies={e.replies} t={t} openSignal={t.bump.key === e.key ? t.bump.n : 0} />}
         <AnimatePresence initial={false}>
-          {t.replying === e.key && <InlineReply key="reply" t={t} people={[]} placeholder={`Répondre en interne à ${firstName(authorOf(e))}…`} onSend={(body) => t.sendNoteReply(e, body)} />}
+          {t.replying === e.key && <InlineReply key="reply" t={t} people={t.notePeople} mentionHint={NOTE_HINT} placeholder={`Répondre en interne à ${firstName(authorOf(e))}…`} onSend={(body) => t.sendNoteReply(e, body)} />}
         </AnimatePresence>
       </div>
     </Motion.article>
@@ -386,6 +388,8 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const [ratings, setRatings] = useState([]);
   const [notes, setNotes] = useState([]);
   const [people, setPeople] = useState([]);
+  // Annuaire des notes internes : la finance et la direction seulement. Vide si le serveur ne le sert pas encore.
+  const [notePeople, setNotePeople] = useState([]);
   // État de chaque source : loading | ready | error | off (pas de numéro client ou pas de fil interne).
   const [shared, setShared] = useState(numero ? 'loading' : 'off');
   const [notesState, setNotesState] = useState(notesBase ? 'loading' : 'off');
@@ -439,6 +443,14 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       .catch(() => { /* sans annuaire, le fil reste utilisable sans complétion */ });
     return () => { alive = false; };
   }, []);
+  useEffect(() => {
+    if (!notesBase) return undefined;
+    let alive = true;
+    apiClient.get('/api/v1/finance-periods/client/notes/mentionables')
+      .then((r) => { if (alive) setNotePeople(Array.isArray(r?.people) ? r.people : []); })
+      .catch(() => { /* sans annuaire, une note reste du texte simple */ });
+    return () => { alive = false; };
+  }, [notesBase]);
   useEffect(() => {
     if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(''), 8000);
@@ -518,10 +530,11 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       if (!body) return;
       setPosting(true); setError('');
       try {
-        const created = await apiClient.post(notesBase, { body });
+        const created = await apiClient.post(notesBase, { body, mentions: mentionedIds(body, notePeople) });
         if (!created?.id || !created?.body) throw new Error('Réponse incomplète');
         setNotes((prev) => sortNotes([created, ...prev.filter((n) => n.id !== created.id)]));
         setDraft('');
+        setNotice(notifiedSummary(created.notified));
       } catch { setError('La note n’a pas été confirmée. Votre texte est conservé.'); }
       finally { setPosting(false); }
       return;
@@ -575,13 +588,18 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       return false;
     }
   };
-  // Répondre sous une note interne : la réponse reste interne, le fil s'ouvre et remonte. Personne n'est prévenu.
+  // Répondre sous une note interne : la réponse reste interne, le fil s'ouvre et remonte. L'auteur de la note et
+  // les collègues mentionnés sont prévenus dans le CRM.
   const sendNoteReply = async (parent, body) => {
     if (readOnly || !notesBase) return false;
     setError('');
     try {
-      const created = await apiClient.post(notesBase, { body, parent_id: parent.id });
+      const mail = (parent.author_email || '').toLowerCase();
+      const author = notePeople.find((p) => mail && (p.email || '').toLowerCase() === mail);
+      const ids = [...new Set([...mentionedIds(body, notePeople), ...(author ? [author.id] : [])])];
+      const created = await apiClient.post(notesBase, { body, parent_id: parent.id, mentions: ids });
       if (!created?.id || !created?.body) throw new Error('Réponse incomplète');
+      setNotice(notifiedSummary(created.notified));
       setNotes((prev) => sortNotes([{ ...created, fresh: true }, ...prev.filter((n) => !sameId(n.id, created.id))]));
       setReplying(null);
       setBump((b) => ({ key: parent.key, n: b.n + 1 }));
@@ -649,8 +667,10 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   };
 
   const mine = (c) => (me.email || '').toLowerCase() === (c.author_email || '').toLowerCase();
+  // Noms surlignés dans une note : l'annuaire interne, et soi-même (absent de son propre annuaire).
+  const noteMentions = useMemo(() => [...notePeople, { id: me.id, name: myName }], [notePeople, me.id, myName]);
   const t = {
-    readOnly, ro, people, myName, react, sendReply, sendNoteReply, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
+    readOnly, ro, people, notePeople, noteMentions, myName, react, sendReply, sendNoteReply, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
     canPin: !!internal?.canPin,
     canEdit: (c) => !readOnly && (c.can_edit || mine(c) || ['admin', 'ceo'].includes(me.role)),
     reactionsOf: (target, id) => reactions[`${target}:${id}`] || [],
@@ -693,15 +713,15 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
         onDragOver={(e) => { if (!noteMode && e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
         onDrop={(e) => { if (noteMode || !e.dataTransfer?.files?.length) return; e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
-        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? [] : people} rows={2} className="fx-ta" maxLength={4000}
+        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? notePeople : people} mentionHint={noteMode ? NOTE_HINT : undefined} rows={2} className="fx-ta" maxLength={4000}
           aria-label={noteMode ? 'Note interne finance' : 'Message de l’espace commun'} onPaste={pasteFiles}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
           placeholder={noteMode ? 'Note pour la finance : promesse de règlement, retour du cabinet…' : `Écrire à Owner, Opti’Lex et la finance… (collez une image avec ${isMac ? '⌘' : 'Ctrl'} V)`}
           {...ro} />
         <ComposerFiles files={files} disabled={posting} onRemove={dropFile} />
         <div className="fx-bar">
-          <button type="button" className="fx-tool" onClick={() => insert('@', true)} disabled={noteMode || !canWrite} aria-label="Mentionner quelqu’un"
-            title={noteMode ? 'Une note interne ne prévient personne' : 'Mentionner quelqu’un : il reçoit un e-mail et une notification'} {...ro}><AtSign size={16} /></button>
+          <button type="button" className="fx-tool" onClick={() => insert('@', true)} disabled={(noteMode && !notePeople.length) || !canWrite} aria-label="Mentionner quelqu’un"
+            title={noteMode ? 'Mentionner un collègue de la finance : il reçoit une notification dans le CRM' : 'Mentionner quelqu’un : il reçoit un e-mail et une notification'} {...ro}><AtSign size={16} /></button>
           <button type="button" className="fx-tool" onClick={() => fileInput.current?.click()} disabled={noteMode || !canWrite || posting} aria-label="Joindre des fichiers"
             title={noteMode ? 'Une note interne n’accepte pas de pièce jointe' : 'Joindre des fichiers (PDF, image, e-mail, audio · 20 Mo au plus) ou les glisser ici'} {...ro}><Paperclip size={16} /></button>
           {readOnly
@@ -725,7 +745,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       </div>
       <p className="fx-scope">
         {noteMode
-          ? <><Lock size={12} strokeWidth={2.1} />Note interne : seule la finance la voit, jamais le cabinet.</>
+          ? <><Lock size={12} strokeWidth={2.1} />Note interne : seule la finance la voit, jamais le cabinet. @ prévient un collègue dans le CRM.</>
           : <><Users size={12} strokeWidth={2.1} />Visible par Owner, le cabinet Opti’Lex et la finance. @ prévient par e-mail et notification.</>}
       </p>
       <AnimatePresence>

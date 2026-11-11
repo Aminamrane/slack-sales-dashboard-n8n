@@ -20,7 +20,8 @@ export function MentionedText({ text, mentions }) {
     : <span key={index}>{part.text}</span>);
 }
 
-export default function MentionTextarea({ value, onChange, people = [], onKeyDown, style, ...rest }) {
+// `mentionHint` : ce que la mention déclenche, dit en tête de la liste (par défaut : e-mail et CRM, l'espace commun).
+export default function MentionTextarea({ value, onChange, people = [], onKeyDown, style, mentionHint = 'Mentionner : la personne sera prévenue par e-mail et dans le CRM', ...rest }) {
   const ref = useRef(null);
   const [caret, setCaret] = useState(0);
   const [active, setActive] = useState(0);
@@ -64,7 +65,7 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
           style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 30, marginTop: 4, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)', overflow: 'hidden' }}>
           <div style={{ padding: '6px 12px', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, display: 'inline-block' }} />
-            Mentionner : la personne sera prévenue par e-mail et dans le CRM
+            {mentionHint}
           </div>
           {options.map((person, index) => (
             <button type="button" key={person.id} role="option" aria-selected={index === active}

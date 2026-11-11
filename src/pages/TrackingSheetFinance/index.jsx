@@ -29,7 +29,7 @@ import { createLatestRequestTracker, withConfirmedEtat } from '../../utils/board
 //   PATCH fails (422 / network) → toast + rollback to the original row.
 
 import React, { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Search, Calendar,
@@ -1218,6 +1218,25 @@ export default function TrackingSheetFinance() {
     });
   }, [panelRowId]);
   const closePanel = useCallback(() => setPanelOpen(false), []);
+  // Lien direct vers la fiche d'un client (notification d'une mention dans une note interne) :
+  // /tracking-finance?client=<id>&onglet=echanges. Traité une fois par lien, quand les lignes du mois sont là.
+  const { search: linkSearch } = useLocation();
+  const linkDone = useRef(null);
+  const [panelTab, setPanelTab] = useState(null);
+  useEffect(() => {
+    if (linkDone.current === linkSearch || !rows.length) return;
+    const params = new URLSearchParams(linkSearch);
+    const wanted = Number(params.get('client'));
+    linkDone.current = linkSearch;
+    if (!wanted) return;
+    const row = rows.find((r) => r.client?.id === wanted || r.client_id === wanted);
+    if (!row) { showToast('Ce client n’a pas de ligne sur le mois affiché.', 'info'); return; }
+    setPanelClientId(row.client_id);
+    setPanelRowId(row.id);
+    setPanelOpen(true);
+    if (params.get('onglet') === 'echanges') setPanelTab({ tab: 'exchanges', n: Date.now() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, linkSearch]);
   const onSelectPanelRow = useCallback((rowId) => setPanelRowId(rowId), []);
   // Ouvrir la fiche depuis une vue qui ne connaît que le client (pertes,
   // encaissements) : on retrouve sa ligne du mois.
@@ -1604,6 +1623,7 @@ export default function TrackingSheetFinance() {
         rowId={panelRowId}
         onClose={closePanel}
         onSelectRow={onSelectPanelRow}
+        openOnTab={panelTab}
         boardMap={boardMap}
         onBoardEtatChange={onBoardEtatChange}
         financeRole={pageRole}

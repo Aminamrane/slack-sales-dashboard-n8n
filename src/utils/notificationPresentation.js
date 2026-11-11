@@ -8,6 +8,8 @@ export function notificationDate(value) {
 export function notificationTarget(notif) {
   if (notif.type === 'owner_rating_regression') return '/ceo/optilex-board' + (notif.data?.numero_client ? `?client=${encodeURIComponent(notif.data.numero_client)}` : '');
   if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
+  // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur).
+  if (notif.type === 'finance_note_mention') return notif.data?.path || '/tracking-finance';
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
   // Lapin reprogrammé (dev 14/10/2026) ou RDV repositionné (agenda setter, dev 27/10/2026) par un setter : le commercial
   // retrouve le lead dans sa sheet.

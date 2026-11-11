@@ -150,6 +150,7 @@ export default function DetailPanel({
   rowId,           // currently focused period row (the one user clicked)
   onClose,
   onSelectRow,     // (rowId) → caller updates rowId
+  openOnTab = null, // { tab, n } : rubrique à ouvrir (lien direct d'une notification) ; `n` change à chaque demande
   boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   financeRole = apiClient.getUser()?.role, // rôle de la page Finance servi par l'API
@@ -172,6 +173,7 @@ export default function DetailPanel({
   const [fullscreen, setFullscreen] = useState(false);
   // Rubrique ouverte, gardée d'un client à l'autre : on relit souvent la même rubrique sur plusieurs fiches.
   const [tab, setTab] = useState('payments');
+  useEffect(() => { if (openOnTab?.tab) setTab(openOnTab.tab); }, [openOnTab]);
   // Résumé du fil d'échanges (nombre, derniers messages), remonté par ExchangeThread : pastille de l'onglet et
   // rappel dans « Paiements ». `null` tant que le fil charge.
   const [exchangeSummary, setExchangeSummary] = useState(null);
