@@ -5,7 +5,7 @@ import { notificationDate } from '../utils/notificationPresentation.js';
 import './GlobalNotifications.css';
 
 function Icon({ notification }) {
-  const Glyph = notification.type === 'owner_rating_regression' ? TrendingDown : notification.type === 'sheet_invitation' ? Mail : notification.type === 'board_mention' ? AtSign : Bell;
+  const Glyph = notification.type === 'owner_rating_regression' ? TrendingDown : notification.type === 'sheet_invitation' ? Mail : ['board_mention', 'finance_note_mention'].includes(notification.type) ? AtSign : Bell;
   return <span className="owner-notif-icon"><Glyph size={19} strokeWidth={1.8} aria-hidden="true" /></span>;
 }
 export function GlobalNotificationPanel({ notifications, tab, setTab, unreadCount, onReadAll, onOpen, onClose, darkMode, position, panelRef }) {

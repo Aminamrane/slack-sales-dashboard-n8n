@@ -18,12 +18,12 @@ const ago = (value) => {
   if (h < 24) return `il y a ${h} h`;
   return `il y a ${Math.round(h / 24)} j`;
 };
-const glyphOf = (n) => (n.type === "owner_rating_regression" ? TrendingDown : n.type === "sheet_invitation" ? Mail : n.type === "board_mention" ? AtSign : Bell);
+const glyphOf = (n) => (n.type === "owner_rating_regression" ? TrendingDown : n.type === "sheet_invitation" ? Mail : (n.type === "board_mention" || n.type === "finance_note_mention") ? AtSign : Bell);
 // Le bouton dit où mène la notification (même cible que la navbar).
 const actionOf = (n) => {
   const target = notificationTarget(n);
   if (!target) return null;
-  if (n.type === "owner_rating_regression" || n.type === "board_mention") return { target, label: "Voir le client", Icon: User };
+  if (n.type === "owner_rating_regression" || n.type === "board_mention" || n.type === "finance_note_mention") return { target, label: "Voir le client", Icon: User };
   return { target, label: "Ouvrir", Icon: FileText };
 };
 
