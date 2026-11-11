@@ -31,7 +31,7 @@ export default function PanelIcon({ name, size = 48, className = '' }) {
       raf = requestAnimationFrame(() => {
         img.style.transition = 'transform .16s ease-out, filter .16s ease-out';
         img.style.transform = `translateY(-3px) scale(1.08) rotateX(${(-y * TILT * 2).toFixed(2)}deg) rotateY(${(x * TILT * 2).toFixed(2)}deg)`;
-        img.style.filter = `drop-shadow(${(-x * 12).toFixed(1)}px ${(10 - y * 6).toFixed(1)}px 14px rgba(18, 27, 53, .22))`;
+        img.style.filter = `drop-shadow(${(-x * 12).toFixed(1)}px ${(10 - y * 6).toFixed(1)}px 14px rgba(28, 27, 25, .2))`;
       });
     };
     const leave = () => {

@@ -5,11 +5,11 @@
 import { useState } from 'react';
 import apiClient from '../services/apiClient';
 
-const TEXT = '#1e2330';
-const MUTED = '#6b7280';
-const BORDER = '#e9ebf0';
-const NAVY = '#1e2330';
-const RED = '#b42318';
+const TEXT = '#1c1b19';
+const MUTED = '#8b867e';
+const BORDER = '#ece9e4';
+const NAVY = '#1c1b19';
+const RED = '#c5221f';
 
 const KINDS = [
   { kind: 'email', title: 'Emails', placeholder: 'adresse@exemple.fr', type: 'email' },
@@ -18,7 +18,7 @@ const KINDS = [
 
 const input = { flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12.5, fontFamily: 'inherit', color: TEXT, background: '#fff' };
 const small = (primary) => ({
-  padding: '5px 10px', borderRadius: 7, fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
+  padding: '5px 10px', borderRadius: 7, fontSize: 11.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
   border: primary ? 'none' : `1px solid ${BORDER}`, background: primary ? NAVY : 'transparent', color: primary ? '#fff' : MUTED,
 });
 const link = { border: 'none', background: 'transparent', padding: '0 2px', fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer', color: MUTED };
@@ -39,15 +39,15 @@ function ContactRow({ contact, busy, onSave, onRemove }) {
   }
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', padding: '5px 0', borderBottom: `1px solid ${BORDER}` }}>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: TEXT, overflowWrap: 'anywhere' }}>{contact.value}</span>
-      {contact.is_primary && <span style={{ fontSize: 10.5, fontWeight: 700, color: '#15794a' }}>principal</span>}
+      <span style={{ fontSize: 12.5, fontWeight: 500, color: TEXT, overflowWrap: 'anywhere' }}>{contact.value}</span>
+      {contact.is_primary && <span style={{ fontSize: 10.5, fontWeight: 500, color: '#0b7a4b' }}>principal</span>}
       {contact.label && <span style={{ fontSize: 11, color: MUTED }}>{contact.label}</span>}
       <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
         {confirm ? (
           <>
             <span style={{ fontSize: 11.5, color: TEXT }}>Retirer ?</span>
             <button type="button" style={link} onClick={() => setConfirm(false)}>Non</button>
-            <button type="button" style={{ ...link, color: RED, fontWeight: 700 }} disabled={busy} onClick={onRemove}>Retirer</button>
+            <button type="button" style={{ ...link, color: RED, fontWeight: 500 }} disabled={busy} onClick={onRemove}>Retirer</button>
           </>
         ) : (
           <>

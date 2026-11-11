@@ -15,13 +15,13 @@ const Ico = ({ children, size = 14 }) => (
 );
 // Une teinte (palette pastel du dev) et un pictogramme par catégorie de mission, dans l'ordre de la ligne.
 const CATS = [
-  { key: "in_progress", one: "en cours", many: "en cours", filter: "En cours", tone: "sky", ink: "#2b4a7a", icon: <><path d="M12 3a9 9 0 1 1-9 9" /><path className="ms-spin" d="M12 3a9 9 0 0 0-9 9" opacity=".35" /></> },
+  { key: "in_progress", one: "en cours", many: "en cours", filter: "En cours", tone: "sky", ink: "#1b6fd0", icon: <><path d="M12 3a9 9 0 1 1-9 9" /><path className="ms-spin" d="M12 3a9 9 0 0 0-9 9" opacity=".35" /></> },
   { key: "waiting", one: "en attente", many: "en attente", filter: "En attente", tone: "sand", ink: "#8a5a14", icon: <><path d="M6 3h12M6 21h12" /><path d="M7 3c0 5 10 5 10 9s-10 4-10 9M17 3c0 5-10 5-10 9s10 4 10 9" /></> },
-  { key: "upcoming", one: "à venir", many: "à venir", filter: "À venir", tone: "lilac", ink: "#5a4fa8", icon: <><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></> },
-  { key: "paused", one: "en pause", many: "en pause", filter: "En pause", tone: "mist", ink: "#5b6472", icon: <path d="M9 5v14M15 5v14" /> },
+  { key: "upcoming", one: "à venir", many: "à venir", filter: "À venir", tone: "lilac", ink: "#4a3fc4", icon: <><rect x="3.5" y="5" width="17" height="15.5" rx="2.5" /><path d="M8 3v4M16 3v4M3.5 10h17" /></> },
+  { key: "paused", one: "en pause", many: "en pause", filter: "En pause", tone: "mist", ink: "#6b665f", icon: <path d="M9 5v14M15 5v14" /> },
   { key: "completed", one: "terminée", many: "terminées", filter: "Terminées", tone: "sage", ink: "#3f7f4b", icon: <path className="ms-tick" d="m5 12.5 4.5 4.5L19 7.5" /> },
   { key: "cancelled", one: "annulée", many: "annulées", filter: "Annulées", tone: "wine", ink: "#85334e", icon: <path d="M6 6l12 12M18 6 6 18" /> },
-  { key: "other", one: "autre", many: "autres", filter: "Autres", tone: "mist", ink: "#5b6472", icon: <><circle cx="6" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="18" cy="12" r="1" /></> },
+  { key: "other", one: "autre", many: "autres", filter: "Autres", tone: "mist", ink: "#6b665f", icon: <><circle cx="6" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="18" cy="12" r="1" /></> },
 ];
 const CAT = Object.fromEntries(CATS.map((c) => [c.key, c]));
 const MISSION_ICON = <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M9 5V3h6v2M8 11l2 2 5-5M8 17h8" /></>;

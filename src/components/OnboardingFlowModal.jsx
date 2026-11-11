@@ -21,15 +21,15 @@ import { Barcode, ConfettiBurst, OnboardedPass } from "./OnboardingPass.jsx";
 import { Art, FolderCard, ListRow, Panel, Stat, Tag } from "./DashParts.jsx";
 import "./OnboardingFlowModal.css";
 
-const NAVY = "#1e2330";
-const TEXT = "#1e2330"; // texte des avertissements météo (main 3fac728)
-const BORDER = "#e9ebf0";
-const MUTED = "#8a93a4";
+const NAVY = "#1c1b19";
+const TEXT = "#1c1b19"; // texte des avertissements météo (main 3fac728)
+const BORDER = "#ece9e4";
+const MUTED = "#8b867e";
 const CARD = "#ffffff";
-const GREEN = "#15794a";
+const GREEN = "#0b7a4b";
 const BRAND = "#3e7d5a";
-const AMBER = "#b45309";
-const RED = "#b42318";
+const AMBER = "#c2500e";
+const RED = "#c5221f";
 const EASE = [0.16, 1, 0.3, 1];
 
 const STEPS = [
@@ -61,12 +61,12 @@ const PHASE_TONES = { done: GREEN, no_date: MUTED, before: BRAND, day_j: BRAND, 
 const PHASE_SHORT = { done: "Réalisé", no_date: "Sans date", before: "À venir", day_j: "Jour J", billing: "En cours" };
 
 function Button({ children, onClick, primary, danger, disabled, small }) {
-  const bg = disabled ? "#e9ebf0" : danger ? RED : primary ? NAVY : CARD;
+  const bg = disabled ? "#ece9e4" : danger ? RED : primary ? NAVY : CARD;
   const color = disabled ? MUTED : (primary || danger) ? "#fff" : NAVY;
   return (
     <Motion.button type="button" whileTap={disabled ? undefined : { scale: 0.97 }} disabled={disabled} onClick={onClick}
       style={{ padding: small ? "7px 12px" : "10px 16px", borderRadius: 10, border: primary || danger || disabled ? "none" : `1px solid ${NAVY}`, background: bg, color,
-        fontSize: small ? 12 : 13, fontWeight: 700, cursor: disabled ? "default" : "pointer", fontFamily: "inherit" }}>
+        fontSize: small ? 12 : 13, fontWeight: 500, cursor: disabled ? "default" : "pointer", fontFamily: "inherit" }}>
       {children}
     </Motion.button>
   );
@@ -87,9 +87,9 @@ function CopyLink({ url }) {
   if (!url) return null;
   return (
     <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
-      <input readOnly value={url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 11, color: MUTED, background: "#fafbfc", fontFamily: "inherit" }} />
+      <input readOnly value={url} onFocus={(e) => e.target.select()} style={{ flex: 1, minWidth: 0, padding: "6px 8px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 11, color: MUTED, background: "#faf9f7", fontFamily: "inherit" }} />
       <Button small onClick={() => { try { navigator.clipboard.writeText(url); } catch { /* sélection manuelle */ } setCopied(true); setTimeout(() => setCopied(false), 1500); }}>{copied ? "Copié ✓" : "Copier"}</Button>
-      <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 700, color: BRAND, textDecoration: "none", whiteSpace: "nowrap" }}>Ouvrir</a>
+      <a href={url} target="_blank" rel="noreferrer" style={{ fontSize: 12, fontWeight: 500, color: BRAND, textDecoration: "none", whiteSpace: "nowrap" }}>Ouvrir</a>
     </div>
   );
 }
@@ -332,8 +332,8 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
         transition={{ type: "spring", stiffness: 300, damping: 22 }}>
         {shape && (
           <svg className="of-bravo-shape" width={shape.w} height={shape.h} viewBox={`0 0 ${shape.w} ${shape.h}`} aria-hidden="true">
-            <defs><filter id="of-bravo-sh" x="-12%" y="-8%" width="124%" height="122%"><feDropShadow dx="0" dy="12" stdDeviation="14" floodColor="#121b35" floodOpacity="0.13" /></filter></defs>
-            <path d={path} fill="#fff" stroke="rgba(18,27,53,0.08)" filter="url(#of-bravo-sh)" />
+            <defs><filter id="of-bravo-sh" x="-12%" y="-8%" width="124%" height="122%"><feDropShadow dx="0" dy="12" stdDeviation="14" floodColor="#1c1b19" floodOpacity="0.13" /></filter></defs>
+            <path d={path} fill="#fff" stroke="rgba(43,41,39,.056)" filter="url(#of-bravo-sh)" />
           </svg>
         )}
         <div className="of-bravo-top">
@@ -351,7 +351,7 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
             <div className="is-right"><span>Passe</span><strong className="of-bravo-pass"><OnboardedPass size={15} />Onboardé</strong></div>
           </div>
           <div className="of-bravo-meteo" style={w ? { "--bm-tile": w.tile, "--bm-ink": w.ink } : undefined}>
-            <span className="of-bravo-meteo-ic">{meteo ? <MeteoIcon score={meteo.score} size={26} color={w?.ink || meteo.st?.color} /> : <MeteoIcon score={5} size={24} color="#a3abba" />}</span>
+            <span className="of-bravo-meteo-ic">{meteo ? <MeteoIcon score={meteo.score} size={26} color={w?.ink || meteo.st?.color} /> : <MeteoIcon score={5} size={24} color="#a8a39b" />}</span>
             <div>
               <span>Météo d'onboarding</span>
               <strong>{meteo ? `${meteo.score}/5 · ${meteo.label}` : "Pas encore posée"}</strong>
@@ -478,9 +478,9 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
 
   return createPortal(
     <div role="dialog" aria-modal="true" aria-label="Faire l'onboarding" style={{ position: "fixed", inset: 0, zIndex: 10060, display: "flex", alignItems: "center", justifyContent: "center", padding: 16, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
-      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} style={{ position: "absolute", inset: 0, background: "rgba(18,27,53,0.42)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }} />
+      <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={requestClose} style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)", backdropFilter: "blur(3px)", WebkitBackdropFilter: "blur(3px)" }} />
       <Motion.div initial={{ opacity: 0, y: 18, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} transition={{ duration: 0.28, ease: EASE }}
-        style={{ position: "relative", width: "min(720px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 28, boxShadow: "0 28px 70px rgba(17,24,39,0.30)", overflow: "hidden" }}>
+        style={{ position: "relative", width: "min(720px, 100%)", maxHeight: "88vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 22, boxShadow: "0 28px 70px rgba(28,27,25,.14)", overflow: "hidden" }}>
         <div className="of-head">
           <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
             <div style={{ minWidth: 0 }}>
@@ -516,7 +516,7 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
 
         <div className="of-body">
           {brief?.onboarding.done && !closingMessage && !celebrate && <section className="of-done">
-            <div style={{ color: GREEN, fontSize: 13, fontWeight: 750, marginBottom: 10 }}>
+            <div style={{ color: GREEN, fontSize: 13, fontWeight: 500, marginBottom: 10 }}>
               Onboarding réalisé{completedDate ? ` le ${fmtDate(completedDate)}` : ''}
             </div>
             <BoardOnboardingDateCorrection numero={num} initialDate={completedDate} completed
@@ -526,7 +526,7 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
             <CelebrationTicket brief={brief} row={row} num={num} rated={rated} onClose={onClose} onRate={() => { setCelebrate(false); setStep(3); }} />
           ) : closingMessage ? (
             <Motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.3, ease: EASE }}
-              style={{ padding: 28, textAlign: "center", color: GREEN, fontSize: 15, fontWeight: 800 }}>{closingMessage}</Motion.div>
+              style={{ padding: 28, textAlign: "center", color: GREEN, fontSize: 15, fontWeight: 500 }}>{closingMessage}</Motion.div>
           ) : !brief && !error ? (
             <div style={{ padding: 30, textAlign: "center", color: MUTED, fontSize: 13 }}>Chargement de la situation du client…</div>
           ) : error && !brief ? (

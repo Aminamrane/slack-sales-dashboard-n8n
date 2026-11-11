@@ -11,7 +11,7 @@ import PeriodSelect from './PeriodSelect.jsx';
 import { useMotionPrefs } from './motion.js';
 
 // Bleu clair Owner : courbes et météo sur le panneau lapis.
-const LAPIS_ACCENT = '#dbe3f1';
+const LAPIS_ACCENT = 'var(--an-lapis-accent)';   // suit le mode : blanc chaud en clair, bleuté en sombre (antique.css)
 
 // Formulation de la moyenne météo. On n'affirme ("Clients satisfaits") que loin
 // des frontières de bande ; près d'une frontière on nuance ("Plutôt satisfaits").

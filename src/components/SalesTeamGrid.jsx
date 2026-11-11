@@ -3,6 +3,8 @@
 // Grille "Équipe Sales" regroupée PAR ÉQUIPE (capitaine en tête).
 // Source unique, utilisée par la page standalone (CeoSalesTeamView) et par
 // l'onglet sales_team du CeoDashboard — pour éviter toute duplication.
+// La palette `C` peut porter des clés facultatives (wBold, wSemi, wMid) : le dashboard s'en sert pour son style, la
+// page standalone ne les fournit pas et garde le rendu d'origine.
 //
 // Données :
 //   users : sortie de /api/v1/users/assignable  → [{id, full_name, role, email, avatar_url, unavailable_until}]
@@ -36,7 +38,7 @@ const isTestOrAdmin = (u) =>
 
 // Avatar photo-first avec repli initiales. Ring = couleur d'équipe pour le
 // capitaine. Fond du repli = couleur d'équipe (cohérent, pas de violet).
-function MemberAvatar({ src, name, teamColor, isCaptain }) {
+function MemberAvatar({ src, name, teamColor, isCaptain, weight = 700 }) {
   const [err, setErr] = useState(false);
   const size = 44;
   const base = { width: size, height: size, borderRadius: 14, flexShrink: 0, boxSizing: "border-box" };
@@ -45,7 +47,7 @@ function MemberAvatar({ src, name, teamColor, isCaptain }) {
     return <img src={src} alt={name} onError={() => setErr(true)} style={{ ...base, objectFit: "cover", border: ring, background: teamColor }} />;
   }
   return (
-    <div style={{ ...base, background: teamColor, border: ring, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700 }}>
+    <div style={{ ...base, background: teamColor, border: ring, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: weight }}>
       {getInitials(name)}
     </div>
   );
@@ -121,8 +123,8 @@ export default function SalesTeamGrid({ users = [], teams = [], loading = false,
           {/* En-tête d'équipe : pastille couleur + libellé + effectif. */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 14px", paddingLeft: 2 }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: g.color, flexShrink: 0 }} />
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, letterSpacing: "-0.01em" }}>{g.label}</h2>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.muted }}>{g.members.length}</span>
+            <h2 style={{ fontSize: 15, fontWeight: C.wBold ?? 700, color: C.text, margin: 0, letterSpacing: "-0.01em" }}>{g.label}</h2>
+            <span style={{ fontSize: 12.5, fontWeight: C.wMid ?? 600, color: C.muted }}>{g.members.length}</span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 14 }}>
@@ -132,12 +134,12 @@ export default function SalesTeamGrid({ users = [], teams = [], loading = false,
               return (
                 <div key={u.email || u.id} className="ceo-card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14, animation: `ceoCardPop 0.4s ease ${Math.min(i, 12) * 45}ms both` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <MemberAvatar src={u.avatar_url} name={name} teamColor={u.teamColor} isCaptain={u.isCaptain} />
+                    <MemberAvatar src={u.avatar_url} name={name} teamColor={u.teamColor} isCaptain={u.isCaptain} weight={C.wBold} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                        <span style={{ fontSize: 14, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
+                        <span style={{ fontSize: 14, fontWeight: C.wSemi ?? 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</span>
                         {u.isCaptain && (
-                          <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: 700, letterSpacing: "0.02em", textTransform: "uppercase", color: g.color, background: `${g.color}1f`, padding: "2px 7px", borderRadius: 20 }}>Capitaine</span>
+                          <span style={{ flexShrink: 0, fontSize: 9.5, fontWeight: C.wBold ?? 700, letterSpacing: "0.02em", textTransform: "uppercase", color: g.color, background: `${g.color}1f`, padding: "2px 7px", borderRadius: 20 }}>Capitaine</span>
                         )}
                       </div>
                       <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{u.email}</div>
@@ -150,7 +152,7 @@ export default function SalesTeamGrid({ users = [], teams = [], loading = false,
                       padding: "9px 14px", borderRadius: 10,
                       border: `1px solid ${C.border}`,
                       background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
-                      color: C.text, fontSize: 12.5, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      color: C.text, fontSize: 12.5, fontWeight: C.wMid ?? 600, cursor: "pointer", fontFamily: "inherit",
                       transition: "all 0.15s",
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = C.accent; e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = C.accent; }}

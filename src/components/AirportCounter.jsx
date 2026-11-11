@@ -136,7 +136,7 @@ function AirportFlipDigit({ targetDigit, delay = 0, duration = 1500, darkMode, s
         position: 'relative',
         fontFamily: "'Airport', monospace",
         fontSize: `${38 * scale}px`,
-        fontWeight: 700,
+        fontWeight: 500,
         color: darkMode ? '#f5d742' : '#e8e8e8',
         textShadow: darkMode ? '0 0 8px rgba(245,215,66,0.5), 0 0 16px rgba(245,215,66,0.2)' : '0 1px 2px rgba(0,0,0,0.5)',
         transform: `translateY(${offsetY}px)`,
@@ -176,9 +176,9 @@ export function AirportKPI({ label, value, minDigits = 3, darkMode, suffix, scal
       {label && (
         <span style={{
           fontFamily: "'Inter', -apple-system, system-ui, sans-serif",
-          fontWeight: 600,
+          fontWeight: 500,
           fontSize: '15px',
-          color: '#9ca3af',
+          color: '#a8a39b',
           letterSpacing: '0.2px',
         }}>
           {label}
@@ -222,7 +222,7 @@ export function AirportKPI({ label, value, minDigits = 3, darkMode, suffix, scal
               <span style={{
                 position: 'relative',
                 fontFamily: "'Airport', monospace",
-                fontSize: '38px', fontWeight: 700,
+                fontSize: '38px', fontWeight: 500,
                 color: darkMode ? '#f5d742' : '#e8e8e8',
                 textShadow: darkMode ? '0 0 8px rgba(245,215,66,0.5), 0 0 16px rgba(245,215,66,0.2)' : '0 1px 2px rgba(0,0,0,0.5)',
                 userSelect: 'none', lineHeight: 1, zIndex: 1,

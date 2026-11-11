@@ -45,7 +45,7 @@ export function AnimatedMeteoIcon({ score, size = 54, color, strokeWidth = 1.6 }
 // Défilé météo : au repos les 5 temps s'enchaînent en fondu (grand soleil → orage),
 // au survol de la carte on s'arrête sur la note réelle du parc. Boucle sans couture.
 const ORDER = [5, 4, 3, 2, 1];
-export function MeteoShowcase({ realScore, hovered, size = 54, color = '#dbe3f1', stepMs = 3200 }) {
+export function MeteoShowcase({ realScore, hovered, size = 54, color = 'var(--an-lapis-accent)', stepMs = 3200 }) {
   const [step, setStep] = useState(0);
   const { reduce } = useMotionPrefs();
   useEffect(() => {

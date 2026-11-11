@@ -94,7 +94,7 @@ export default function RecordingViewerModal({ rec, mode, onClose, C, darkMode }
         <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "14px 18px", borderBottom: `1px solid ${C.border}` }}>
           <Icon size={24} strokeWidth={1.8} color={C.muted} aria-hidden="true" />
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.name}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{rec.name}</div>
             {mode === "transcription" && trans?.words != null && (
               <div style={{ fontSize: 11.5, color: C.muted, marginTop: 1 }}>{trans.has_verbatim ? "Transcription disponible" : "Notes de réunion"}</div>
             )}

@@ -12,6 +12,8 @@
 //
 // `teams` (prop) = liste canonique des équipes (même ordre/couleurs que la
 // grille Sales) pour ordonner les sections.
+// La palette `C` peut porter des clés facultatives (wBold, wSemi, wMid, chip, tags) : le dashboard s'en sert pour son
+// style, la page standalone ne les fournit pas et garde le rendu d'origine.
 
 import { useMemo, useState } from "react";
 
@@ -32,7 +34,15 @@ const modeOf = (a) =>
   : a.manual_only ? { key: "man", label: "Manuel", color: "#1e2330", bg: "#eef0f4" }
   : { key: "std", label: "Sous 24h", color: "#5a6473", bg: "#f0f2f5" };
 
-function SetterAvatar({ src, name, teamColor }) {
+// Étiquette de mode : teinte d'origine, sauf si la palette fournit les siennes (C.tags).
+const modeTagStyle = (m, C) => {
+  const tone = C.tags?.[m.key];
+  return tone
+    ? { fontSize: 10.5, fontWeight: 500, color: tone.color, background: tone.bg, border: `1px solid ${tone.edge}`, borderRadius: 7, padding: "1px 7px" }
+    : { fontSize: 10, fontWeight: 700, color: m.color, background: m.bg, borderRadius: 6, padding: "2px 7px" };
+};
+
+function SetterAvatar({ src, name, teamColor, weight = 700 }) {
   const [err, setErr] = useState(false);
   const size = 44;
   const base = { width: size, height: size, borderRadius: 14, flexShrink: 0, boxSizing: "border-box" };
@@ -40,7 +50,7 @@ function SetterAvatar({ src, name, teamColor }) {
     return <img src={src} alt={name} onError={() => setErr(true)} style={{ ...base, objectFit: "cover", background: teamColor }} />;
   }
   return (
-    <div style={{ ...base, background: teamColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: 700 }}>
+    <div style={{ ...base, background: teamColor, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 14, fontWeight: weight }}>
       {getInitials(name)}
     </div>
   );
@@ -103,8 +113,8 @@ export default function SettersGrid({ setters = [], teams = [], loading = false,
         <section key={g.label}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, margin: "0 0 14px", paddingLeft: 2 }}>
             <span style={{ width: 10, height: 10, borderRadius: 3, background: g.color, flexShrink: 0 }} />
-            <h2 style={{ fontSize: 15, fontWeight: 700, color: C.text, margin: 0, letterSpacing: "-0.01em" }}>{g.label}</h2>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: C.muted }}>{g.setters.length}</span>
+            <h2 style={{ fontSize: 15, fontWeight: C.wBold ?? 700, color: C.text, margin: 0, letterSpacing: "-0.01em" }}>{g.label}</h2>
+            <span style={{ fontSize: 12.5, fontWeight: C.wMid ?? 600, color: C.muted }}>{g.setters.length}</span>
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 14 }}>
@@ -122,25 +132,25 @@ export default function SettersGrid({ setters = [], teams = [], loading = false,
               return (
                 <div key={`${g.label}-${s.email || s.id}`} className="ceo-card" style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 13, animation: `ceoCardPop 0.4s ease ${Math.min(i, 12) * 45}ms both` }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                    <SetterAvatar src={s.avatar_url} name={name} teamColor={s.sectionColor} />
+                    <SetterAvatar src={s.avatar_url} name={name} teamColor={s.sectionColor} weight={C.wBold} />
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, fontWeight: 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
+                      <div style={{ fontSize: 14, fontWeight: C.wSemi ?? 650, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{name}</div>
                       <div style={{ fontSize: 11.5, color: C.muted, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", marginTop: 1 }}>{s.email}</div>
                     </div>
                   </div>
 
                   {/* Sur qui il traite les leads + mode d'arrivée. */}
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.02em", color: C.muted }}>Traite les leads de</div>
+                    <div style={{ fontSize: 10.5, fontWeight: C.wMid ?? 600, textTransform: "uppercase", letterSpacing: "0.02em", color: C.muted }}>Traite les leads de</div>
                     <div style={{ display: "flex", flexWrap: "wrap", gap: 5 }}>
                       {uniqTargets.length ? uniqTargets.map((t) => (
-                        <span key={t} style={{ fontSize: 11.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#f2f3f5", border: `1px solid ${C.border}`, borderRadius: 7, padding: "3px 8px" }}>{t}</span>
+                        <span key={t} style={{ fontSize: 11.5, fontWeight: C.wMid ?? 600, color: C.text, background: C.chip || (darkMode ? "rgba(255,255,255,0.05)" : "#f2f3f5"), border: `1px solid ${C.border}`, borderRadius: 7, padding: "3px 8px" }}>{t}</span>
                       )) : <span style={{ fontSize: 11.5, color: C.muted }}>—</span>}
                     </div>
                     {modes.length > 0 && (
                       <div style={{ display: "flex", flexWrap: "wrap", gap: 5, marginTop: 1 }}>
                         {modes.map((m) => (
-                          <span key={m.key} style={{ fontSize: 10, fontWeight: 700, color: m.color, background: m.bg, borderRadius: 6, padding: "2px 7px" }}>{m.label}</span>
+                          <span key={m.key} style={modeTagStyle(m, C)}>{m.label}</span>
                         ))}
                       </div>
                     )}
@@ -155,7 +165,7 @@ export default function SettersGrid({ setters = [], teams = [], loading = false,
                       padding: "9px 14px", borderRadius: 10,
                       border: `1px solid ${C.border}`,
                       background: darkMode ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.02)",
-                      color: onOpenAccount ? C.text : C.muted, fontSize: 12.5, fontWeight: 600,
+                      color: onOpenAccount ? C.text : C.muted, fontSize: 12.5, fontWeight: C.wMid ?? 600,
                       cursor: onOpenAccount ? "pointer" : "not-allowed", fontFamily: "inherit",
                       opacity: onOpenAccount ? 1 : 0.6, transition: "all 0.15s",
                     }}
