@@ -16,7 +16,7 @@ import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
 import SetterRescheduleDialog from "../components/setter/SetterRescheduleDialog.jsx";
-import { canPlanSetterR2, canRescheduleSetterR1 } from '../utils/setterJourney.js';
+import { canPlanSetterR2, canRescheduleSetterR1, canRescheduleSetterR2 } from '../utils/setterJourney.js';
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw, Check, X, TriangleAlert} from "lucide-react";
 import NotesDialog from "../components/salesJourney/NotesDialog";
 import { SalesNotesView } from "../components/salesJourney/SalesNotes";
@@ -6260,8 +6260,8 @@ export default function TrackingSheetSetter() {
               )}
 
               {/* ─── RENDEZ-VOUS, en frise (comme chez les sales) : un fil, un point par rendez-vous, le prochain en point plein.
-                   Règles inchangées : le setter lit son R1 et le déplace par « Reprogrammer » (agenda du commercial) ; les
-                   autres dates se changent en dépliant la ligne, avec le même sélecteur qu'avant. ─── */}
+                   Setter (dev 12/11/2026) : un rendez-vous se déplace toujours par « Reprogrammer », sur l'agenda du commercial
+                   du lead (R1 et R2) ; aucune saisie libre de date. Hors setter, la ligne se déplie sur le sélecteur d'avant. ─── */}
               {(lead.r1 || lead.r2) && (() => {
                 const RDV_COLORS = { r1: '#3b82f6', r2: '#fb923c', r3: '#8b5cf6' };
                 const rows = [['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']].filter(([field]) => lead[field]).map(([field, label]) => ({ field, label, value: toDatetimeLocal(lead[field]) }));
@@ -6271,17 +6271,18 @@ export default function TrackingSheetSetter() {
                     <div style={{ marginBottom: 6, fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>Rendez-vous</div>
                     {rows.map((r, index) => (
                       <RdvRow key={r.field} first={index === 0} last={index === rows.length - 1} next={upcoming?.field === r.field} label={r.label} value={r.value} C={C} darkMode={darkMode}
-                        action={r.field === 'r1' && canRescheduleSetterR1(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }) ? (
-                          <button type="button" onClick={() => setSetterModal({ kind: 'reschedule', lead, rdv: 'r1' })}
-                            aria-label="Reprogrammer le R1"
+                        action={((r.field === 'r1' && canRescheduleSetterR1(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }))
+                          || (r.field === 'r2' && canRescheduleSetterR2(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }))) ? (
+                          <button type="button" onClick={() => setSetterModal({ kind: 'reschedule', lead, rdv: r.field })}
+                            aria-label={`Reprogrammer le ${r.label}`}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', border: `1px solid ${C.border}`, borderRadius: 9, background: C.bg, color: C.text, fontSize: 11.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'border-color 0.15s ease' }}
                             onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
                             onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
                             <RotateCcw size={13} aria-hidden="true" />Reprogrammer
                           </button>
                         ) : null}>
-                        {/* Setter : le R1 se déplace par « Reporter » (agenda du commercial), pas en saisie libre. */}
-                        {r.field === 'r1' && isSetter ? null
+                        {/* Setter : aucune saisie libre, le rendez-vous se déplace sur l'agenda du commercial du lead. */}
+                        {isSetter ? null
                           : <DateTimePicker value={r.value} onChange={(val) => handleDateChange(lead.id, r.field, val)} color={RDV_COLORS[r.field]} C={C} darkMode={darkMode} />}
                       </RdvRow>
                     ))}

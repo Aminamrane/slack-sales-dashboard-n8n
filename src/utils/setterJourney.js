@@ -10,6 +10,14 @@ export function canRescheduleSetterR1(lead, { isSetter = false, readOnly = false
     && ![lead.status, lead._setter_bucket, lead._lead_status].some(status =>
       ['signed', 'r2', 'r3', 'r2_placed'].includes(status)));
 }
+// Report d'un R2 par le setter (dev 12/11/2026 : « par rapport à l'agenda du sales concerné par le lead ») : comme le R1,
+// il passe par l'agenda du commercial du lead, jamais par une saisie libre. Pas un R2 tenu, signé ou suivi d'un R3.
+export function canRescheduleSetterR2(lead, { isSetter = false, readOnly = false } = {}) {
+  return Boolean(isSetter && !readOnly && lead?.id && (lead.r2 || lead.r2_date)
+    && lead.assigned_to && !lead.setter_disqualified_at && !lead.signed_at
+    && !(lead.r3 || lead.r3_date) && lead.r2_result !== 'done'
+    && ![lead.status, lead._setter_bucket, lead._lead_status].some(status => ['signed', 'r3'].includes(status)));
+}
 export function canPlanSetterR2(lead) {
   return Boolean(lead?.id && ['done', 'showed_up'].includes(lead.r1_result)
     && !lead.signed_at && !lead.setter_disqualified_at

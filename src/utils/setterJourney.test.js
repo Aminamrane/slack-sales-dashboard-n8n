@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canPlanSetterR2, canRescheduleSetterR1, withDuplicateConfirmation } from './setterJourney.js';
+import { setterAction, availableSelection, bookingSalesChoices, singleBookingAction, canPlanSetterR2, canRescheduleSetterR1, canRescheduleSetterR2, withDuplicateConfirmation } from './setterJourney.js';
 const owned = { id: 7, assigned_to: 'a@example.com', email: 'client@example.com' };
 const mine = { ...owned, created_by_setter: 'setter@example.com' };
 const slot = { email: 'a@example.com', date: '2026-09-24', time: '10:30' };
@@ -119,4 +119,15 @@ test('a click never confirms a dormant duplicate: only « Placer le RDV quand m�
   assert.equal(withDuplicateConfirmation(action, true).body.confirm_duplicate, true);
   assert.equal(withDuplicateConfirmation(action, true).body.r1_date, '2026-10-19T17:00:00');
   assert.equal(action.body.confirm_duplicate, undefined);
+});
+
+test('un setter reporte un R2 par l’agenda du commercial du lead, jamais un R2 tenu, signé ou suivi d’un R3', () => {
+  const lead = { id: 9, assigned_to: 'a@example.com', r1: '2026-11-06T13:00:00', r1_result: 'done', r2: '2026-11-17T15:30:00', status: 'r2_placed', _setter_bucket: 'r2_placed', _lead_status: 'r2' };
+  assert.equal(canRescheduleSetterR2(lead, { isSetter: true }), true);
+  assert.equal(canRescheduleSetterR2({ ...lead, r2_result: 'no_show' }, { isSetter: true }), true);
+  assert.equal(canRescheduleSetterR2(lead), false);
+  assert.equal(canRescheduleSetterR2(lead, { isSetter: true, readOnly: true }), false);
+  for (const patch of [{ assigned_to: '' }, { r2: null }, { r2_result: 'done' }, { r3: '2026-11-20T10:00:00' }, { signed_at: '2026-11-18T10:00:00Z' }, { setter_disqualified_at: '2026-11-10T10:00:00Z' }, { _lead_status: 'signed' }]) {
+    assert.equal(canRescheduleSetterR2({ ...lead, ...patch }, { isSetter: true }), false, JSON.stringify(patch));
+  }
 });
