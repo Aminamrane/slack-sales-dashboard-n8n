@@ -9,8 +9,10 @@
 //   - les notes internes finance (/api/v1/finance-periods/client/{id}/comments) : jamais montrées au cabinet,
 //     épinglables, et l'on y répond comme à un message (11/11/2026 : « pourquoi ils ne peuvent pas répondre à
 //     l'interne ? »). Une réponse est une note dont `parent_id` désigne la note. On y mentionne un collègue de la
-//     finance ou de la direction (annuaire /notes/mentionables, jamais le cabinet) : il reçoit une notification
-//     dans le CRM, sans e-mail. Ni pièce jointe ni réaction.
+//     finance ou de la direction (annuaire /notes/mentionables, jamais le cabinet) : il reçoit un e-mail et une
+//     notification dans le CRM. On y réagit par emoji comme sur un message. Pas de pièce jointe.
+// Dans un fil, on répond depuis le bas (« Répondre » sous la dernière réponse) ou depuis une réponse précise
+// (la flèche de sa ligne, qui prépare « @Auteur »).
 // La saisie dit toujours à qui l'on écrit. Rôles en lecture seule : tout se lit, rien ne s'écrit.
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
@@ -176,9 +178,9 @@ const editItems = (t, key, body) => [
 ];
 
 // Réponse sous le message : une ligne de saisie dans la carte ; l'auteur du message est prévenu comme une mention.
-const NOTE_HINT = 'Mentionner : la personne sera prévenue dans le CRM';
-function InlineReply({ t, placeholder, onSend, people = t.people, mentionHint }) {
-  const [text, setText] = useState('');
+function InlineReply({ t, placeholder, onSend, people = t.people, initial = '' }) {
+  const [text, setText] = useState(initial);
+  const placed = useRef(false);
   const [busy, setBusy] = useState(false);
   const send = async () => {
     const body = text.trim();
@@ -192,7 +194,8 @@ function InlineReply({ t, placeholder, onSend, people = t.people, mentionHint })
     <Motion.div className="fx-reply" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.24, ease: EASE }}>
       <div className="fx-reply-box">
         <Avatar name={t.myName} size={22} />
-        <MentionTextarea value={text} onChange={setText} people={people} mentionHint={mentionHint} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
+        <MentionTextarea value={text} onChange={setText} people={people} rows={1} autoFocus className="fx-reply-ta" placeholder={placeholder}
+          onFocus={(e) => { if (placed.current) return; placed.current = true; const end = e.target.value.length; e.target.setSelectionRange(end, end); }}
           aria-label="Votre réponse" maxLength={4000}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
@@ -204,13 +207,19 @@ function InlineReply({ t, placeholder, onSend, people = t.people, mentionHint })
   );
 }
 
-function Reply({ c, t }) {
+// Flèche d'une réponse : rouvre la saisie du fil en préparant « @Auteur » quand il est dans l'annuaire.
+const AnswerTo = ({ t, threadKey, author, people }) => (!t.readOnly && threadKey ? (
+  <button type="button" className="fx-sub-answer" aria-label={`Répondre à ${firstName(author)}`} title={`Répondre à ${firstName(author)}`}
+    onClick={() => t.replyTo(threadKey, author, people)}><CornerUpLeft size={14} /></button>
+) : null);
+
+function Reply({ c, t, threadKey }) {
   const key = `c:${c.id}`;
   const list = t.reactionsOf('comment', c.id);
   return (
     <div className={`fx-sub${c.fresh ? ' is-fresh' : ''}`}>
       <Head author={authorOf(c)} size={22} small iso={c.created_at} extra={c.updated_at ? ' · modifié' : ''}
-        menu={!t.readOnly && <><EmojiPalette onPick={(e) => t.react('comment', c.id, e)} />{t.canEdit(c) && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, c.body)} />}</>} />
+        menu={!t.readOnly && <><AnswerTo t={t} threadKey={threadKey} author={authorOf(c)} people={t.people} /><EmojiPalette onPick={(e) => t.react('comment', c.id, e)} />{t.canEdit(c) && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, c.body)} />}</>} />
       <div className="fx-sub-in">
         {t.edit.key === key ? <EditBox t={t} mentions />
           : c.body && <Clamp max={88} measureKey={c.body}><div className="fx-text"><MentionedText text={c.body} mentions={c.mentions} /></div></Clamp>}
@@ -221,26 +230,30 @@ function Reply({ c, t }) {
     </div>
   );
 }
-// Réponse à une note interne : texte seul. Les actions viennent du serveur (`can_moderate`).
-function NoteReply({ n, t }) {
+// Réponse à une note interne : texte et réactions. Modifier et supprimer viennent du serveur (`can_moderate`).
+function NoteReply({ n, t, threadKey }) {
   const key = `n:${n.id}`;
   const edited = n.updated_at && n.updated_at !== n.created_at;
+  const list = n.reactions || [];
   return (
     <div className={`fx-sub${n.fresh ? ' is-fresh' : ''}`}>
       <Head author={authorOf(n)} size={22} small iso={n.created_at} extra={edited ? ' · modifiée' : ''}
-        menu={!t.readOnly && n.can_moderate && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, n.body)} />} />
+        menu={!t.readOnly && <><AnswerTo t={t} threadKey={threadKey} author={authorOf(n)} people={t.notePeople} /><EmojiPalette onPick={(e) => t.reactNote(n, e)} />{n.can_moderate && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, n.body)} />}</>} />
       <div className="fx-sub-in">
         {t.edit.key === key ? <EditBox t={t} />
           : <Clamp max={88} measureKey={n.body}><div className="fx-text"><MentionedText text={n.body} mentions={t.noteMentions} /></div></Clamp>}
         {t.confirming === key && <DeleteConfirm t={t} entryKey={key} what="cette réponse" />}
+        {list.length > 0 && <Reactions list={list} onToggle={(e) => t.reactNote(n, e)} />}
       </div>
     </div>
   );
 }
 // Réponses d'un message, d'une météo ou d'une note : ouvertes jusqu'à deux, sinon regroupées derrière leurs
 // auteurs ; le fil s'ouvre de lui-même quand une réponse vient d'y être publiée.
-function Replies({ replies, t, openSignal, note = false }) {
+function Replies({ replies, t, openSignal, note = false, threadKey }) {
   const [open, setOpen] = useState(replies.length <= 2);
+  // Rognée seulement pendant qu'elle se déplie : au repos, le menu « ⋯ » de la dernière réponse doit dépasser.
+  const [moving, setMoving] = useState(false);
   useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   const names = replies.map(authorOf);
   return (
@@ -252,8 +265,12 @@ function Replies({ replies, t, openSignal, note = false }) {
       </button>
       <AnimatePresence initial={false}>
         {open && (
-          <Motion.div className="fx-replies-list" initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: EASE }}>
-            {replies.map((reply) => (note ? <NoteReply key={reply.id} n={reply} t={t} /> : <Reply key={reply.id} c={reply} t={t} />))}
+          <Motion.div className={`fx-replies-list${moving ? ' is-moving' : ''}`} initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.3, ease: EASE }}
+            onAnimationStart={() => setMoving(true)} onAnimationComplete={() => setMoving(false)}>
+            {replies.map((reply) => (note ? <NoteReply key={reply.id} n={reply} t={t} threadKey={threadKey} /> : <Reply key={reply.id} c={reply} t={t} threadKey={threadKey} />))}
+            {!t.readOnly && threadKey && t.replying !== threadKey && (
+              <button type="button" className="fx-thread-answer" onClick={() => t.toggleReply(threadKey)}><CornerUpLeft size={14} />Répondre</button>
+            )}
           </Motion.div>
         )}
       </AnimatePresence>
@@ -271,9 +288,9 @@ function SharedFoot({ kind, entry, t }) {
         <Reactions list={t.reactionsOf(kind, entry.id)} onToggle={(e) => t.react(kind, entry.id, e)} />
         <button type="button" className="fx-answer" aria-expanded={t.replying === key} onClick={() => t.toggleReply(key)} {...t.ro}><CornerUpLeft size={14} />Répondre</button>
       </footer>
-      {entry.replies.length > 0 && <Replies replies={entry.replies} t={t} openSignal={t.bump.key === key ? t.bump.n : 0} />}
+      {entry.replies.length > 0 && <Replies replies={entry.replies} t={t} threadKey={key} openSignal={t.bump.key === key ? t.bump.n : 0} />}
       <AnimatePresence initial={false}>
-        {t.replying === key && <InlineReply key="reply" t={t} placeholder={`Répondre à ${firstName(author)}…`} onSend={(body) => t.sendReply(kind, entry, body)} />}
+        {t.replying === key && <InlineReply key={`reply-${t.replySeed.n}`} t={t} initial={t.replySeed.text} placeholder={`Répondre à ${firstName(author)}…`} onSend={(body) => t.sendReply(kind, entry, body)} />}
       </AnimatePresence>
     </>
   );
@@ -334,14 +351,15 @@ function NoteCard({ e, t }) {
           : <Clamp max={88} measureKey={e.body}><div className="fx-text"><MentionedText text={e.body} mentions={t.noteMentions} /></div></Clamp>}
         {t.confirming === e.key && <DeleteConfirm t={t} entryKey={e.key} what={e.replies.length ? 'cette note et ses réponses' : 'cette note'} />}
         {!e._pending && (
-          <footer className="fx-foot is-end">
+          <footer className="fx-foot">
+            <Reactions list={e.reactions || []} onToggle={(emoji) => t.reactNote(e, emoji)} />
             <button type="button" className="fx-answer" aria-expanded={t.replying === e.key} onClick={() => t.toggleReply(e.key)}
-              title="Répondre en interne : le cabinet ne voit pas la réponse, l’auteur de la note est prévenu dans le CRM" {...t.ro}><CornerUpLeft size={14} />Répondre</button>
+              title="Répondre en interne : le cabinet ne voit pas la réponse, l’auteur de la note est prévenu" {...t.ro}><CornerUpLeft size={14} />Répondre</button>
           </footer>
         )}
-        {e.replies.length > 0 && <Replies note replies={e.replies} t={t} openSignal={t.bump.key === e.key ? t.bump.n : 0} />}
+        {e.replies.length > 0 && <Replies note replies={e.replies} t={t} threadKey={e.key} openSignal={t.bump.key === e.key ? t.bump.n : 0} />}
         <AnimatePresence initial={false}>
-          {t.replying === e.key && <InlineReply key="reply" t={t} people={t.notePeople} mentionHint={NOTE_HINT} placeholder={`Répondre en interne à ${firstName(authorOf(e))}…`} onSend={(body) => t.sendNoteReply(e, body)} />}
+          {t.replying === e.key && <InlineReply key={`reply-${t.replySeed.n}`} t={t} people={t.notePeople} initial={t.replySeed.text} placeholder={`Répondre en interne à ${firstName(authorOf(e))}…`} onSend={(body) => t.sendNoteReply(e, body)} />}
         </AnimatePresence>
       </div>
     </Motion.article>
@@ -405,6 +423,8 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const [kind, setKind] = useState('all');
   const [limit, setLimit] = useState(STEP);
   const [replying, setReplying] = useState(null);
+  // Texte de départ de la saisie de réponse (« @Auteur » quand on répond à une réponse précise) ; `n` la remonte.
+  const [replySeed, setReplySeed] = useState({ text: '', n: 0 });
   const [bump, setBump] = useState({ key: null, n: 0 });
   const [edit, setEdit] = useState({ key: null, draft: '', saving: false, error: '' });
   const [confirming, setConfirming] = useState(null);
@@ -568,6 +588,20 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       setError('La réaction n’a pas pu être enregistrée.');
     }
   };
+  // Réaction sur une note interne ou sa réponse : même geste, sa propre route.
+  const reactNote = async (note, emoji) => {
+    if (readOnly || !notesBase) return;
+    const before = note.reactions || [];
+    const swap = (list) => setNotes((prev) => prev.map((n) => (sameId(n.id, note.id) ? { ...n, reactions: list } : n)));
+    swap(toggledReactions(before, emoji, myName));
+    try {
+      const r = await apiClient.post(`${notesBase}/${note.id}/reactions`, { emoji });
+      if (Array.isArray(r?.reactions)) swap(r.reactions);
+    } catch {
+      swap(before);
+      setError('La réaction n’a pas pu être enregistrée.');
+    }
+  };
   // Répondre sous un message ou une météo : son auteur est prévenu comme une mention, le fil s'ouvre et remonte.
   const sendReply = async (target, parent, body) => {
     if (readOnly) return false;
@@ -589,7 +623,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
     }
   };
   // Répondre sous une note interne : la réponse reste interne, le fil s'ouvre et remonte. L'auteur de la note et
-  // les collègues mentionnés sont prévenus dans le CRM.
+  // les collègues mentionnés sont prévenus (e-mail et CRM).
   const sendNoteReply = async (parent, body) => {
     if (readOnly || !notesBase) return false;
     setError('');
@@ -670,11 +704,18 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   // Noms surlignés dans une note : l'annuaire interne, et soi-même (absent de son propre annuaire).
   const noteMentions = useMemo(() => [...notePeople, { id: me.id, name: myName }], [notePeople, me.id, myName]);
   const t = {
-    readOnly, ro, people, notePeople, noteMentions, myName, react, sendReply, sendNoteReply, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
+    readOnly, ro, people, notePeople, noteMentions, myName, react, reactNote, sendReply, sendNoteReply, replySeed, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
     canPin: !!internal?.canPin,
     canEdit: (c) => !readOnly && (c.can_edit || mine(c) || ['admin', 'ceo'].includes(me.role)),
     reactionsOf: (target, id) => reactions[`${target}:${id}`] || [],
-    toggleReply: (key) => { if (!readOnly) setReplying((k) => (k === key ? null : key)); },
+    toggleReply: (key) => { if (readOnly) return; setReplySeed((s) => ({ text: '', n: s.n + 1 })); setReplying((k) => (k === key ? null : key)); },
+    // Répondre à une réponse précise : la saisie du fil s'ouvre sur « @Auteur » s'il peut être mentionné.
+    replyTo: (key, author, directory) => {
+      if (readOnly) return;
+      const person = (directory || []).find((p) => p.name === author);
+      setReplySeed((s) => ({ text: person ? `@${person.name} ` : '', n: s.n + 1 }));
+      setReplying(key);
+    },
     cancelReply: () => setReplying(null),
     startEdit: (key, body) => { setEdit({ key, draft: body || '', saving: false, error: '' }); setConfirming(null); },
     setEditDraft: (value) => setEdit((s) => ({ ...s, draft: value })),
@@ -713,7 +754,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
         onDragOver={(e) => { if (!noteMode && e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
         onDrop={(e) => { if (noteMode || !e.dataTransfer?.files?.length) return; e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
-        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? notePeople : people} mentionHint={noteMode ? NOTE_HINT : undefined} rows={2} className="fx-ta" maxLength={4000}
+        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? notePeople : people} rows={2} className="fx-ta" maxLength={4000}
           aria-label={noteMode ? 'Note interne finance' : 'Message de l’espace commun'} onPaste={pasteFiles}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
           placeholder={noteMode ? 'Note pour la finance : promesse de règlement, retour du cabinet…' : `Écrire à Owner, Opti’Lex et la finance… (collez une image avec ${isMac ? '⌘' : 'Ctrl'} V)`}
@@ -721,7 +762,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
         <ComposerFiles files={files} disabled={posting} onRemove={dropFile} />
         <div className="fx-bar">
           <button type="button" className="fx-tool" onClick={() => insert('@', true)} disabled={(noteMode && !notePeople.length) || !canWrite} aria-label="Mentionner quelqu’un"
-            title={noteMode ? 'Mentionner un collègue de la finance : il reçoit une notification dans le CRM' : 'Mentionner quelqu’un : il reçoit un e-mail et une notification'} {...ro}><AtSign size={16} /></button>
+            title={noteMode ? 'Mentionner un collègue de la finance : il reçoit un e-mail et une notification' : 'Mentionner quelqu’un : il reçoit un e-mail et une notification'} {...ro}><AtSign size={16} /></button>
           <button type="button" className="fx-tool" onClick={() => fileInput.current?.click()} disabled={noteMode || !canWrite || posting} aria-label="Joindre des fichiers"
             title={noteMode ? 'Une note interne n’accepte pas de pièce jointe' : 'Joindre des fichiers (PDF, image, e-mail, audio · 20 Mo au plus) ou les glisser ici'} {...ro}><Paperclip size={16} /></button>
           {readOnly
@@ -745,7 +786,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       </div>
       <p className="fx-scope">
         {noteMode
-          ? <><Lock size={12} strokeWidth={2.1} />Note interne : seule la finance la voit, jamais le cabinet. @ prévient un collègue dans le CRM.</>
+          ? <><Lock size={12} strokeWidth={2.1} />Note interne : seule la finance la voit, jamais le cabinet. @ prévient un collègue par e-mail et notification.</>
           : <><Users size={12} strokeWidth={2.1} />Visible par Owner, le cabinet Opti’Lex et la finance. @ prévient par e-mail et notification.</>}
       </p>
       <AnimatePresence>
