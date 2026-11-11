@@ -16,7 +16,7 @@ import apiClient from "../services/apiClient";
 import { leadAvatar } from "../utils/leadAvatar";
 import { poolBusinessDetails, sortByMyLastCall } from "../utils/commonPoolPresentation";
 
-const ORIGIN_TONE = { bg: "rgba(100,116,139,0.12)", text: "#64748b" };
+const ORIGIN_TONE = { bg: "rgba(139,134,126,0.12)", text: "#8c867d" };
 
 const fmtAge = (iso) => {
   if (!iso) return null;
@@ -87,12 +87,12 @@ function CopyChip({ kind, value, C, darkMode }) {
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   };
-  const accent = "#0891b2"; // teal (cohérent avec « Prendre avec un RDV »)
+  const accent = darkMode ? "#d6d6d6" : "#55514b"; // encre (style Owner, 11/11/2026 ; avant : bleu sarcelle)
   const bg = copied
-    ? (darkMode ? "rgba(62,125,90,0.20)" : "#e7f5ee")
-    : hover ? (darkMode ? "rgba(8,145,178,0.16)" : "#e6f6fa")
-            : (darkMode ? "rgba(255,255,255,0.05)" : "#f4f6f9");
-  const border = copied ? "#3e7d5a" : hover ? accent : (darkMode ? "rgba(255,255,255,0.10)" : "#e2e6ee");
+    ? (darkMode ? "rgba(62,125,90,0.20)" : "#e2f6ea")
+    : hover ? (darkMode ? "rgba(255,255,255,0.10)" : "#f1eee9")
+            : (darkMode ? "rgba(255,255,255,0.05)" : "#f8f7f5");
+  const border = copied ? "#3e7d5a" : hover ? accent : (darkMode ? "rgba(255,255,255,0.10)" : "#ede9e3");
   if (isPhone) {
     return (
       <span style={{
@@ -102,7 +102,7 @@ function CopyChip({ kind, value, C, darkMode }) {
       }}>
         <span aria-hidden="true" style={{ display: "flex", color: accent, flexShrink: 0 }}>{IC_PHONE}</span>
         {/* La copie ne remplace pas ce texte : une extension peut y injecter son bouton. */}
-        <span key={value} style={{ fontSize: 12.5, fontWeight: 700, color: C.text, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
+        <span key={value} style={{ fontSize: 12.5, fontWeight: 500, color: C.text, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>
           {value}
         </span>
         <button
@@ -174,11 +174,11 @@ function ContactRow({ lead, C, darkMode }) {
 const TAG_PALETTES = [
   { bg: "#f2ecfd", dbg: "rgba(124,77,214,0.20)", fg: "#7c4dd6" },
   { bg: "#e9f0fe", dbg: "rgba(59,111,212,0.20)", fg: "#3b6fd4" },
-  { bg: "#e3f5f2", dbg: "rgba(44,156,143,0.20)", fg: "#2c9c8f" },
+  { bg: "#f0ede8", dbg: "rgba(44,156,143,0.20)", fg: "#2c9c8f" },
   { bg: "#fdf2e2", dbg: "rgba(191,122,30,0.20)", fg: "#bf7a1e" },
   { bg: "#fdeaf2", dbg: "rgba(219,39,119,0.20)", fg: "#db2777" },
   { bg: "#eaf6e9", dbg: "rgba(47,122,83,0.20)", fg: "#2f7a53" },
-  { bg: "#eef1f5", dbg: "rgba(105,117,136,0.20)", fg: "#697588" },
+  { bg: "#f4f2ef", dbg: "rgba(139,134,126,0.20)", fg: "#807a71" },
 ];
 function tagPalette(s) {
   let h = 0; const str = String(s || "");
@@ -189,7 +189,7 @@ function OriginTag({ origin, darkMode }) {
   if (!origin) return null;
   const p = tagPalette(origin);
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 7, fontSize: 11.5, fontWeight: 600, whiteSpace: "nowrap", background: darkMode ? p.dbg : p.bg, color: p.fg }}>
+    <span style={{ display: "inline-flex", alignItems: "center", padding: "3px 10px", borderRadius: 7, fontSize: 11.5, fontWeight: 500, whiteSpace: "nowrap", background: darkMode ? p.dbg : p.bg, color: p.fg }}>
       {origin}
     </span>
   );
@@ -217,7 +217,7 @@ function Pager({ page, pages, total, onPage, C, darkMode }) {
     display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 13px",
     borderRadius: 9, border: `1px solid ${C.border}`,
     background: darkMode ? "rgba(255,255,255,0.04)" : "#fff",
-    color: dis ? C.muted : C.text, fontSize: 12.5, fontWeight: 650,
+    color: dis ? C.muted : C.text, fontSize: 12.5, fontWeight: 500,
     cursor: dis ? "default" : "pointer", fontFamily: "inherit", opacity: dis ? 0.5 : 1,
     transition: "background 0.15s",
   });
@@ -228,7 +228,7 @@ function Pager({ page, pages, total, onPage, C, darkMode }) {
       <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 12.5, color: C.muted, whiteSpace: "nowrap" }}>
         Page
         <select aria-label="Aller à la page" value={page} onChange={(e) => go(Number(e.target.value))}
-          style={{ ...btn(false), padding: "6px 8px", fontWeight: 700 }}>
+          style={{ ...btn(false), padding: "6px 8px", fontWeight: 500 }}>
           {Array.from({ length: pages }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}
         </select>
         / {pages} · {total} leads
@@ -243,8 +243,8 @@ function LeadBusinessDetails({ lead, C }) {
   if (!revenue && !headcount) return null;
   return (
     <div style={{ display: "grid", gap: 3, marginTop: 5, fontSize: 11.5, lineHeight: 1.4, color: C.text, maxWidth: 300, overflowWrap: "anywhere" }}>
-      {revenue && <strong style={{ fontWeight: 700 }}>CA : {revenue}</strong>}
-      {headcount && <strong style={{ fontWeight: 700 }}>Salariés : {headcount}</strong>}
+      {revenue && <strong style={{ fontWeight: 500 }}>CA : {revenue}</strong>}
+      {headcount && <strong style={{ fontWeight: 500 }}>Salariés : {headcount}</strong>}
     </div>
   );
 }
@@ -296,7 +296,7 @@ function PoolCallsBadge({ lead, C, darkMode }) {
   const hot = n >= 6;
   return (
     <span title="Appels passés par l'équipe depuis le pool" style={{
-      fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
+      fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
       color: hot ? "#b42318" : "#b45309",
       background: hot ? (darkMode ? "rgba(180,35,24,0.16)" : "#fdecea") : (darkMode ? "rgba(180,83,9,0.16)" : "#fff3e3"),
     }}>
@@ -314,7 +314,7 @@ function MyCallsBadge({ lead, C, darkMode }) {
   return (
     <span title="Vos appels à vous sur ce lead" style={{
       display: "inline-flex", alignItems: "center", gap: 5,
-      fontSize: 11, fontWeight: 700, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
+      fontSize: 11, fontWeight: 500, whiteSpace: "nowrap", padding: "2px 9px", borderRadius: 20,
       color: darkMode ? "#93c5fd" : "#1d4ed8",
       background: darkMode ? "rgba(29,78,216,0.18)" : "#e8effd",
     }}>
@@ -364,7 +364,7 @@ function EnvelopeButton({ lead, C, darkMode, onOpen }) {
       </svg>
       {(unseen > 0 || n > 0) && (
         <span style={{ position: "absolute", top: -4, right: -4, minWidth: 15, height: 15, padding: "0 4px",
-          borderRadius: 8, background: tone, color: "#fff", fontSize: 9.5, fontWeight: 800,
+          borderRadius: 8, background: tone, color: "#fff", fontSize: 9.5, fontWeight: 500,
           display: "inline-flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
           animation: unseen ? "cvpPulse 1.6s ease-in-out infinite" : "none",
           boxShadow: unseen ? "0 0 0 0 rgba(220,38,38,0.45)" : "none" }}>
@@ -428,25 +428,25 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
       {/* Le centrage vient du conteneur flex, PAS d'un transform sur la boîte :
           la frame finale de cvpModalIn (transform:none) écraserait un
           translate(-50%,-50%) et décentrerait le popup. */}
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10070, background: "rgba(15,20,30,0.45)", backdropFilter: "blur(2px)",
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, zIndex: 10070, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(2px)",
         display: "flex", alignItems: "center", justifyContent: "center", padding: 16, animation: "cvpFadeIn 0.16s ease both" }}>
       <div role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()} style={{
         width: "min(480px, 100%)", maxHeight: "min(600px, calc(100vh - 48px))", display: "flex", flexDirection: "column",
-        background: darkMode ? "#1c1f26" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
-        boxShadow: "0 24px 64px rgba(10,14,22,0.35)", animation: "cvpModalIn 0.2s cubic-bezier(0.16,1,0.3,1) both", overflow: "hidden" }}>
+        background: darkMode ? "#212121" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
+        boxShadow: "0 24px 64px rgba(0,0,0,0.35)", animation: "cvpModalIn 0.2s cubic-bezier(0.16,1,0.3,1) both", overflow: "hidden" }}>
 
         {/* En-tête : qui est ce lead */}
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "14px 16px", borderBottom: `1px solid ${C.border}` }}>
           <LeadFace lead={lead} />
           <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            <div style={{ fontSize: 14, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
               {lead.full_name || lead.company_name || "Sans nom"}
             </div>
             <div style={{ fontSize: 11.5, color: C.muted }}>Messages de l'équipe sur ce lead</div>
           </div>
           <button onClick={onClose} title="Fermer (Échap)"
             style={{ width: 30, height: 30, borderRadius: 8, border: "none", background: "transparent", color: C.muted, cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.06)" : "#f1f3f7"; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.06)" : "#f6f4f2"; }}
             onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
           </button>
@@ -464,12 +464,12 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
             </div>
           ) : comments.map((c, i) => (
             <div key={c.id} style={{ display: "flex", gap: 9, animation: `cvpMsgIn 0.22s ease ${Math.min(i * 0.03, 0.3)}s both` }}>
-              <span style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: darkMode ? "rgba(8,145,178,0.22)" : "#e6f6fa", color: accent, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 800 }}>
+              <span style={{ width: 28, height: 28, borderRadius: "50%", flexShrink: 0, background: darkMode ? "rgba(8,145,178,0.22)" : "#e6f6fa", color: accent, display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 10.5, fontWeight: 500 }}>
                 {initialsOf(c.author_name || c.author_email)}
               </span>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 7, flexWrap: "wrap" }}>
-                  <span style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{c.author_name || c.author_email || "—"}</span>
+                  <span style={{ fontSize: 12, fontWeight: 500, color: C.text }}>{c.author_name || c.author_email || "—"}</span>
                   <span style={{ fontSize: 10.5, color: C.muted }}>{fmtAge(c.created_at)}</span>
                 </div>
                 <div style={{ fontSize: 13, color: C.text, lineHeight: 1.45, marginTop: 2, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{c.body}</div>
@@ -484,7 +484,7 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
         </div>
 
         {/* Saisie */}
-        <div style={{ padding: "12px 16px 14px", borderTop: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
+        <div style={{ padding: "12px 16px 14px", borderTop: `1px solid ${C.border}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fcfbfa" }}>
           <textarea value={draft} onChange={(e) => setDraft(e.target.value)} rows={2} autoFocus
             onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
             placeholder="Votre message pour les autres sales…"
@@ -494,9 +494,9 @@ function PoolCommentsModal({ lead, C, darkMode, onClose, onPosted }) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 8 }}>
             <span style={{ fontSize: 10.5, color: C.muted }}>Cmd/Ctrl + Entrée pour publier</span>
             <button onClick={submit} disabled={!draft.trim() || posting}
-              style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 12.5, fontWeight: 700, fontFamily: "inherit",
+              style={{ padding: "7px 16px", borderRadius: 8, border: "none", fontSize: 12.5, fontWeight: 500, fontFamily: "inherit",
                 cursor: draft.trim() && !posting ? "pointer" : "default",
-                background: draft.trim() ? accent : (darkMode ? "rgba(255,255,255,0.08)" : "#e5e7eb"),
+                background: draft.trim() ? accent : (darkMode ? "rgba(255,255,255,0.08)" : "#e8e4de"),
                 color: draft.trim() ? "#fff" : C.muted, transition: "background 0.2s" }}>
               {posting ? "…" : "Publier"}
             </button>
@@ -690,8 +690,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     background: darkMode ? "rgba(255,255,255,0.03)" : "#fff", ...extra,
   });
   // Styles de tableau (partagés par les deux pools).
-  const thS = { fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap", background: darkMode ? "rgba(255,255,255,0.02)" : "#fcfcfd" };
-  const tdS = { padding: "7px 10px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, verticalAlign: "middle", fontSize: 12.5, color: C.text };
+  const thS = { fontSize: 10, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em", color: C.muted, textAlign: "left", padding: "8px 10px", borderBottom: `1px solid ${C.border}`, whiteSpace: "nowrap", background: darkMode ? "rgba(255,255,255,0.02)" : "#fdfdfc" };
+  const tdS = { padding: "7px 10px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f7f5f2"}`, verticalAlign: "middle", fontSize: 12.5, color: C.text };
   // Variante « serrée » : la colonne se réduit à son contenu, tout se rapproche
   // du bord gauche, l'espace libre s'accumule en fin de ligne (demande dev).
   const thT = { ...thS };
@@ -700,9 +700,9 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
   // horizontalement et la corbeille sortait de l'écran (retour dev 2026-09-03).
   // Fond opaque obligatoire (sinon le contenu défile visiblement dessous) +
   // ombre gauche pour marquer la séparation.
-  const actionsBg = darkMode ? "#23262d" : "#fff";
-  const thActions = { ...thS, textAlign: "right", position: "sticky", right: 0, zIndex: 2, background: darkMode ? "rgba(38,41,48,1)" : "#fcfcfd", boxShadow: "-8px 0 8px -8px rgba(17,24,39,0.18)" };
-  const tdActions = { ...tdS, whiteSpace: "nowrap", textAlign: "right", position: "sticky", right: 0, zIndex: 1, background: actionsBg, boxShadow: "-8px 0 8px -8px rgba(17,24,39,0.18)" };
+  const actionsBg = darkMode ? "#282828" : "#fff";
+  const thActions = { ...thS, textAlign: "right", position: "sticky", right: 0, zIndex: 2, background: darkMode ? "rgba(38,38,38,1)" : "#fdfdfc", boxShadow: "-8px 0 8px -8px rgba(28,27,25,0.18)" };
+  const tdActions = { ...tdS, whiteSpace: "nowrap", textAlign: "right", position: "sticky", right: 0, zIndex: 1, background: actionsBg, boxShadow: "-8px 0 8px -8px rgba(28,27,25,0.18)" };
 
   if (!data && !err) {
     return <div style={{ padding: 32, textAlign: "center", color: C.muted, fontSize: 13 }}>Chargement des pools…</div>;
@@ -715,13 +715,13 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
       <style>{`@keyframes cvpPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(220,38,38,0.45)}50%{transform:scale(1.12);box-shadow:0 0 0 4px rgba(220,38,38,0)}}`}</style>
       {claimedMsg && (
-        <div style={{ padding: "10px 16px", borderRadius: 10, background: darkMode ? "rgba(62,125,90,0.18)" : "#e7f0eb", color: "#3e7d5a", fontSize: 12.5, fontWeight: 650 }}>
+        <div style={{ padding: "10px 16px", borderRadius: 10, background: darkMode ? "rgba(62,125,90,0.18)" : "#e7f0eb", color: "#3e7d5a", fontSize: 12.5, fontWeight: 500 }}>
           {claimedMsg}
         </div>
       )}
       {/* Switch entre les deux pools */}
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <div style={{ display: "inline-flex", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f1f3f7" }}>
+        <div style={{ display: "inline-flex", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f6f4f2" }}>
           {[
             { key: "reactivite", label: "Réactivité", n: totRea, color: "#ef4444" },
             { key: "traitement", label: "Traitement", n: totTrt, color: "#0891b2" },
@@ -730,27 +730,27 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
             return (
               <button key={p.key} type="button" onClick={() => setPool(p.key)}
                 style={{ display: "inline-flex", alignItems: "center", gap: 7, padding: "8px 16px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit",
-                  fontSize: 13, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                  fontSize: 13, fontWeight: 500, transition: "background 0.15s, color 0.15s",
                   background: on ? (darkMode ? "rgba(255,255,255,0.10)" : "#fff") : "transparent",
                   color: on ? C.text : C.muted,
-                  boxShadow: on ? "0 1px 3px rgba(17,24,39,0.10)" : "none" }}>
+                  boxShadow: on ? "0 1px 3px rgba(28,27,25,0.10)" : "none" }}>
                 <span style={{ width: 7, height: 7, borderRadius: "50%", background: on ? p.color : C.muted, opacity: on ? 1 : 0.5 }} />
                 {p.label}
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: on ? p.color : C.muted }}>{p.n}</span>
+                <span style={{ fontSize: 11.5, fontWeight: 500, color: on ? p.color : C.muted }}>{p.n}</span>
               </button>
             );
           })}
         </div>
-        <div style={{ display: pool === "traitement" ? "inline-flex" : "none", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f1f3f7" }}>
+        <div style={{ display: pool === "traitement" ? "inline-flex" : "none", gap: 4, padding: 4, borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.05)" : "#f6f4f2" }}>
           {MINE_FILTERS.map((f) => {
             const on = mine === f.key;
             return (
               <button key={f.key} type="button" onClick={() => setMine(f.key)} title={f.label}
                 style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 13px", borderRadius: 9, border: "none", cursor: "pointer", fontFamily: "inherit",
-                  fontSize: 12.5, fontWeight: 650, transition: "background 0.15s, color 0.15s",
+                  fontSize: 12.5, fontWeight: 500, transition: "background 0.15s, color 0.15s",
                   background: on ? (darkMode ? "rgba(255,255,255,0.10)" : "#fff") : "transparent",
                   color: on ? C.text : C.muted,
-                  boxShadow: on ? "0 1px 3px rgba(17,24,39,0.10)" : "none" }}>
+                  boxShadow: on ? "0 1px 3px rgba(28,27,25,0.10)" : "none" }}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   {f.icon}
                 </svg>
@@ -763,7 +763,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
           <label style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 12, color: C.muted }}>
             Mon dernier appel
             <select aria-label="Trier par mon dernier appel" value={callOrder} onChange={(e) => setCallOrder(e.target.value)}
-              style={{ padding: "9px 11px", borderRadius: 9, border: `1px solid ${C.border}`, background: darkMode ? "#23262d" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }}>
+              style={{ padding: "9px 11px", borderRadius: 9, border: `1px solid ${C.border}`, background: darkMode ? "#282828" : "#fff", color: C.text, fontSize: 12.5, fontFamily: "inherit" }}>
               <option value="oldest">Plus anciens d’abord</option>
               <option value="newest">Plus récents d’abord</option>
             </select>
@@ -793,14 +793,14 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                 <tbody>
                   {rea.map((lead) => (
                     <tr key={lead.id} style={{ transition: "background 0.12s" }}
-                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"; }}
+                      onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#faf9f7"; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                       <td style={tdS}>
                         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <LeadFace lead={lead} />
                           <div style={{ minWidth: 0 }}>
-                            <div style={{ fontWeight: 650, color: C.text, whiteSpace: "nowrap" }}>{lead.full_name || lead.company_name || "Sans nom"}</div>
-                            {lead.pool_entered_at && <div style={{ fontSize: 10.5, color: "#ef4444", fontWeight: 600 }}>arrivé {fmtAge(lead.pool_entered_at)}</div>}
+                            <div style={{ fontWeight: 500, color: C.text, whiteSpace: "nowrap" }}>{lead.full_name || lead.company_name || "Sans nom"}</div>
+                            {lead.pool_entered_at && <div style={{ fontSize: 10.5, color: "#ef4444", fontWeight: 500 }}>arrivé {fmtAge(lead.pool_entered_at)}</div>}
                             {fmtDate(lead.created_at) && <div style={{ fontSize: 10.5, color: C.muted }}>entré le {fmtDate(lead.created_at)}</div>}
                             <LeadBusinessDetails lead={lead} C={C} />
                           </div>
@@ -813,7 +813,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                         <td style={tdActions}>
                           <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                             <button onClick={() => claimRea(lead.id)} disabled={busyId === lead.id}
-                              style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                              style={{ padding: "5px 12px", borderRadius: 8, border: "none", background: busyId === lead.id ? C.muted : "#3e7d5a", color: "#fff", fontSize: 11.5, fontWeight: 500, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                               {busyId === lead.id ? "…" : "Je le prends"}
                             </button>
                             <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={openComments} />
@@ -852,19 +852,19 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                   {trt.map((lead) => (
                     <Fragment key={lead.id}>
                       <tr style={{ transition: "background 0.12s" }}
-                        onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#f8fafc"; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? "rgba(255,255,255,0.03)" : "#faf9f7"; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}>
                         <td style={tdS}>
                           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                           <LeadFace lead={lead} />
                           <div style={{ minWidth: 0 }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                            <span style={{ fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{lead.full_name || lead.company_name || "Sans nom"}</span>
+                            <span style={{ fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 180 }}>{lead.full_name || lead.company_name || "Sans nom"}</span>
                             <span title="Appels passés par l'équipe depuis le pool"
                               style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, whiteSpace: "nowrap", flexShrink: 0,
                                 color: (lead.pool_calls || 0) >= 6 ? "#b42318" : (lead.pool_calls || 0) > 0 ? "#b45309" : C.muted }}>
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" /></svg>
-                              <b style={{ fontWeight: 700 }}>{lead.pool_calls || 0}</b>
+                              <b style={{ fontWeight: 500 }}>{lead.pool_calls || 0}</b>
                               {lead.pool_last_call_at && <span style={{ color: C.muted, fontWeight: 400 }}>· {fmtAge(lead.pool_last_call_at)}</span>}
                             </span>
                           </div>
@@ -884,12 +884,12 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                           <td style={tdActions}>
                             <div style={{ display: "inline-flex", alignItems: "center", gap: 7 }}>
                               <button onClick={() => markCalled(lead.id)}
-                                style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 650, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
+                                style={{ padding: "5px 9px", borderRadius: 7, border: `1px solid ${C.border}`, background: calledFlash[lead.id] ? "#3e7d5a" : "transparent", color: calledFlash[lead.id] ? "#fff" : C.text, fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "background 0.2s, color 0.2s", whiteSpace: "nowrap" }}>
                                 {calledFlash[lead.id] ? "Noté ✓" : "J'ai appelé"}
                               </button>
                               <button onClick={() => claimCallback(lead.id)} disabled={busyId === lead.id}
                                 title="Le prospect a demandé à être rappelé : récupérer ce lead dans votre onglet « À rappeler » pour 3 jours, sans poser de RDV"
-                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 7, border: "1px solid #fcd9a8", background: busyId === lead.id ? "#f3e8d8" : "#fdf4e7", color: "#b45309", fontSize: 11, fontWeight: 700, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "5px 10px", borderRadius: 7, border: "1px solid #fcd9a8", background: busyId === lead.id ? "#f3e8d8" : "#fdf4e7", color: "#b45309", fontSize: 11, fontWeight: 500, cursor: busyId === lead.id ? "wait" : "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                                   <polyline points="16 2 16 8 22 8" /><line x1="22" y1="2" x2="16" y2="8" />
                                   <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
@@ -897,7 +897,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 {busyId === lead.id ? "…" : "Demande à être rappelé"}
                               </button>
                               <button onClick={() => { setRdvFor(rdvFor === lead.id ? null : lead.id); setRdvDate(""); setRdvKind("r1"); }}
-                                style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
+                                style={{ padding: "5px 10px", borderRadius: 7, border: `1px solid ${rdvFor === lead.id ? "#3e7d5a" : "#cfe8d9"}`, background: rdvFor === lead.id ? "#3e7d5a" : "#e9f5ee", color: rdvFor === lead.id ? "#fff" : "#2f7a53", fontSize: 11, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", whiteSpace: "nowrap" }}>
                                 Prendre avec un RDV
                               </button>
                               <EnvelopeButton lead={lead} C={C} darkMode={darkMode} onOpen={openComments} />
@@ -908,16 +908,16 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                       </tr>
                       {rdvFor === lead.id && (
                         <tr>
-                          <td colSpan={canClaim ? 5 : 4} style={{ padding: "0 14px 12px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f2f4f7"}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fafbfc" }}>
+                          <td colSpan={canClaim ? 5 : 4} style={{ padding: "0 14px 12px", borderBottom: `1px solid ${darkMode ? "rgba(255,255,255,0.06)" : "#f7f5f2"}`, background: darkMode ? "rgba(255,255,255,0.02)" : "#fcfbfa" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingTop: 10 }}>
-                              <div style={{ display: "inline-flex", gap: 3, padding: 3, borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.05)" : "#eef1f5" }}>
+                              <div style={{ display: "inline-flex", gap: 3, padding: 3, borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.05)" : "#f4f2ef" }}>
                                 {["r1", "r2"].map((k) => (
                                   <button key={k} type="button" onClick={() => setRdvKind(k)}
                                     style={{ padding: "4px 11px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit",
-                                      fontSize: 11.5, fontWeight: 700, transition: "background 0.15s, color 0.15s",
+                                      fontSize: 11.5, fontWeight: 500, transition: "background 0.15s, color 0.15s",
                                       background: rdvKind === k ? (darkMode ? "rgba(255,255,255,0.12)" : "#fff") : "transparent",
                                       color: rdvKind === k ? C.text : C.muted,
-                                      boxShadow: rdvKind === k ? "0 1px 2px rgba(17,24,39,0.10)" : "none" }}>
+                                      boxShadow: rdvKind === k ? "0 1px 2px rgba(28,27,25,0.10)" : "none" }}>
                                     {k.toUpperCase()}
                                   </button>
                                 ))}
@@ -943,7 +943,7 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
                                 );
                               })()}
                               <button onClick={() => claimTrt(lead.id)} disabled={!rdvDate || rdvDate.length < 16 || busyId === lead.id}
-                                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: !rdvDate ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 700, cursor: !rdvDate ? "default" : "pointer", fontFamily: "inherit" }}>
+                                style={{ padding: "7px 14px", borderRadius: 8, border: "none", background: !rdvDate ? C.muted : "#3e7d5a", color: "#fff", fontSize: 12, fontWeight: 500, cursor: !rdvDate ? "default" : "pointer", fontFamily: "inherit" }}>
                                 {busyId === lead.id ? "…" : "Confirmer le RDV et récupérer"}
                               </button>
                             </div>

@@ -62,7 +62,7 @@ export default function SetterRescheduleDialog({ lead, kind = 'r1', dark = false
   }
 
   return createPortal(<div className={`sj-overlay stj-overlay ${dark ? 'sj-dark' : ''}`} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-    <section ref={ref} tabIndex={-1} className="sj-dialog stj-dialog stj-wide" role="dialog" aria-modal="true" aria-labelledby="stj-reschedule-title">
+    <section ref={ref} tabIndex={-1} className="sj-dialog sj-pure stj-dialog stj-wide" role="dialog" aria-modal="true" aria-labelledby="stj-reschedule-title">
       <header className="sj-head"><span className="sj-icon"><CalendarClock size={24}/></span><div><small>PARCOURS SETTER</small><h2 id="stj-reschedule-title">Reporter le {label}</h2><p>{lead.full_name}{current ? ` · ${label} actuel : ${currentLabel(current)}` : ''}</p></div><button className="sj-close" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20}/></button></header>
       <div className="sj-body">
         <div className="stj-calendar">

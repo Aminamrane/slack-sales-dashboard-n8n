@@ -10,7 +10,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { ArrowRight, CalendarCheck2, CalendarClock, CalendarPlus, Check, CircleX, Clock3, UserRoundCheck, UserRoundX } from 'lucide-react';
-import { ParisDateTimeInput } from './FrenchDateInput';
+import WhenPicker from './WhenPicker';
+import PickList from './PickList';
 import { RESULTS, useDialogFocus } from './QualificationDialog';
 import { ActionButton, Celebration, CountUp, PickCheck, ProgressSegments, Stamp } from './DailyQualificationMotion';
 import { rdvLabel } from '../../utils/dailyQualification';
@@ -45,28 +46,10 @@ const slide = {
 
 const who = (lead) => lead.company_name || lead.company || lead.full_name || `Lead ${lead.id}`;
 
+// Les choix d'une question : la liste épurée des fenêtres de qualification (lignes en cascade, réponse qui replie
+// les autres). `key` : une nouvelle question repart d'une liste ouverte.
 function Options({ items, value, onPick, disabled }) {
-  return (
-    <Motion.div className="sj-options" initial="hidden" animate="shown" variants={{ hidden: {}, shown: { transition: { staggerChildren: 0.05 } } }}>
-      {items.map(([key, title, desc, icon]) => {
-        const Icon = icon;
-        const on = value === key;
-        return (
-          <Motion.button key={key} type="button" disabled={disabled} aria-pressed={on} className={`dq-option${on ? ' is-selected' : ''}`} onClick={() => onPick(key)}
-            variants={{
-              hidden: { opacity: 0, y: 10 },
-              shown: { opacity: 1, y: 0, scale: 1, transition: { duration: 0.32, ease: EASE } },
-              picked: { opacity: 1, y: 0, scale: [1, 1.025, 1], transition: { duration: 0.3, ease: EASE } },
-            }}
-            animate={on ? 'picked' : 'shown'} whileHover={disabled ? undefined : { y: -2 }} whileTap={disabled ? undefined : { scale: 0.97 }}>
-            <Motion.span className="dq-option-icon" animate={{ scale: on ? 1.08 : 1 }} transition={{ type: 'spring', stiffness: 380, damping: 18 }}><Icon size={21} /></Motion.span>
-            <span><strong>{title}</strong><small>{desc}</small></span>
-            <PickCheck on={on} />
-          </Motion.button>
-        );
-      })}
-    </Motion.div>
-  );
+  return <PickList items={items} value={value} onPick={onPick} disabled={disabled} />;
 }
 
 // Question suivante qui se déplie sous la précédente. Le débord n'est masqué que pendant l'animation : ensuite, le
@@ -221,7 +204,7 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
 
   return createPortal(
     <div className={`sj-overlay ${dark ? 'sj-dark' : ''}`} onClick={(e) => { if (e.target === e.currentTarget) requestClose(); }}>
-      <section ref={ref} tabIndex={-1} className={`sj-dialog${index === 0 || index === total + 1 ? ' dq-welcome' : ''}`} role="dialog" aria-modal="true" aria-labelledby="dq-title" style={{ overflowX: 'hidden' }}>
+      <section ref={ref} tabIndex={-1} className={`sj-dialog${index === 0 || index === total + 1 ? ' dq-welcome' : ' sj-pure dq-deck'}`} role="dialog" aria-modal="true" aria-labelledby="dq-title" style={{ overflowX: 'hidden' }}>
         {current && (
           <header className="sj-head">
             <span className="sj-icon"><CalendarCheck2 size={24} /></span>
@@ -281,7 +264,7 @@ export default function DailyQualificationDeck({ items, onSave, onClose, dark = 
                     )}
                     {needsDate && (
                       <Reveal key={`date-${form.choice}-${form.next || form.when || ''}`}>
-                        <ParisDateTimeInput disabled={busy} value={form.date || ''}
+                        <WhenPicker disabled={busy} value={form.date || ''}
                           label={form.next === 'r2_set' ? 'Date et heure du R2' : `Nouvelle date du ${stageName}`}
                           onChange={(date) => { setForm((f) => ({ ...f, date })); setError(''); }} />
                       </Reveal>

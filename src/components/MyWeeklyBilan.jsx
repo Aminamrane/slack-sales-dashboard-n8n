@@ -22,7 +22,7 @@ import ErrorBoundary from "./ErrorBoundary.jsx";
 
 // Palette claire éditoriale : l'onglet conserve l'aspect « dossier » du bilan de
 // coaching même quand la tracking sheet est en mode sombre, comme aujourd'hui.
-const C = { text: "#14181C", muted: "#8A9099", border: "#E1DED5" };
+const C = { text: "#1c1b19", muted: "#9d9890", border: "#ece9e4" };
 
 const RDV_TONE = {
   R1: { label: "R1", color: "#3b82f6", bg: "#eff6ff" },
@@ -41,7 +41,7 @@ function Loading({ label = "Chargement…" }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 14, padding: "60px 24px" }}>
       <span className="mwb-spin" />
-      <span style={{ fontFamily: "'IBM Plex Mono', ui-monospace, monospace", fontSize: 11.5, letterSpacing: "0.12em", textTransform: "uppercase", color: C.muted }}>{label}</span>
+      <span style={{ fontSize: 13, color: C.muted }}>{label}</span>
     </div>
   );
 }
@@ -152,8 +152,8 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
 
   const rowStyle = (active) => ({
     display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, cursor: "pointer",
-    background: active ? "#eef7f9" : "transparent",
-    border: `1px solid ${active ? "#0891b2" : "transparent"}`, transition: "background 0.12s",
+    background: active ? "#f4f2ee" : "transparent",
+    border: "1px solid transparent", transition: "background 0.15s ease",
   });
 
   return (
@@ -161,14 +161,15 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
       <style>{`
         @keyframes mwbFade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         @keyframes mwbSpin { to { transform: rotate(360deg); } }
-        .mwb-spin { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid ${C.border}; border-top-color: #E8A317; animation: mwbSpin 0.7s linear infinite; }
-        .mwb-hover:hover { background: #f6f7f9 !important; }
-        .owner-mwbtabs { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 22px; }
-        .owner-mwbtabs .rt { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .13em; text-transform: uppercase; font-weight: 600; color: ${C.muted}; background: transparent; border: 1.5px solid ${C.border}; border-radius: 999px; padding: 9px 16px; cursor: pointer; transition: color .14s, background .14s, border-color .14s; line-height: 1; }
-        .owner-mwbtabs .rt:hover { color: ${C.text}; border-color: ${C.muted}; }
-        .owner-mwbtabs .rt.on { color: #14181C; background: #E8A317; border-color: #14181C; }
-        .owner-mwbtabs .rt .n { margin-left: 7px; opacity: .7; font-weight: 600; }
-        .owner-mwbtabs .rt.on .n { opacity: .85; }
+        .mwb-spin { width: 30px; height: 30px; border-radius: 50%; border: 2.5px solid ${C.border}; border-top-color: #2b2927; animation: mwbSpin 0.7s linear infinite; }
+        .mwb-hover:hover { background: #f7f5f2 !important; }
+        /* Style Owner (11/11/2026) : bascule à pouce blanc, comme les onglets de la fiche du lead. */
+        .owner-mwbtabs { display: inline-flex; gap: 2px; padding: 3px; margin: 0 0 22px; border-radius: 12px; background: #f4f2ee; }
+        .owner-mwbtabs .rt { font: 500 13px Inter, system-ui, sans-serif; color: ${C.muted}; background: transparent; border: 0; border-radius: 9px; padding: 7px 14px; cursor: pointer; transition: color .15s, background .18s, box-shadow .18s; line-height: 1.2; }
+        .owner-mwbtabs .rt:hover { color: ${C.text}; }
+        .owner-mwbtabs .rt.on { color: ${C.text}; background: #fff; box-shadow: 0 1px 2px rgba(28,27,25,.08); }
+        .owner-mwbtabs .rt .n { margin-left: 7px; padding: 1px 6px; border-radius: 6px; background: #f1eee9; color: #4a4540; font-size: 11px; font-variant-numeric: tabular-nums; }
+        .owner-mwbtabs .rt.on .n { background: #f4f2ee; }
       `}</style>
 
       <div className="owner-mwbtabs">
@@ -208,12 +209,12 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
                   const active = String(sc.id) === String(selId);
                   return (
                     <div key={sc.id} className={active ? "" : "mwb-hover"} onClick={() => setSelId(sc.id)} style={rowStyle(active)}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: tone.color, background: tone.bg, borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>{tone.label}</span>
+                      <span style={{ fontSize: 10, fontWeight: 500, color: tone.color, background: tone.bg, borderRadius: 5, padding: "1px 6px", flexShrink: 0 }}>{tone.label}</span>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(sc.prospect || "Prospect").split("(")[0].trim()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: C.text, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{(sc.prospect || "Prospect").split("(")[0].trim()}</div>
                         <div style={{ fontSize: 11, color: C.muted }}>{fmtDate(sc.rdv_date)}</div>
                       </div>
-                      <span style={{ fontSize: 12.5, fontWeight: 800, color: scColor(sc.score), flexShrink: 0 }}>{sc.score}</span>
+                      <span style={{ fontSize: 12.5, fontWeight: 500, color: scColor(sc.score), flexShrink: 0 }}>{sc.score}</span>
                     </div>
                   );
                 })}
@@ -243,7 +244,7 @@ export default function MyWeeklyBilan({ name, avatarUrl, team }) {
                   <span style={{ fontSize: 14 }}>🎥</span>
                   <span style={{ fontSize: 13, color: C.text, flex: 1, minWidth: 0, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{r.name}</span>
                   <span style={{ fontSize: 11.5, color: C.muted }}>{fmtDate(r.created)}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 700, color: "#0891b2" }}>▶ Lire</span>
+                  <span style={{ fontSize: 11.5, fontWeight: 500, color: "#0891b2" }}>▶ Lire</span>
                 </div>
               ))}
             </div>

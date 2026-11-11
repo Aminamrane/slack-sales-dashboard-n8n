@@ -1,10 +1,10 @@
 .ti-rollout {
   margin: 8px 12px;
   padding: 12px 16px;
-  border: 1px solid #dfe6ec;
+  border: 1px solid #ebe7e0;
   border-radius: 12px;
   background: #fff;
-  color: #283441;
+  color: #383531;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -23,7 +23,7 @@
   flex: 1;
 }
 .ti-rollout span {
-  color: #60717e;
+  color: #767068;
 }
 .ti-rollout button,
 .ti-dialog-head button {
@@ -32,11 +32,11 @@
   justify-content: center;
   gap: 8px;
   padding: 8px 12px;
-  border: 1px solid #dfe6ec;
-  background: #f8fafb;
+  border: 1px solid #ebe7e0;
+  background: #fbfaf8;
   border-radius: 8px;
   font: inherit;
-  color: #283441;
+  color: #383531;
   cursor: pointer;
 }
 .ti-rollout button:disabled {
@@ -46,10 +46,10 @@
 .ti-confirm {
   flex-basis: 100%;
   padding: 16px;
-  border-top: 1px solid #e2e8eb;
+  border-top: 1px solid #ebe7e2;
 }
 .ti-confirm p {
-  color: #647480;
+  color: #79736b;
 }
 .ti-confirm label {
   display: flex;
@@ -59,7 +59,7 @@
 }
 .ti-confirm input {
   padding: 10px;
-  border: 1px solid #bac8d1;
+  border: 1px solid #cbc7c0;
   border-radius: 8px;
   max-width: 330px;
   font: inherit;
@@ -73,11 +73,11 @@
   gap: 10px;
   width: 100%;
   text-align: left;
-  border: 1px solid #dce6e4;
-  background: #f4f8f7;
+  border: 1px solid #e7e2db;
+  background: #f8f6f4;
   border-radius: 10px;
   padding: 12px;
-  color: #254b44;
+  color: #3b3935;
   cursor: pointer;
   font:
     600 12px Inter,
@@ -90,14 +90,14 @@
   display: block;
   font-size: 11px;
   font-weight: 400;
-  color: #60736f;
+  color: #706b63;
   margin-top: 4px;
 }
 .ti-overlay {
   position: fixed;
   inset: 0;
   z-index: 12000;
-  background: #14233066;
+  background: #24222066;
   backdrop-filter: blur(5px);
   padding: 22px;
   display: flex;
@@ -109,9 +109,9 @@
   width: min(1240px, 100%);
   max-height: calc(100dvh - 44px);
   overflow: auto;
-  background: #f5f7f8;
+  background: #f8f7f5;
   border-radius: 22px;
-  box-shadow: 0 24px 80px #15212a33;
+  box-shadow: 0 24px 80px #21201e33;
   animation: tiEnter 0.24s cubic-bezier(0.2, 0.75, 0.3, 1);
   outline: none;
 }
@@ -125,11 +125,11 @@
   gap: 14px;
   padding: 14px 22px;
   background: #fffffff5;
-  border-bottom: 1px solid #e2e8eb;
+  border-bottom: 1px solid #ebe7e2;
   font:
     13px Inter,
     sans-serif;
-  color: #283441;
+  color: #383531;
 }
 .ti-dialog-head strong {
   overflow: hidden;
@@ -159,12 +159,12 @@
     sans-serif;
 }
 .dark-mode .ti-rollout {
-  background: #242b35;
-  border-color: #39434f;
-  color: #e5ebf1;
+  background: #2c2c2c;
+  border-color: #444444;
+  color: #ebebeb;
 }
 .dark-mode .ti-rollout span {
-  color: #b4c1cb;
+  color: #c0c0c0;
 }
 @keyframes tiEnter {
   from {
@@ -220,34 +220,34 @@
 }
 
 /* A quiet, continuous route from the existing sheet to signature. */
-.ti-journey { display:flex; gap:0; list-style:none; padding:20px 28px; margin:0; color:#667584; font:500 12px/1.4 Inter,sans-serif; }
+.ti-journey { display:flex; gap:0; list-style:none; padding:20px 28px; margin:0; color:#7c766e; font:500 12px/1.4 Inter,sans-serif; }
 .ti-journey li { display:flex; align-items:center; gap:9px; flex:1; position:relative; }
-.ti-journey li:not(:last-child)::after { content:""; height:1px; background:#dce3e9; flex:1; margin:0 16px; }
-.ti-step-icon { display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; border-radius:11px; border:1px solid #dce3e9; background:#fff; transition:background .25s,border-color .25s; }
-.ti-journey .is-current { color:#223347; font-weight:700; }
-.ti-journey .is-current .ti-step-icon { background:#223347; color:#fff; border-color:#223347; box-shadow:0 3px 8px #22334718; }
-.ti-journey .is-complete .ti-step-icon { color:#33735d; background:#edf5f1; border-color:#d4e7de; }
+.ti-journey li:not(:last-child)::after { content:""; height:1px; background:#e8e4dd; flex:1; margin:0 16px; }
+.ti-step-icon { display:grid; place-items:center; width:34px; height:34px; flex-shrink:0; border-radius:11px; border:1px solid #e8e4dd; background:#fff; transition:background .25s,border-color .25s; }
+.ti-journey .is-current { color:#383531; font-weight:500; }
+.ti-journey .is-current .ti-step-icon { background:#383531; color:#fff; border-color:#383531; box-shadow:0 3px 8px #38353118; }
+.ti-journey .is-complete .ti-step-icon { color:#58544e; background:#edf5f1; border-color:#e4dfd7; }
 .ti-journey.is-compact { padding:4px 0 22px; font-size:11px; }
 .ti-journey.is-compact li { flex-direction:column; gap:6px; }
 .ti-journey.is-compact li::after { position:absolute; top:17px; left:calc(50% + 23px); width:calc(100% - 46px); margin:0; }
-.ti-contract-review { max-width:640px; padding:28px 28px 40px; margin:auto; text-align:center; color:#243346; font-family:Inter,sans-serif; animation:tiEnter .28s cubic-bezier(.2,.75,.3,1); }
-.ti-review-icon { display:grid; place-items:center; width:72px; height:72px; background:#eaf2ef; color:#346856; border-radius:22px; margin:0 auto 22px; }
-.ti-review-eyebrow { font-size:10px; letter-spacing:.12em; font-weight:700; color:#547666; }
+.ti-contract-review { max-width:640px; padding:28px 28px 40px; margin:auto; text-align:center; color:#383632; font-family:Inter,sans-serif; animation:tiEnter .28s cubic-bezier(.2,.75,.3,1); }
+.ti-review-icon { display:grid; place-items:center; width:72px; height:72px; background:#f1efeb; color:#534f49; border-radius:22px; margin:0 auto 22px; }
+.ti-review-eyebrow { font-size:10px; letter-spacing:.12em; font-weight:500; color:#6b665f; }
 .ti-contract-review h1 { font-size:30px; letter-spacing:-.04em; margin:10px 0; outline:none; }
-.ti-contract-review > p { font-size:14px; line-height:1.6; color:#627184; }
-.ti-contract-review dl { text-align:left; background:white; border:1px solid #dee5eb; border-radius:16px; margin:28px 0 18px; padding:8px 20px; }
+.ti-contract-review > p { font-size:14px; line-height:1.6; color:#7a746c; }
+.ti-contract-review dl { text-align:left; background:white; border:1px solid #eae6df; border-radius:16px; margin:28px 0 18px; padding:8px 20px; }
 .ti-contract-review dl > div { display:flex; justify-content:space-between; gap:20px; padding:15px 0; font-size:13px; line-height:1.5; }
-.ti-contract-review dl > div + div { border-top:1px solid #edf0f3; }
-.ti-contract-review dt { color:#677486; }
-.ti-contract-review dd { margin:0; font-weight:600; text-align:right; overflow-wrap:anywhere; }
-.ti-next-appointment { display:flex; align-items:center; text-align:left; gap:14px; background:#eef2f6; border-radius:13px; padding:17px; color:#647183; font-size:12px; line-height:1.6; }
-.ti-next-appointment svg { flex-shrink:0; color:#506276; }
-.ti-next-appointment strong { display:block; font-size:13px; color:#304255; }
+.ti-contract-review dl > div + div { border-top:1px solid #f3f1ed; }
+.ti-contract-review dt { color:#7e786f; }
+.ti-contract-review dd { margin:0; font-weight:500; text-align:right; overflow-wrap:anywhere; }
+.ti-next-appointment { display:flex; align-items:center; text-align:left; gap:14px; background:#f5f3ef; border-radius:13px; padding:17px; color:#7a756d; font-size:12px; line-height:1.6; }
+.ti-next-appointment svg { flex-shrink:0; color:#69645d; }
+.ti-next-appointment strong { display:block; font-size:13px; color:#46433f; }
 .ti-review-actions { display:flex; justify-content:space-between; gap:12px; margin-top:28px; }
-.ti-review-actions button { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:10px; padding:13px 17px; font:600 13px Inter,sans-serif; cursor:pointer; border:1px solid #d7e1e6; background:white; color:#324254; transition:transform .18s,box-shadow .18s; }
-.ti-review-actions .ip-primary { background:#243b39; color:white; border-color:#243b39; }
-.ti-review-actions button:hover { transform:translateY(-1px); box-shadow:0 4px 12px #1c2b3612; }
-.ti-review-actions button:focus-visible,.ti-dialog button:focus-visible { outline:2px solid #6274a1; outline-offset:3px; }
+.ti-review-actions button { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:10px; padding:13px 17px; font:500 13px Inter,sans-serif; cursor:pointer; border:1px solid #e5e0d8; background:white; color:#47443f; transition:transform .18s,box-shadow .18s; }
+.ti-review-actions .ip-primary { background:#32302d; color:white; border-color:#32302d; }
+.ti-review-actions button:hover { transform:translateY(-1px); box-shadow:0 4px 12px #2b292712; }
+.ti-review-actions button:focus-visible,.ti-dialog button:focus-visible { outline:2px solid #89837a; outline-offset:3px; }
 @media(max-width:720px) { .ti-journey { padding:16px; font-size:11px; } .ti-journey li { gap:6px; } .ti-journey li:not(:last-child)::after { margin:0 8px; } .ti-contract-review { padding:24px 18px; } .ti-review-actions { flex-direction:column-reverse; } }
 @media(prefers-reduced-motion:reduce) { .ti-contract-review { animation:none; } .ti-step-icon,.ti-review-actions button { transition:none; } .ti-review-actions button:hover { transform:none; } }
 
@@ -261,18 +261,18 @@
 
 .ti-preparation { max-width: 780px; }
 .ti-band-field { border: 0; padding: 0; margin: 22px 0; text-align: left; }
-.ti-band-field legend, .ti-contact-fields label { color: #293447; font-size: 14px; font-weight: 600; }
+.ti-band-field legend, .ti-contact-fields label { color: #3b3935; font-size: 14px; font-weight:500; }
 .ti-band-options { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 12px; }
-.ti-band-options button { border: 1px solid #dfe4ec; background: #fff; color: #475569; border-radius: 10px; padding: 11px 6px; font: inherit; font-size: 14px; cursor: pointer; transition: background .18s ease, border-color .18s ease; }
-.ti-band-options button[aria-pressed="true"] { color: #fff; background: #243449; border-color: #243449; }
-.ti-band-options button:focus-visible, .ti-contact-fields input:focus-visible { outline: 3px solid #a9bfd8; outline-offset: 2px; }
+.ti-band-options button { border: 1px solid #ebe7e0; background: #fff; color: #5d5953; border-radius: 10px; padding: 11px 6px; font: inherit; font-size: 14px; cursor: pointer; transition: background .18s ease, border-color .18s ease; }
+.ti-band-options button[aria-pressed="true"] { color: #fff; background: #3a3733; border-color: #3a3733; }
+.ti-band-options button:focus-visible, .ti-contact-fields input:focus-visible { outline: 3px solid #c7c2ba; outline-offset: 2px; }
 .ti-contact-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; text-align: left; }
 .ti-contact-fields label { display: flex; flex-direction: column; gap: 8px; }
 .ti-contact-fields small { font-weight: 400; display: contents; }
-.ti-contact-fields input { width: 100%; box-sizing: border-box; border: 1px solid #dfe4ec; border-radius: 10px; padding: 12px; font: inherit; font-weight: 400; background: #fff; color: #243449; }
+.ti-contact-fields input { width: 100%; box-sizing: border-box; border: 1px solid #ebe7e0; border-radius: 10px; padding: 12px; font: inherit; font-weight: 400; background: #fff; color: #3a3733; }
 .ti-preparation .ti-signer-name { text-align: left; font-size: 13px; margin: 12px 0; }
 .ti-preparation .ti-setup-error { background: #fff3f1; color: #9b352c; padding: 12px 16px; border-radius: 10px; font-size: 14px; text-align: left; }
-.ti-back-setup { display: flex; align-items: center; gap: 8px; margin: 0 24px; border: 0; background: transparent; color: #475569; font: inherit; font-size: 13px; cursor: pointer; padding: 10px 0; }
+.ti-back-setup { display: flex; align-items: center; gap: 8px; margin: 0 24px; border: 0; background: transparent; color: #5d5953; font: inherit; font-size: 13px; cursor: pointer; padding: 10px 0; }
 @media (max-width: 600px) { .ti-contact-fields { grid-template-columns: 1fr; } .ti-band-options { grid-template-columns: repeat(3, 1fr); } .ti-journey { gap: 8px; } .ti-journey li { font-size: 11px; } }
 
 @media (max-width: 600px) {
@@ -329,7 +329,7 @@
   .ti-contract-review h1 { font-size:22px; }
   .ip-embedded .ip-page-head { margin-bottom:12px; }
 }
-.ti-preparation .ti-review-actions { position:sticky; bottom:0; padding:12px 0 4px; z-index:2; background:#f5f7f8; box-shadow:0 -10px 14px #f5f7f8; }
+.ti-preparation .ti-review-actions { position:sticky; bottom:0; padding:12px 0 4px; z-index:2; background:#f8f7f5; box-shadow:0 -10px 14px #f8f7f5; }
 @media print {
   body:has(.ti-saved-view) #root { display:none; }
   .ti-overlay:has(.ti-saved-view) { position:static; display:block; background:none; padding:0; backdrop-filter:none; }
@@ -339,14 +339,14 @@
 }
 
 .ti-nda-edit { padding: 12px 24px; display: flex; justify-content: flex-end; }
-.ti-nda-edit button, .ti-recovery button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #cedbd7; background: #fff; color: #254b44; border-radius: 9px; padding: 10px 14px; font: inherit; font-size: 13px; cursor: pointer; }
+.ti-nda-edit button, .ti-recovery button { display: inline-flex; align-items: center; gap: 8px; border: 1px solid #d9d5d0; background: #fff; color: #3b3935; border-radius: 9px; padding: 10px 14px; font: inherit; font-size: 13px; cursor: pointer; }
 .ti-nda-edit button:disabled { opacity: .5; cursor: default; }
-.ti-recovery { font: 14px/1.5 Inter, sans-serif; margin: 20px 24px; padding: 22px; background: #f4f8f6; border: 1px solid #cedbd7; border-radius: 14px; color: #20312c; }
+.ti-recovery { font: 14px/1.5 Inter, sans-serif; margin: 20px 24px; padding: 22px; background: #f8f6f4; border: 1px solid #d9d5d0; border-radius: 14px; color: #2b2926; }
 .ti-recovery h2 { margin: 0 0 10px; font-size: 20px; }
 .ti-recovery h3 { font-size: 15px; }
 .ti-recovery-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .ti-recovery-choices section { min-width: 0; padding: 16px; border-radius: 10px; background: #fff; overflow-wrap: anywhere; }
 .ti-recovery ul { padding-left: 18px; font-size: 13px; }
 .ti-recovery li { margin-bottom: 10px; }
-.ti-recovery small { display: block; margin-top: 4px; color: #52665e; }
+.ti-recovery small { display: block; margin-top: 4px; color: #625d56; }
 @media (max-width: 600px) { .ti-recovery-choices { grid-template-columns: 1fr; } .ti-recovery { font: 14px/1.5 Inter, sans-serif; margin: 12px; padding: 14px; } .ti-nda-edit { padding: 12px; } }

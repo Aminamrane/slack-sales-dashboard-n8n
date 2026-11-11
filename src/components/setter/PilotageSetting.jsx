@@ -317,7 +317,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   const bad = darkMode ? '#f87171' : '#b42318';
   const cell = { padding: '10px 8px', fontSize: 13.5, color: C.text, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap', textAlign: 'center' };
   const head = {
-    ...cell, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em',
+    ...cell, fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em',
     padding: '10px 12px', whiteSpace: 'normal', verticalAlign: 'bottom', lineHeight: 1.3,
   };
   const sticky = { position: 'sticky', left: 0, zIndex: 1, background: 'inherit' };
@@ -337,7 +337,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
   };
   const pill = (active) => ({
     padding: '7px 14px', borderRadius: 9, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-    fontSize: 13, fontWeight: 600, transition: 'background 0.15s, color 0.15s',
+    fontSize: 13, fontWeight: 500, transition: 'background 0.15s, color 0.15s',
     background: active ? C.bg : 'transparent', color: active ? C.text : C.secondary,
     boxShadow: active ? (darkMode ? 'none' : '0 1px 2px rgba(16,24,40,0.08)') : 'none',
   });
@@ -359,17 +359,17 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     for (const col of columns) {
       if (col === 'calls') {
         out.push(linked
-          ? <td key={col} style={{ ...cell, fontWeight: 600 }}>{fmtInt(m.calls)}</td>
+          ? <td key={col} style={{ ...cell, fontWeight: 500 }}>{fmtInt(m.calls)}</td>
           : <td key={col} style={{ ...cell, color: C.muted }} title={ALLO_LABELS[s.allo] || ALLO_LABELS.error}>–</td>);
       } else if (col === 'answered') {
         out.push(linked
           ? <td key={col} style={cell}>{fmtInt(m.answered)}</td>
           : <td key={col} style={{ ...cell, color: C.muted }} title={ALLO_LABELS[s.allo] || ALLO_LABELS.error}>–</td>);
       } else if (col === 'r1') {
-        out.push(<td key={col} style={{ ...cell, fontWeight: 600, color: m.r1 ? '#3b82f6' : C.muted }}>{fmtInt(m.r1)}</td>);
+        out.push(<td key={col} style={{ ...cell, fontWeight: 500, color: m.r1 ? '#3b82f6' : C.muted }}>{fmtInt(m.r1)}</td>);
       } else if (col === 'held') {
         out.push(
-          <td key={col} style={{ ...cell, fontWeight: 600, color: m.held ? ok : C.muted }}>
+          <td key={col} style={{ ...cell, fontWeight: 500, color: m.held ? ok : C.muted }}>
             {fmtInt(m.held)}
             {m.to_qualify > 0 && <div style={sub}>{fmtInt(m.to_qualify)} à qualifier</div>}
           </td>,
@@ -377,10 +377,10 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
       } else if (col === 'no_show') {
         out.push(
           <td key={col} title={m.to_qualify > 0 ? `${fmtInt(m.to_qualify)} RDV passés restent à qualifier` : undefined}
-            style={{ ...cell, fontWeight: 600, color: m.no_show ? bad : C.muted }}>{fmtInt(m.no_show)}</td>,
+            style={{ ...cell, fontWeight: 500, color: m.no_show ? bad : C.muted }}>{fmtInt(m.no_show)}</td>,
         );
       } else if (col === 'r2') {
-        out.push(<td key={col} style={{ ...cell, fontWeight: 600, color: m.r2 ? '#fb923c' : C.muted }}>{fmtInt(m.r2)}</td>);
+        out.push(<td key={col} style={{ ...cell, fontWeight: 500, color: m.r2 ? '#fb923c' : C.muted }}>{fmtInt(m.r2)}</td>);
       } else if (col === 'duration') {
         out.push(<td key={col} style={{ ...cell, color: linked ? C.text : C.muted }}>{linked ? fmtTalk(m.duration) : '–'}</td>);
       } else if (col === 'average') {
@@ -433,7 +433,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
                 title={on ? 'Cliquer pour retirer la note' : `Discours : ${n} sur 5`}
                 onClick={() => { editField(s.id, day.day, 'discours', on ? null : n); saveRow(s.id, day.day, 'discours'); }}
                 style={{
-                  width: 26, height: 26, borderRadius: 999, padding: 0, fontSize: 12, fontWeight: 700, fontFamily: 'inherit',
+                  width: 26, height: 26, borderRadius: 999, padding: 0, fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
                   cursor: locked ? 'default' : 'pointer', borderWidth: 1, borderStyle: 'solid',
                   borderColor: on ? C.accent : fieldBorder, backgroundColor: on ? C.accent : (darkMode ? 'rgba(0,0,0,0.22)' : '#ffffff'),
                   color: on ? '#fff' : C.secondary, transition: 'background-color 0.12s, border-color 0.12s',
@@ -482,7 +482,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     const tip = reviewTooltip(review) || undefined;
     const roCell = { ...manualCell, verticalAlign: 'middle' };
     return [
-      <td key="discours" style={{ ...roCell, fontWeight: 600, color: review?.discours ? C.text : C.muted }} title={tip}>
+      <td key="discours" style={{ ...roCell, fontWeight: 500, color: review?.discours ? C.text : C.muted }} title={tip}>
         {review?.discours ?? '–'}
       </td>,
       <td key="blocage" style={{ ...roCell, color: review?.blocage ? C.text : C.muted, maxWidth: 320, whiteSpace: 'pre-wrap' }} title={tip}>
@@ -498,7 +498,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     const top = topBlocage(s.days);
     const noted = notedDays(s.days);
     return [
-      <td key="discours" style={{ ...cell, textAlign: 'left', fontWeight: 600, color: s.totals?.discours_avg != null ? C.text : C.muted }}
+      <td key="discours" style={{ ...cell, textAlign: 'left', fontWeight: 500, color: s.totals?.discours_avg != null ? C.text : C.muted }}
         title={s.totals?.discours_avg != null ? 'Moyenne des notes de la période' : undefined}>
         {fmtScore(s.totals?.discours_avg)}
         {s.totals?.discours_avg != null && <div style={sub}>moyenne</div>}
@@ -517,20 +517,20 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
     ? <img src={s.avatar_url} alt="" loading="lazy" referrerPolicy="no-referrer"
         style={{ width: 30, height: 30, borderRadius: 999, objectFit: 'cover', flexShrink: 0, border: `1px solid ${C.border}` }} />
     : <span style={{ width: 30, height: 30, borderRadius: 999, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        background: darkMode ? '#2a2b36' : '#e8ebf5', color: C.accent, fontSize: 11.5, fontWeight: 700 }}>
+        background: darkMode ? '#2e2e2e' : '#f1eee9', color: C.accent, fontSize: 11.5, fontWeight: 500 }}>
         {String(s.name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('')}
       </span>);
 
   const nameCell = (s, { chevron, expanded } = {}) => (
-    <td style={{ ...cell, ...sticky, textAlign: 'left', fontWeight: 600 }}>
+    <td style={{ ...cell, ...sticky, textAlign: 'left', fontWeight: 500 }}>
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
         {chevron && (expanded ? <ChevronDown size={15} color={C.muted} /> : <ChevronRight size={15} color={C.muted} />)}
         {avatar(s)}
         <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-start' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             {s.name}
-            {s.role === 'setter_manager' && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>manager</span>}
-            {s.active === false && <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>inactif</span>}
+            {s.role === 'setter_manager' && <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>manager</span>}
+            {s.active === false && <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>inactif</span>}
           </span>
           {s.allo !== 'linked' && <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>{ALLO_LABELS[s.allo] || ALLO_LABELS.error}</span>}
         </span>
@@ -609,7 +609,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         .pilotage-tip { position: relative; }
         .pilotage-tip::after {
           content: attr(data-tip); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%);
-          background: ${darkMode ? '#eef0f6' : '#1e2330'}; color: ${darkMode ? '#1e2330' : '#fff'}; font-size: 11.5px; font-weight: 600;
+          background: ${darkMode ? '#ededed' : '#2b2927'}; color: ${darkMode ? '#2b2927' : '#fff'}; font-size: 11.5px; font-weight: 500;
           text-transform: none; letter-spacing: 0; white-space: nowrap; padding: 5px 9px; border-radius: 7px;
           opacity: 0; pointer-events: none; transition: opacity 0.12s; z-index: 5; box-shadow: 0 4px 14px rgba(0,0,0,0.16);
         }
@@ -625,9 +625,9 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
                 background: `${k.tone}1a`, color: k.tone }}>
                 <k.icon size={17} strokeWidth={2} />
               </span>
-              <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</span>
+              <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{k.label}</span>
             </div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: k.color || C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', opacity: loading ? 0.45 : 1, transition: 'opacity 0.2s' }}>
+            <div style={{ fontSize: 26, fontWeight: 500, color: k.color || C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums', opacity: loading ? 0.45 : 1, transition: 'opacity 0.2s' }}>
               {fresh ? k.value : '–'}
             </div>
             {fresh && k.note && <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{k.note}</div>}
@@ -676,24 +676,24 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
         <button type="button" onClick={() => setRefresh((n) => n + 1)} disabled={loading || Boolean(periodError)} title="Actualiser" style={{
           display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 12px', borderRadius: 10,
           border: `1px solid ${C.border}`, background: C.bg, color: C.secondary, cursor: loading ? 'default' : 'pointer',
-          fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+          fontFamily: 'inherit', fontSize: 13, fontWeight: 500,
         }}>
           <RefreshCw size={14} style={{ animation: loading ? 'prospSpin 1s linear infinite' : 'none' }} />
           Actualiser
         </button>
-        {!dayMode && !periodError && <span style={{ fontSize: 12.5, color: C.muted, fontWeight: 600 }}>{fmtPeriod(start, end)}</span>}
+        {!dayMode && !periodError && <span style={{ fontSize: 12.5, color: C.muted, fontWeight: 500 }}>{fmtPeriod(start, end)}</span>}
       </div>
 
       {(periodError || pendingKeys.length > 0) && <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', marginTop: -6 }}>
-        {periodError && <span role="alert" style={{ fontSize: 13, color: bad, fontWeight: 600 }}>{periodError}</span>}
+        {periodError && <span role="alert" style={{ fontSize: 13, color: bad, fontWeight: 500 }}>{periodError}</span>}
         {pendingKeys.length > 0 && (
-          <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: bad, fontWeight: 600, flexWrap: 'wrap' }}>
+          <span role="status" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12.5, color: bad, fontWeight: 500, flexWrap: 'wrap' }}>
             <CircleAlert size={14} />
             {pendingKeys.length > 1 ? `${pendingKeys.length} saisies non enregistrées` : '1 saisie non enregistrée'} : le texte est conservé, cliquez sur l'icône rouge pour réessayer.
             {pendingDays.map((day) => (
               <button key={day} type="button" onClick={() => goToDay(day)} style={{
                 border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', color: C.accent,
-                fontFamily: 'inherit', fontSize: 12.5, fontWeight: 600, textDecoration: 'underline',
+                fontFamily: 'inherit', fontSize: 12.5, fontWeight: 500, textDecoration: 'underline',
               }}>Ouvrir le {fmtDayShort(day)}</button>
             ))}
           </span>
@@ -728,7 +728,7 @@ export default function PilotageSetting({ C, darkMode, onToast }) {
                           <span className="pilotage-tip" data-tip={COLUMN_LABELS[c]}
                             style={{ display: 'inline-flex', alignItems: 'flex-start', justifyContent: 'center', color: C.secondary, cursor: 'help', height: 22 }}>
                             <Icon size={ICON_SIZES[c] || 18} strokeWidth={1.9} />
-                            {c === 'r2' && <span style={{ fontSize: 10, fontWeight: 700, marginLeft: 1, lineHeight: 1 }}>2</span>}
+                            {c === 'r2' && <span style={{ fontSize: 10, fontWeight: 500, marginLeft: 1, lineHeight: 1 }}>2</span>}
                           </span>
                         ) : (
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>

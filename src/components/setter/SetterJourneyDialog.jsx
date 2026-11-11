@@ -4,6 +4,7 @@ import { ArrowLeft, ArrowRight, CalendarCheck2, CalendarDays, Check, ChevronLeft
 import apiClient from '../../services/apiClient';
 import { useDialogFocus } from '../salesJourney/QualificationDialog';
 import { ParisDateTimeInput } from '../salesJourney/FrenchDateInput';
+import PickList from '../salesJourney/PickList';
 import { availableSelection, bookingSalesChoices, setterAction, singleBookingAction, withDuplicateConfirmation } from '../../utils/setterJourney';
 import './setterJourney.css';
 
@@ -110,10 +111,10 @@ export default function SetterJourneyDialog({ lead, teamSales = [], onClose, onS
     finally { submitting.current = false; setBusy(false); }
   }
   return createPortal(<div className={`sj-overlay stj-overlay ${dark ? 'sj-dark' : ''}`} onClick={e => { if (e.target === e.currentTarget && !busy) onClose(); }}>
-    <section ref={ref} tabIndex={-1} className={`sj-dialog stj-dialog ${booking ? 'stj-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="stj-title">
+    <section ref={ref} tabIndex={-1} className={`sj-dialog sj-pure stj-dialog ${booking ? 'stj-wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby="stj-title">
       <header className="sj-head"><span className="sj-icon">{browseOnly ? <UsersRound size={24}/> : <Phone size={24}/>}</span><div><small>{browseOnly ? 'AGENDAS COMMERCIAUX' : onBook ? 'PROSPECTION' : 'PARCOURS SETTER'}</small><h2 id="stj-title">{browseOnly ? 'Disponibilités des sales' : onBook ? 'Prendre le rendez-vous' : 'Qualifier l’appel'}</h2><p>{browseOnly ? 'Consultez les créneaux à proposer pendant votre appel.' : onBook ? prospect?.name : lead?.full_name}</p></div><button className="sj-close" onClick={onClose} disabled={busy} aria-label="Fermer"><X size={20}/></button></header>
       <div className="sj-body">
-        {!outcome && <><h3 className="stj-question">Quel est le résultat de l’appel ?</h3><div className="sj-options stj-outcomes">{outcomes.map(([value, title, desc, Icon]) => <button key={value} onClick={() => selectOutcome(value)}><Icon size={23}/><span><strong>{title}</strong><small>{desc}</small></span><ChevronRight size={17}/></button>)}</div></>}
+        {!outcome && <><h3 className="stj-question">Quel est le résultat de l’appel ?</h3><PickList items={outcomes} value={outcome} fold={false} onPick={selectOutcome}/></>}
         {outcome && <>
           {browseOnly ? <div className="sj-attendance" aria-label="Type de rendez-vous">{['r1', 'r2'].map(k => <button key={k} disabled={busy} aria-pressed={outcome === k} onClick={() => selectOutcome(k)}>{k.toUpperCase()} · {k === 'r1' ? 'Premier rendez-vous' : 'Audit'}</button>)}</div> : <div className="stj-step">{!onBook && <button disabled={busy} onClick={() => selectOutcome('')}><ArrowLeft size={16}/> Résultat de l’appel</button>}<strong>{outcomes.find(o => o[0] === outcome)?.[1]}</strong></div>}
           {booking && !single && !browseOnly && !lockSales && (autoR2 === false || error || bookingMode === 'manual') && <div className="sj-attendance stj-booking-mode" aria-label="Mode de réservation"><button disabled={busy} aria-pressed={bookingMode === 'available'} onClick={() => {setBookingMode('available');setError('');}}><CalendarDays size={18}/> Créneaux disponibles</button><button disabled={busy} aria-pressed={bookingMode === 'manual'} onClick={() => {setBookingMode('manual');setError('');}}><Clock3 size={18}/> Forcer un rendez-vous</button></div>}

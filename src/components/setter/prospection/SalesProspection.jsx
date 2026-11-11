@@ -18,7 +18,7 @@ export default function SalesProspection({ view, C, darkMode, onNavigate, onOpen
 
   return (
     <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-      <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+      <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
         {search ? 'Trouver des contacts' : 'Mes listes'}
       </h2>
       <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>
@@ -36,7 +36,7 @@ export default function SalesProspection({ view, C, darkMode, onNavigate, onOpen
       {toast && createPortal(
         <div style={{
           position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)', padding: '10px 18px', borderRadius: 10,
-          background: toast.kind === 'err' ? '#ef4444' : '#10b981', color: '#fff', fontSize: 13, fontWeight: 600,
+          background: toast.kind === 'err' ? '#ef4444' : '#10b981', color: '#fff', fontSize: 13, fontWeight: 500,
           boxShadow: '0 12px 32px rgba(0,0,0,0.25)', zIndex: 10000,
         }}>
           {toast.text}

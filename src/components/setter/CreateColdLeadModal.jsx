@@ -68,12 +68,12 @@ export default function CreateColdLeadModal({
 }) {
   // Palette identique à TrackingSheet.jsx (cohérence visuelle parfaite)
   const C = {
-    bg: darkMode ? "#1e1f28" : "#ffffff",
-    border: darkMode ? "#2a2b36" : "#e2e6ef",
-    text: darkMode ? "#eef0f6" : "#1e2330",
-    muted: darkMode ? "#5e6273" : "#9ca3af",
-    secondary: darkMode ? "#8b8fa0" : "#6b7280",
-    accent: darkMode ? "#7c8adb" : "#5b6abf",
+    bg: darkMode ? "#1f1f1f" : "#ffffff",
+    border: darkMode ? "#2e2e2e" : "#ece9e4",
+    text: darkMode ? "#f2f2f2" : "#1c1b19",
+    muted: darkMode ? "#7d7d7d" : "#9d9890",
+    secondary: darkMode ? "#a3a3a3" : "#55514b",
+    accent: darkMode ? "#ededed" : "#2b2927",
   };
 
   const [formData, setFormData] = useState(INITIAL_FORM);
@@ -168,7 +168,7 @@ export default function CreateColdLeadModal({
           maxHeight: "85vh",
           overflowY: "auto",
           background: C.bg,
-          borderRadius: 16,
+          borderRadius: 22,
           border: `1px solid ${C.border}`,
           boxShadow: darkMode
             ? "0 8px 40px rgba(0,0,0,0.5)"
@@ -190,7 +190,7 @@ export default function CreateColdLeadModal({
             <h2
               style={{
                 fontSize: 18,
-                fontWeight: 700,
+                fontWeight: 500,
                 color: C.text,
                 margin: 0,
                 letterSpacing: "-0.01em",
@@ -243,7 +243,7 @@ export default function CreateColdLeadModal({
               <label
                 style={{
                   fontSize: 11.5,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: C.secondary,
                   marginBottom: 5,
                   display: "block",
@@ -262,7 +262,7 @@ export default function CreateColdLeadModal({
                     fontSize: 13,
                     fontWeight: 500,
                     border: `1px solid ${C.border}`,
-                    background: darkMode ? "#16171e" : "#fff",
+                    background: darkMode ? "#262626" : "#fff",
                     color: formData[field.key] ? C.text : C.muted,
                     outline: "none",
                     fontFamily: "inherit",
@@ -309,7 +309,7 @@ export default function CreateColdLeadModal({
                     fontSize: 13,
                     fontWeight: 500,
                     border: `1px solid ${C.border}`,
-                    background: darkMode ? "#16171e" : "#fff",
+                    background: darkMode ? "#262626" : "#fff",
                     color: C.text,
                     outline: "none",
                     fontFamily: "inherit",
@@ -346,7 +346,7 @@ export default function CreateColdLeadModal({
               <label
                 style={{
                   fontSize: 11.5,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: C.secondary,
                   marginBottom: 5,
                   display: "block",
@@ -366,7 +366,7 @@ export default function CreateColdLeadModal({
                   fontSize: 13,
                   fontWeight: 500,
                   border: `1px solid ${C.border}`,
-                  background: darkMode ? "#16171e" : "#fff",
+                  background: darkMode ? "#262626" : "#fff",
                   color: C.text,
                   outline: "none",
                   fontFamily: "inherit",
@@ -388,7 +388,7 @@ export default function CreateColdLeadModal({
               <label
                 style={{
                   fontSize: 11.5,
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: C.secondary,
                   marginBottom: 5,
                   display: "block",
@@ -408,7 +408,7 @@ export default function CreateColdLeadModal({
                   fontSize: 13,
                   fontWeight: 500,
                   border: `1px solid ${C.border}`,
-                  background: darkMode ? "#16171e" : "#fff",
+                  background: darkMode ? "#262626" : "#fff",
                   color: C.text,
                   outline: "none",
                   fontFamily: "inherit",
@@ -430,7 +430,7 @@ export default function CreateColdLeadModal({
           </div>
 
           {formError && (
-            <p style={{ fontSize: 12, color: "#ef4444", margin: 0, fontWeight: 500 }}>
+            <p style={{ fontSize: 12, color: darkMode ? "#f3a6a3" : "#c5221f", margin: 0, fontWeight: 500 }}>
               {formError}
             </p>
           )}
@@ -443,10 +443,10 @@ export default function CreateColdLeadModal({
               padding: "10px 24px",
               borderRadius: 10,
               border: "none",
-              background: submitting ? C.muted : darkMode ? "#fff" : "#1e2330",
-              color: darkMode ? "#1e2330" : "#fff",
+              background: submitting ? C.muted : darkMode ? "#ededed" : "#2b2927",
+              color: darkMode ? "#141414" : "#fff",
               fontSize: 13,
-              fontWeight: 600,
+              fontWeight: 500,
               cursor: submitting ? "not-allowed" : "pointer",
               fontFamily: "inherit",
               transition: "all 0.15s",
@@ -488,10 +488,10 @@ export default function CreateColdLeadModal({
                 fill="none"
                 style={{ animation: "successPulse 0.4s ease both", flexShrink: 0 }}
               >
-                <circle cx="12" cy="12" r="10" fill="#10b981" opacity="0.15" />
+                <circle cx="12" cy="12" r="10" fill="#0b7a4b" opacity="0.15" />
                 <path
                   d="M7 12.5l3 3 7-7"
-                  stroke="#10b981"
+                  stroke="#0b7a4b"
                   strokeWidth="2"
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -500,7 +500,7 @@ export default function CreateColdLeadModal({
                   style={{ animation: "checkmarkDraw 0.5s ease 0.15s both" }}
                 />
               </svg>
-              <span style={{ fontSize: 13, fontWeight: 600, color: "#10b981" }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: "#0b7a4b" }}>
                 Lead ajouté avec succès
               </span>
             </div>

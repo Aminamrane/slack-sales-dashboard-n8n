@@ -27,7 +27,7 @@ function tint(hex, a) {
 
 function Badge({ color, children }) {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 650,
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 999, fontSize: 11.5, fontWeight: 500,
       background: tint(color, 0.13), color: 'inherit', border: `1px solid ${tint(color, 0.35)}`, whiteSpace: 'nowrap' }}>
       <span style={{ width: 6, height: 6, borderRadius: 999, background: color }} />{children}
     </span>
@@ -36,14 +36,14 @@ function Badge({ color, children }) {
 
 function Button({ C, darkMode, kind = 'secondary', icon: Icon, children, ...props }) {
   const styles = {
-    primary: { background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', border: 'none' },
+    primary: { background: darkMode ? '#ededed' : '#2b2927', color: darkMode ? '#2b2927' : '#fff', border: 'none' },
     secondary: { background: C.bg, color: C.text, border: `1px solid ${C.border}` },
     ghost: { background: 'transparent', color: C.secondary, border: '1px solid transparent' },
-    danger: { background: 'transparent', color: '#c25555', border: '1px solid transparent' },
+    danger: { background: 'transparent', color: '#c5221f', border: '1px solid transparent' },
   }[kind];
   return (
     <button type="button" {...props}
-      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 9, fontSize: 13, fontWeight: 600,
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 13px', borderRadius: 9, fontSize: 13, fontWeight: 500,
         fontFamily: 'inherit', cursor: props.disabled ? 'default' : 'pointer', opacity: props.disabled ? 0.55 : 1, ...styles, ...props.style }}>
       {Icon && <Icon size={15} strokeWidth={2.1} />}{children}
     </button>
@@ -54,7 +54,7 @@ function Section({ C, title, icon: Icon, children, aside }) {
   return (
     <section style={{ borderTop: `1px solid ${C.border}`, padding: '16px 0 4px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 700, color: C.text }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, fontWeight: 500, color: C.text }}>
           {Icon && <Icon size={15} strokeWidth={2} color={C.secondary} />}{title}
         </div>
         {aside}
@@ -74,7 +74,7 @@ function ListItem({ C, darkMode, item, selected, onSelect }) {
         boxShadow: selected ? `inset 3px 0 0 ${tone}` : 'none', cursor: 'pointer', fontFamily: 'inherit', opacity: state === 'taken' ? 0.62 : 1,
         transition: 'border-color .15s ease, background .15s ease' }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ fontSize: 13.5, fontWeight: 500, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {item.company || item.contact_first_name || `Lead ${item.lead_id}`}
         </span>
         <span style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{wallLabel(item.rdv_at, { time: false })}</span>
@@ -84,7 +84,7 @@ function ListItem({ C, darkMode, item, selected, onSelect }) {
         {item.sales_name && <span>chez {item.sales_name.split(' ')[0]}</span>}
         {item.contact_first_name && item.company && <span style={{ color: C.muted }}>· {item.contact_first_name}</span>}
       </div>
-      {state === 'mine' && <span style={{ fontSize: 11.5, color: '#3e7d5a', fontWeight: 650 }}>À vous jusqu'au {untilLabel(item.claim.expires_at)}{item.claim.calls ? ` · ${item.claim.calls} appel${item.claim.calls > 1 ? 's' : ''}` : ''}</span>}
+      {state === 'mine' && <span style={{ fontSize: 11.5, color: '#0b7a4b', fontWeight: 500 }}>À vous jusqu'au {untilLabel(item.claim.expires_at)}{item.claim.calls ? ` · ${item.claim.calls} appel${item.claim.calls > 1 ? 's' : ''}` : ''}</span>}
       {state === 'taken' && <span style={{ fontSize: 11.5, color: C.muted }}>Repris par {item.claim.setter_name || 'un setter'}</span>}
     </button>
   );
@@ -107,7 +107,7 @@ function Timeline({ C, events }) {
             </span>
             <div style={{ minWidth: 0, paddingTop: 2 }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, alignItems: 'baseline' }}>
-                <span style={{ fontSize: 13, fontWeight: 650, color: C.text }}>{ev.title}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{ev.title}</span>
                 <span style={{ fontSize: 11, color: C.muted, whiteSpace: 'nowrap' }}>{wallLabel(ev.at, { year: false })}</span>
               </div>
               {(ev.detail || ev.actor) && (
@@ -122,7 +122,7 @@ function Timeline({ C, events }) {
       {canToggle && (
         <button type="button" aria-expanded={expanded} onClick={() => setExpanded((v) => !v)}
           style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, width: '100%', margin: '12px 0 0', padding: '7px 10px',
-            borderRadius: 9, border: `1px dashed ${C.border}`, background: C.subtle, color: C.secondary, fontSize: 12.5, fontWeight: 600,
+            borderRadius: 9, border: `1px dashed ${C.border}`, background: C.subtle, color: C.secondary, fontSize: 12.5, fontWeight: 500,
             fontFamily: 'inherit', cursor: 'pointer' }}>
           {expanded ? <ChevronUp size={14} strokeWidth={2.2} /> : <ChevronDown size={14} strokeWidth={2.2} />}
           {expanded ? 'Réduire le parcours' : `Afficher le reste du parcours (${hidden} événement${hidden > 1 ? 's' : ''})`}
@@ -198,20 +198,20 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
   const rdvs = useMemo(() => rdvHistory(detail?.events), [detail]);
   const tabButton = (key, label, n) => (
     <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => { setTab(key); setSelectedId(null); }}
-      style={{ padding: '7px 13px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-        background: tab === key ? (darkMode ? '#2a2b36' : '#fff') : 'transparent', color: tab === key ? C.text : C.muted,
+      style={{ padding: '7px 13px', borderRadius: 8, border: 'none', fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
+        background: tab === key ? (darkMode ? '#2e2e2e' : '#fff') : 'transparent', color: tab === key ? C.text : C.muted,
         boxShadow: tab === key && !darkMode ? '0 1px 2px rgba(16,24,40,0.08)' : 'none' }}>
       {label}<span style={{ marginLeft: 6, fontSize: 11.5, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{n}</span>
     </button>
   );
 
-  if (error) return <div style={{ fontSize: 13, color: '#c25555', fontWeight: 600 }}>{error}</div>;
+  if (error) return <div style={{ fontSize: 13, color: '#c5221f', fontWeight: 500 }}>{error}</div>;
   if (!items) return <div style={{ fontSize: 13, color: C.muted }}>Chargement…</div>;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 380px) minmax(0, 1fr)', gap: 18, alignItems: 'start' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'sticky', top: 0 }}>
-        <div role="tablist" style={{ display: 'inline-flex', padding: 3, gap: 3, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.05)' : '#eceef2', alignSelf: 'flex-start' }}>
+        <div role="tablist" style={{ display: 'inline-flex', padding: 3, gap: 3, borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.05)' : '#f4f2ee', alignSelf: 'flex-start' }}>
           {tabButton('free', 'À reprendre', counts.free + counts.taken)}
           {tabButton('mine', 'Mes reprises', counts.mine)}
         </div>
@@ -254,7 +254,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
           <>
             <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
               <div style={{ minWidth: 0 }}>
-                <h3 style={{ margin: 0, fontSize: 19, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{selected.company || lead?.full_name || `Lead ${selected.lead_id}`}</h3>
+                <h3 style={{ margin: 0, fontSize: 19, fontWeight: 500, color: C.text, letterSpacing: '-0.01em' }}>{selected.company || lead?.full_name || `Lead ${selected.lead_id}`}</h3>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 7, marginTop: 7, color: C.secondary, fontSize: 12.5 }}>
                   <Badge color={STAGE_TONE[selected.stage]}>{outcomeLabel(selected.stage, selected.result)}</Badge>
                   <span>{wallLabel(selected.rdv_at)}</span>
@@ -282,9 +282,9 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
               {state === 'mine' && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', fontSize: 13 }}>
-                    {lead?.phone && <a href={`tel:${lead.phone.replace(/\s+/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: C.text, fontWeight: 700, textDecoration: 'none' }}><Phone size={15} />{lead.phone}</a>}
+                    {lead?.phone && <a href={`tel:${lead.phone.replace(/\s+/g, '')}`} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: C.text, fontWeight: 500, textDecoration: 'none' }}><Phone size={15} />{lead.phone}</a>}
                     {lead?.email && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: C.secondary }}><Mail size={14} />{lead.email}</span>}
-                    <span style={{ color: '#3e7d5a', fontWeight: 650, fontSize: 12 }}>À vous jusqu’au {untilLabel(selected.claim.expires_at)}{selected.claim.calls ? ` · ${selected.claim.calls} appel${selected.claim.calls > 1 ? 's' : ''}` : ''}</span>
+                    <span style={{ color: '#0b7a4b', fontWeight: 500, fontSize: 12 }}>À vous jusqu’au {untilLabel(selected.claim.expires_at)}{selected.claim.calls ? ` · ${selected.claim.calls} appel${selected.claim.calls > 1 ? 's' : ''}` : ''}</span>
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {['r1', 'r2'].map((kind) => (
@@ -307,7 +307,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
                       <div style={{ display: 'flex', gap: 8 }}>
                         <Button C={C} darkMode={darkMode} kind={form.kind === 'discard' ? 'secondary' : 'primary'} icon={CheckCircle2}
                           disabled={Boolean(busy) || (form.kind === 'discard' && form.text.trim().length < 3)}
-                          style={form.kind === 'discard' ? { color: '#c25555', borderColor: tint('#c25555', 0.4) } : undefined}
+                          style={form.kind === 'discard' ? { color: '#c5221f', borderColor: tint('#c5221f', 0.4) } : undefined}
                           onClick={() => {
                             const text = form.text.trim();
                             if (form.kind === 'called') act('called', () => secondChanceApi.called(selected.lead_id, text), 'Appel enregistré.');
@@ -324,7 +324,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
               )}
             </div>
 
-            {historyError && <div style={{ fontSize: 13, color: '#c25555', fontWeight: 600 }}>{historyError}</div>}
+            {historyError && <div style={{ fontSize: 13, color: '#c5221f', fontWeight: 500 }}>{historyError}</div>}
             {!detail && !historyError && <div style={{ fontSize: 13, color: C.muted }}>Chargement du parcours…</div>}
             {detail && (
               <>
@@ -355,7 +355,7 @@ export default function SecondChance({ C, darkMode = false, teamSales = [], asSe
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {detail.comments.map((c, i) => (
                         <div key={i} style={{ fontSize: 13, color: C.text, lineHeight: 1.5 }}>
-                          <span style={{ fontWeight: 650 }}>{c.author}</span>
+                          <span style={{ fontWeight: 500 }}>{c.author}</span>
                           <span style={{ color: C.muted, fontSize: 11.5 }}> · {wallLabel(c.at)}</span>
                           <div style={{ color: C.secondary }}>{c.body}</div>
                         </div>

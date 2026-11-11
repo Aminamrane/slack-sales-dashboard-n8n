@@ -46,22 +46,21 @@ export default function ProspectLists({ C, darkMode, onToast, openListId, onOpen
           Aucune liste pour l'instant. Créez-en une depuis « Trouver des contacts ».
         </Card>
       )}
-      {others.length === 0 && mine.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} />)}
+      {others.length === 0 && mine.length > 0 && <ListGroup C={C} darkMode={darkMode} lists={mine} onOpen={onOpenList} />}
       {others.length > 0 && (
         <>
           <SectionHead C={C} title="Mes listes" count={mine.length} />
           {mine.length === 0 && <div style={{ color: C.muted, fontSize: 14 }}>Aucune liste à vous pour l'instant.</div>}
-          {mine.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} />)}
+          {mine.length > 0 && <ListGroup C={C} darkMode={darkMode} lists={mine} onOpen={onOpenList} />}
           <SectionHead C={C} title="Listes de l'équipe" count={others.length} note="Suivies par leurs propriétaires : ne pas les traiter." />
           {owners.map((owner) => (
-            <div key={owner.email} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
-                <OwnerAvatar C={C} darkMode={darkMode} name={owner.name} />
-                <span style={{ fontSize: 15, fontWeight: 650, color: C.text }}>{owner.name}</span>
-                {ROLE_LABEL[owner.role] && <span style={{ fontSize: 12, color: C.muted }}>{ROLE_LABEL[owner.role]}</span>}
-                <span style={{ fontSize: 12, color: C.muted, fontFamily: MONO }}>· {owner.lists.length} liste{owner.lists.length > 1 ? 's' : ''}</span>
+            <div key={owner.email} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 2 }}>
+                <OwnerAvatar C={C} darkMode={darkMode} name={owner.name} size={24} />
+                <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>{owner.name}</span>
+                <span style={{ fontSize: 12.5, color: C.muted }}>{[ROLE_LABEL[owner.role], `${owner.lists.length} liste${owner.lists.length > 1 ? 's' : ''}`].filter(Boolean).join(' · ')}</span>
               </div>
-              {owner.lists.map((list) => <ListCard key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpenList} teammate />)}
+              <ListGroup C={C} darkMode={darkMode} lists={owner.lists} onOpen={onOpenList} teammate />
             </div>
           ))}
         </>
@@ -78,79 +77,92 @@ function OwnerAvatar({ C, darkMode, name, size = 28, background }) {
   const letters = (name || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
   return (
     <span aria-hidden="true" style={{ flex: `0 0 ${size}px`, width: size, height: size, borderRadius: '50%', background: background || col.bg, color: col.text,
-      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 700 }}>{letters}</span>
+      display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: size * 0.38, fontWeight: 500 }}>{letters}</span>
   );
 }
 
 function SectionHead({ C, title, count, note }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginTop: 6 }}>
-      <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: C.text }}>{title}</span>
-      <span style={{ fontSize: 13, color: C.muted, fontFamily: MONO }}>{count}</span>
-      {note && <span style={{ fontSize: 13, color: C.muted }}>{note}</span>}
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+      <span style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '.09em', textTransform: 'uppercase', color: '#a8a39b' }}>{title}</span>
+      <span style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, fontVariantNumeric: 'tabular-nums' }}>{count}</span>
+      {note && <span style={{ fontSize: 12.5, color: C.muted, marginLeft: 6 }}>{note}</span>}
     </div>
   );
 }
 
-// Carte d'une liste. `teammate` : liste d'un collègue, fond teinté, trait à gauche et nom du propriétaire en clair.
-function ListCard({ C, darkMode, list, onOpen, teammate = false }) {
-  const col = chipColors(C, darkMode);
+// Les listes d'un groupe dans une seule carte, en lignes à filet fin (style Owner, 11/11/2026 : « ça peut être mieux
+// fait dans notre style »). Chaque ligne : le nom, le nombre d'entreprises et la date ; à droite les trois chiffres
+// de la prospection en colonnes (nombre + micro-libellé). Les critères de la liste, secondaires, se lisent au survol
+// et dans la liste ouverte. `teammate` : listes d'un collègue, sur fond doux (plus de trait de couleur à gauche).
+function ListGroup({ C, darkMode, lists, onOpen, teammate = false }) {
   return (
-    <Card C={C} darkMode={darkMode} style={{ padding: '16px 20px', cursor: 'pointer',
-      ...(teammate ? { background: C.subtle || (darkMode ? '#252636' : '#f4f6fb'), boxShadow: 'none', borderLeft: `4px solid ${col.close}` } : {}) }}>
-      <div role="button" tabIndex={0} onClick={() => onOpen(list.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(list.id); }}
-        aria-label={teammate ? `${list.name}, liste de ${list.owner_name || list.owner_email}` : list.name}
-        style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 260px', minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{list.name}</div>
-          <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>
-            {teammate && <><span style={{ color: col.text, fontWeight: 600 }}>Liste de {list.owner_name || list.owner_email}</span> · </>}
-            Créée le {fmtDay(list.created_at)} · {fmtInt(list.total)} entreprise{list.total > 1 ? 's' : ''}
-          </div>
-          {list.chips?.length > 0 && (
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-              title={list.chips.map((chip) => chip.label).join(' · ')}>
-              {list.chips.map((chip) => chip.label).join(' · ')}
-            </div>
-          )}
-        </div>
-        <Funnel C={C} counts={list} compact />
-        <ChevronRight size={18} color={C.muted} />
-      </div>
+    <Card C={C} darkMode={darkMode} style={{ padding: 0, overflow: 'hidden', ...(teammate ? { background: C.subtle || (darkMode ? '#262626' : '#f7f5f2'), borderColor: 'transparent' } : {}) }}>
+      {lists.map((list, index) => <ListRow key={list.id} C={C} darkMode={darkMode} list={list} onOpen={onOpen} teammate={teammate} index={index} />)}
     </Card>
   );
 }
+function ListRow({ C, darkMode, list, onOpen, teammate, index }) {
+  const criteria = list.chips?.map((chip) => chip.label).join(' · ');
+  return (
+    <div role="button" tabIndex={0} className="pl-row" onClick={() => onOpen(list.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(list.id); }}
+      aria-label={teammate ? `${list.name}, liste de ${list.owner_name || list.owner_email}` : list.name} title={criteria || undefined}
+      style={{ '--i': index, display: 'flex', alignItems: 'center', gap: 20, padding: '14px 18px', cursor: 'pointer',
+        borderTop: index ? `1px solid ${darkMode ? '#2e2e2e' : teammate ? '#ebe8e3' : '#f1eee9'}` : 'none' }}>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 500, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{list.name}</div>
+        <div style={{ fontSize: 12.5, color: C.muted, marginTop: 2 }}>
+          {fmtInt(list.total)} entreprise{list.total > 1 ? 's' : ''} · créée le {fmtDay(list.created_at)}
+        </div>
+      </div>
+      <Funnel C={C} darkMode={darkMode} counts={list} compact />
+      <ChevronRight className="pl-chev" size={16} color={C.muted} />
+    </div>
+  );
+}
 
-function Funnel({ C, counts, compact }) {
-  const size = compact ? 13 : 16;
+function Funnel({ C, darkMode, counts, compact }) {
+  const green = darkMode ? '#7cc49b' : '#0b7a4b';
+  if (compact) {
+    const stat = (n, label, tone = C.text) => (
+      <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', minWidth: 74 }}>
+        <span style={{ fontSize: 15, fontWeight: 500, color: n ? tone : C.muted, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em' }}>{fmtInt(n)}</span>
+        <span style={{ fontSize: 9.5, fontWeight: 500, letterSpacing: '.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b', whiteSpace: 'nowrap' }}>{label}</span>
+      </span>
+    );
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
+        {stat(counts.a_contacter, 'À contacter')}{stat(counts.contacte, 'Contactées')}{stat(counts.repondu, 'Réponses', green)}
+      </span>
+    );
+  }
   const step = (icon, n, label, color) => (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color, fontSize: size, fontWeight: color === C.text ? 500 : 600 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color, fontSize: 16, fontWeight: 500 }}>
       {icon}{fmtInt(n)} {label}
     </span>
   );
-  const arrow = <ChevronRight size={compact ? 14 : 16} color={C.muted} />;
+  const arrow = <ChevronRight size={16} color={C.muted} />;
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: compact ? 8 : 14, flexWrap: 'wrap' }}>
-      {!compact && <span style={{ fontSize: size, color: C.text }}>Prospection :</span>}
-      {step(<Mail size={size} color={C.accent} />, counts.a_contacter, 'prêtes à contacter', C.text)}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+      <span style={{ fontSize: 16, color: C.text }}>Prospection :</span>
+      {step(<Mail size={16} color={C.accent} />, counts.a_contacter, 'prêtes à contacter', C.text)}
       {arrow}
-      {step(<Send size={size} color={C.accent} />, counts.contacte, 'contactées', C.text)}
+      {step(<Send size={16} color={C.accent} />, counts.contacte, 'contactées', C.text)}
       {arrow}
-      {step(<MessageCircle size={size} color="#15803d" />, counts.repondu, 'ont répondu', '#15803d')}
+      {step(<MessageCircle size={16} color={green} />, counts.repondu, 'ont répondu', green)}
     </span>
   );
 }
 
 // Liste d'un collègue ouverte par un manager : à qui elle est, et qu'il ne faut pas la traiter (doublons).
 function TeammateBanner({ C, darkMode, list }) {
-  const col = chipColors(C, darkMode);
   const owner = list.owner_name || list.owner_email;
   return (
     <div role="note" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 16, borderRadius: 12,
-      background: col.bg, color: col.text, borderLeft: `4px solid ${col.close}` }}>
+      background: C.subtle || (darkMode ? '#262626' : '#f7f5f2'), color: C.text }}>
       <OwnerAvatar C={C} darkMode={darkMode} name={owner} size={34} background={C.bg} />
       <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: 15, fontWeight: 700 }}>Liste de {owner}{ROLE_LABEL[list.owner_role] ? <span style={{ fontWeight: 500 }}> · {ROLE_LABEL[list.owner_role]}</span> : null}</div>
+        <div style={{ fontSize: 15, fontWeight: 500 }}>Liste de {owner}{ROLE_LABEL[list.owner_role] ? <span style={{ fontWeight: 500 }}> · {ROLE_LABEL[list.owner_role]}</span> : null}</div>
         <div style={{ fontSize: 13, marginTop: 2 }}>Suivie par {firstName(list.owner_name) || owner} : ne pas contacter ces entreprises, pour éviter les doublons.</div>
       </div>
     </div>
@@ -259,7 +271,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
 
       <Card C={C} darkMode={darkMode} style={{ padding: '22px 28px' }}>
         {list.is_owner === false && <TeammateBanner C={C} darkMode={darkMode} list={list} />}
-        <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 14 }}>{list.name}</div>
+        <div style={{ fontSize: 18, fontWeight: 500, color: C.text, marginBottom: 14 }}>{list.name}</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 28, flexWrap: 'wrap', paddingBottom: 18, borderBottom: `1px solid ${C.border}` }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 16, color: C.text }}>
             <Building2 size={20} color={C.muted} />{fmtInt(list.total)} entreprise{list.total > 1 ? 's' : ''}
@@ -268,7 +280,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 16, color: C.text }}><CalendarDays size={19} color={C.muted} />Créée le {fmtDay(list.created_at)}</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, fontSize: 16, color: C.text }}><FileText size={19} color={C.muted} />Mise à jour le {fmtDay(list.updated_at)}</span>
         </div>
-        <div style={{ paddingTop: 16 }}><Funnel C={C} counts={list} /></div>
+        <div style={{ paddingTop: 16 }}><Funnel C={C} darkMode={darkMode} counts={list} /></div>
         {list.chips?.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 14 }}>
             {list.chips.map((chip) => <Chip key={`${chip.kind}-${chip.code}`} C={C} darkMode={darkMode} label={chip.label} />)}
@@ -292,7 +304,7 @@ function ListDetail({ C, darkMode, listId, onBack, onToast, onOpenLeads, teamSal
           <Button C={C} darkMode={darkMode} onClick={() => setMenuOpen((v) => !v)} style={{ padding: '10px 12px' }} title="Plus d'actions"><MoreHorizontal size={18} /></Button>
           {menuOpen && (
             <div style={{ position: 'absolute', top: '100%', left: 0, marginTop: 6, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 10,
-              zIndex: 20, boxShadow: '0 12px 28px rgba(16,24,40,0.12)', minWidth: 220 }}>
+              zIndex: 20, boxShadow: '0 14px 34px rgba(28,27,25,0.10), 0 2px 6px rgba(28,27,25,0.04)', minWidth: 220 }}>
               <button type="button" onClick={() => { setMenuOpen(false); setConfirmDelete(true); }} style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 14px', border: 'none', background: 'transparent',
                 color: '#b42318', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer' }}><Trash2 size={15} /> Supprimer la liste</button>
@@ -386,9 +398,9 @@ function CompanyCard({ C, darkMode, item, onStatus, onBook, onExport, onRemove, 
       <div style={{ display: 'flex', flexWrap: 'wrap', padding: '22px 24px', gap: 0 }}>
         <div style={{ flex: '1 1 340px', display: 'flex', gap: 18, paddingRight: 24, minWidth: 0 }}>
           <div style={{ width: 56, height: 56, borderRadius: 12, background: col.bg, color: col.text, display: 'flex', alignItems: 'center',
-            justifyContent: 'center', fontWeight: 600, fontSize: 18, flexShrink: 0, border: `1px solid ${C.border}` }}>{c.initials}</div>
+            justifyContent: 'center', fontWeight: 500, fontSize: 18, flexShrink: 0, border: `1px solid ${C.border}` }}>{c.initials}</div>
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{c.name}</div>
+            <div style={{ fontSize: 17, fontWeight: 500, color: C.text }}>{c.name}</div>
             <div style={{ fontSize: 15, color: C.text }}>{c.activity}</div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap', fontSize: 15, color: C.text }}>
               {locationLabel(c) && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><MapPin size={17} color={C.muted} />{locationLabel(c)}</span>}
@@ -432,7 +444,7 @@ function CompanyCard({ C, darkMode, item, onStatus, onBook, onExport, onRemove, 
         {manager && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 15, color: C.text }}><Users size={17} color={C.muted} />Contact : {item.contact || manager.name}</span>}
         <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
           {item.rdv ? (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, fontSize: 14, fontWeight: 600,
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '7px 14px', borderRadius: 999, fontSize: 14, fontWeight: 500,
               color: darkMode ? '#86efac' : '#15803d', background: darkMode ? 'rgba(34,197,94,0.14)' : '#f0fdf4' }}>
               <CalendarCheck2 size={16} /> R1 le {fmtWallDateTime(item.rdv.date)} · {item.rdv.sales}
             </span>
@@ -444,7 +456,7 @@ function CompanyCard({ C, darkMode, item, onStatus, onBook, onExport, onRemove, 
             </Button>
           )}
           {item.crm_lead_id
-            ? <button type="button" onClick={onOpenLeads} style={{ ...iconBtn, gap: 6, color: '#15803d', fontSize: 13, fontWeight: 600 }} title="Voir dans Mes leads"><CheckCircle2 size={17} /> Dans le CRM</button>
+            ? <button type="button" onClick={onOpenLeads} style={{ ...iconBtn, gap: 6, color: '#15803d', fontSize: 13, fontWeight: 500 }} title="Voir dans Mes leads"><CheckCircle2 size={17} /> Dans le CRM</button>
             : <IconButton C={C} darkMode={darkMode} tone="accent" onClick={onExport} disabled={busy || !c.phone}
                 title={c.phone ? 'Exporter cette entreprise vers le CRM, sans rendez-vous' : 'Pas de téléphone : export impossible'}><Upload size={19} /></IconButton>}
           {!item.crm_lead_id && (

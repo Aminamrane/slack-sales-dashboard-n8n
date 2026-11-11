@@ -4,10 +4,10 @@
 // des commerciaux) : le code NAF partout en France (demande dev 06/10/2026), et en plus, si besoin, une ville ou
 // un code postal (29/10/2026, additif : sans ville, la recherche et la liste sont celles d'avant).
 import { useEffect, useRef, useState } from 'react';
-import { MapPin, Landmark, Loader2, ListPlus, Radar } from 'lucide-react';
+import { MapPin, Landmark, Loader2, ListChecks, ListPlus, Radar, Search } from 'lucide-react';
 import { prospectionApi, errorMessage } from './prospectionApi';
 import { Card, Chip, Button, Modal, ProspectionStyles } from './ui';
-import { MONO, FONT, fmtInt, inputStyle, chipColors, locationLabel } from './format';
+import { MONO, FONT, fmtInt, inputStyle, locationLabel } from './format';
 import CriteriaInput from './CriteriaInput';
 import PappersSearch from './PappersSearch';
 
@@ -41,7 +41,6 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, where
   const [createOpen, setCreateOpen] = useState(false);
   const [pappersOpen, setPappersOpen] = useState(false);
   const seq = useRef(0);
-  const col = chipColors(C, darkMode);
 
   useEffect(() => {
     prospectionApi.meta().then(setMeta).catch(() => setMeta({ enabled: false }));
@@ -97,9 +96,26 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, where
           {loading && <Loader2 size={18} color={C.muted} style={{ animation: 'prospSpin 1s linear infinite', flexShrink: 0 }} />}
         </div>
 
+        {!hasCriteria && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 4px 14px', borderTop: `1px solid ${darkMode ? C.border : '#f1eee9'}`, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 12.5, color: C.muted, marginRight: 2 }}>Essayer</span>
+            {(byCity ? NAF_EXAMPLES : EXAMPLES).map((ex) => (
+              <button key={ex.title} type="button" className="pl-try" onClick={() => load({ activity: ex.activity, departement: ex.departement, place: null }, [null], 0)} style={{
+                border: `1px solid ${C.border}`, background: C.bg, color: C.text, borderRadius: 10, padding: '5px 11px',
+                fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
+              }}>{ex.title}</button>
+            ))}
+            {canLaunch && (
+              <span style={{ marginLeft: 'auto' }}>
+                <Button C={C} darkMode={darkMode} onClick={() => setPappersOpen(true)}><Radar size={16} /> Recherches Pappers</Button>
+              </span>
+            )}
+          </div>
+        )}
+
         {hasCriteria && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '14px 4px', borderTop: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 15, color: C.text }}>Critères :</span>
+            <span style={{ fontSize: 13, color: C.muted }}>Critères</span>
             {criteria.activity
               ? <Chip C={C} darkMode={darkMode} label={activityLabel(criteria.activity)} onRemove={() => setCriterion('activity', null)} />
               : <MutedChip C={C} label="Toutes activités" />}
@@ -113,7 +129,7 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, where
 
         {hasCriteria && result && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 4px', borderTop: `1px solid ${C.border}`, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 16, fontWeight: 600, color: C.text }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: C.text }}>
               {fmtInt(total)} entreprise{total > 1 ? 's' : ''} disponible{total > 1 ? 's' : ''} pour ces critères
             </span>
             {stockSize?.distributable != null && (
@@ -140,22 +156,20 @@ export default function ProspectSearch({ C, darkMode, onToast, onOpenList, where
 
       {error && <div role="alert" style={{ color: '#b42318', fontSize: 14 }}>{error}</div>}
 
+      {/* Avant toute recherche : le chemin en trois temps, pour savoir où l'on va (11/11/2026 : « mieux amené »). */}
       {!hasCriteria && (
-        <div style={{ color: C.muted, fontSize: 14, lineHeight: 1.7 }}>
-          {byCity ? 'Saisissez un code NAF, et si besoin une ville ou un code postal. Par exemple :' : "Choisissez une activité (code NAF), un département, ou les deux : ce sont les critères de l'outil de scraping. Par exemple :"}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 10 }}>
-            {(byCity ? NAF_EXAMPLES : EXAMPLES).map((ex) => (
-              <button key={ex.title} type="button" onClick={() => load({ activity: ex.activity, departement: ex.departement, place: null }, [null], 0)} style={{
-                border: `1px solid ${C.border}`, background: col.bg, color: col.text, borderRadius: 999, padding: '6px 12px',
-                fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
-              }}>{ex.title}</button>
-            ))}
-          </div>
-          {canLaunch && (
-            <div style={{ marginTop: 16 }}>
-              <Button C={C} darkMode={darkMode} onClick={() => setPappersOpen(true)}><Radar size={16} /> Recherches Pappers</Button>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: 12 }}>
+          {[[Search, 'Cherchez', byCity ? 'Un code NAF, puis une ville ou un code postal si besoin.' : 'Une activité (code NAF), un département, ou les deux.'],
+            [ListPlus, 'Réservez', 'Créez une liste : ces entreprises sont à vous, personne d’autre ne les appellera.'],
+            [ListChecks, 'Suivez', 'Retrouvez la liste dans « Mes listes » et avancez entreprise par entreprise.']].map(([icon, title, text], index) => { const StepIcon = icon; return (
+            <div key={title} className="pl-step" style={{ '--i': index, display: 'flex', gap: 12, padding: '14px 16px', borderRadius: 14, background: C.subtle || (darkMode ? '#262626' : '#f7f5f2') }}>
+              <span style={{ flex: '0 0 30px', height: 30, borderRadius: 10, background: C.bg, border: `1px solid ${C.border}`, display: 'grid', placeItems: 'center', color: C.text }}><StepIcon size={15} /></span>
+              <span style={{ minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: C.text }}><span style={{ color: C.muted, fontVariantNumeric: 'tabular-nums', marginRight: 6 }}>{index + 1}</span>{title}</span>
+                <span style={{ display: 'block', fontSize: 12.5, lineHeight: 1.5, color: C.muted, marginTop: 2 }}>{text}</span>
+              </span>
             </div>
-          )}
+          ); })}
         </div>
       )}
 
@@ -261,10 +275,10 @@ function CreateListModal({ C, darkMode, criteria, total, max, onClose, onCreate 
   return (
     <Modal C={C} darkMode={darkMode} title="Créer une liste" onClose={busy ? undefined : onClose}>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Nom de la liste
+        <label style={{ fontSize: 13, fontWeight: 500 }}>Nom de la liste
           <input value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} style={{ ...inputStyle(C), width: '100%', marginTop: 6 }} />
         </label>
-        <label style={{ fontSize: 13, fontWeight: 600 }}>Nombre d'entreprises
+        <label style={{ fontSize: 13, fontWeight: 500 }}>Nombre d'entreprises
           <input type="number" min={1} max={limit} value={count} onChange={(e) => setCount(e.target.value)} required
             style={{ ...inputStyle(C), width: 160, marginTop: 6, display: 'block' }} />
         </label>

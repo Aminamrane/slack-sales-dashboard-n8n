@@ -1,7 +1,10 @@
 import React, {useEffect, useRef, useState} from 'react';
 import {createPortal} from 'react-dom';
-import {PhoneCall, Voicemail, UserRoundX, CircleX, CircleAlert, RotateCcw, CalendarPlus, CalendarClock, PhoneOff, Check, X, ArrowRight} from 'lucide-react';
-import FrenchDateInput, {ParisDateTimeInput} from './FrenchDateInput';
+import {PhoneCall, Voicemail, UserRoundX, CircleX, CircleAlert, RotateCcw, CalendarPlus, CalendarClock, PhoneOff, X, ArrowRight} from 'lucide-react';
+import FrenchDateInput from './FrenchDateInput';
+import WhenPicker from './WhenPicker';
+import PickList from './PickList';
+import {parisToday} from '../../utils/parisDates';
 import {useDialogFocus} from './QualificationDialog';
 import {CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP, recallInPast, recallRuleNote} from '../../utils/contactQualification';
 import './salesJourney.css';
@@ -20,6 +23,9 @@ const followUps = [
   ['callback', 'À rappeler', 'Poursuivre le suivi téléphonique', RotateCcw],
   ['not_interested', 'Pas intéressé', 'Le prospect ne souhaite pas poursuivre', CircleX],
 ];
+// « À relancer » : les échéances courantes d'un clic, le calendrier pour le reste.
+const SOON = [['1 semaine', 7], ['2 semaines', 14], ['1 mois', 30], ['3 mois', 90]];
+const inDays = days => { const d = new Date(`${parisToday()}T12:00:00Z`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); };
 export default function ContactQualificationDialog({lead, category, dark = false, onClose, onSave}) {
   const [result, setResult] = useState('');
   const [next, setNext] = useState('');
@@ -49,24 +55,24 @@ export default function ContactQualificationDialog({lead, category, dark = false
     finally { lock.current = false; setBusy(false); }
   }
   function options(items, selected, choose) {
-    return <div className="sj-options">{items.map(([value, title, description, Icon]) => <button type="button" key={value} disabled={busy} aria-pressed={selected === value} className={selected === value ? 'is-selected' : ''} onClick={() => {choose(value); setDate(''); setPickerKey(k => k + 1); setError('');}}><Icon size={21}/><span><strong>{title}</strong><small>{description}</small></span>{selected === value && <Check size={16}/>}</button>)}</div>;
+    return <PickList items={items} value={selected} disabled={busy} onPick={value => {choose(value); setDate(''); setPickerKey(k => k + 1); setError('');}}/>;
   }
   return createPortal(<div className={`sj-overlay ${dark ? 'sj-dark' : ''}`} onClick={e => {if (e.target === e.currentTarget && !lock.current) onClose();}}>
-    <section className={`sj-dialog${callback ? ' sj-dialog-callback' : ''}`} role="dialog" aria-modal="true" aria-labelledby="sj-contact-title" ref={ref} tabIndex={-1}>
+    <section className={`sj-dialog sj-pure${callback ? ' sj-dialog-callback' : ''}`} role="dialog" aria-modal="true" aria-labelledby="sj-contact-title" ref={ref} tabIndex={-1}>
       <header className="sj-head"><span className="sj-icon"><PhoneCall size={24}/></span><div><small>PARCOURS COMMERCIAL</small><h2 id="sj-contact-title">Qualifier le contact</h2><p>{lead.full_name || lead.company_name}</p></div><button className="sj-close" disabled={busy} onClick={onClose} aria-label="Fermer la qualification"><X size={20}/></button></header>
       <div className="sj-body"><h3 style={{marginTop: 0}}>Quel est le résultat de l’appel ?</h3>
         {options(outcomes, result, value => {setResult(value); setNext('');})}
         {result === 'reached' && <div className="sj-r1-next"><h3>Quelle est la prochaine étape ?</h3>{options(followUps, next, setNext)}</div>}
-        {appointment && <ParisDateTimeInput key={next} label={`Date et heure du ${next.toUpperCase()}`} value={date} disabled={busy} onChange={value => {setDate(value); setError('');}}/>}
+        {appointment && <WhenPicker key={next} label={`Date et heure du ${next.toUpperCase()}`} value={date} disabled={busy} onChange={value => {setDate(value); setError('');}}/>}
         {callback && <div className={`sj-callback${past ? ' is-past' : ''}`} ref={panelRef}>
           <div className="sj-callback-when">
-            <ParisDateTimeInput key={`callback-${pickerKey}`} label="Date et heure du rappel" value={date} disabled={busy} onChange={value => {setDate(value); setError('');}}/>
+            <WhenPicker key={`callback-${pickerKey}`} label="Date et heure du rappel" value={date} disabled={busy} onChange={value => {setDate(value); setError('');}}/>
             {past && <small className="sj-callback-past" role="alert">Cette heure est déjà passée.</small>}
           </div>
           <label className="sj-callback-note"><span>Description <small>(facultatif)</small></span><textarea rows={2} maxLength={CALLBACK_NOTE_MAX} disabled={busy} value={note} onChange={e => setNote(e.target.value)} placeholder="Ce dont vous avez convenu avec le prospect…"/></label>
           {ruleNote && <p className="sj-callback-rule" role="note" title={CALLBACK_RULE_HELP}>{ruleNote}</p>}
         </div>}
-        {result === 'to_recontact' && <fieldset className="sj-paris-date" disabled={busy}><legend>Quand le recontacter ?</legend><FrenchDateInput aria-label="Date de relance" value={date} onChange={value => {setDate(value); setError('');}}/><small>Date approximative, modifiable plus tard.</small></fieldset>}
+        {result === 'to_recontact' && <fieldset className="sj-paris-date" disabled={busy}><legend>Dans combien de temps le recontacter ?</legend><div className="sj-soon" role="group" aria-label="Dans combien de temps">{SOON.map(([label, days]) => <button type="button" key={label} aria-pressed={date === inDays(days)} onClick={() => {setDate(inDays(days)); setError('');}}>{label}</button>)}</div><FrenchDateInput floating aria-label="Date de relance" value={date} onChange={value => {setDate(value); setError('');}}/><small>Date approximative, modifiable plus tard.</small></fieldset>}
         {attemptNote && !callback && <p>Cette tentative sera ajoutée au suivi, sans déplacer le prospect.</p>}
         {error && <p className="sj-error" role="alert">{error}</p>}
       </div>
