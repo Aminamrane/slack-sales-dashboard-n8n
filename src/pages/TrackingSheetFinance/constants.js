@@ -198,7 +198,7 @@ export const stripEntitySuffix = (label) =>
   String(label || '').replace(/\s+(Owner|Opti'lex)$/i, '');
 
 // ── Editable enums (backend Pydantic strict) ─────────────────────────────
-export const PSP_OPTIONS = ['Learnypay', 'IFX', 'whop', 'Quonto'];
+export const PSP_OPTIONS = ['Learnypay', 'IFX', 'whop', 'Quonto', 'Owner Pay'];
 
 // 2026-08-18 : `ETAT_OPTIONS` (enum snake_case `clients.etat`) et
 // `FINANCE_STATUS_DETAILS` (colonne « État détail ») supprimés. La colonne
@@ -886,6 +886,7 @@ export const PSP_COLORS = {
   IFX:       { fg: '#0b7a4b', bg: '#e2f6ea' },
   whop:      { fg: '#0b7a4b', bg: '#e2f6ea' },
   Quonto:    { fg: '#0b7a4b', bg: '#e2f6ea' },
+  'Owner Pay': { fg: '#0b7a4b', bg: '#e2f6ea' },
 };
 export const PSP_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee' };
 
