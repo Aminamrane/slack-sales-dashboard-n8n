@@ -1,0 +1,25 @@
+/* Encaissements et Pertes : les barres des Statistiques, avec un montant au bout de la ligne au lieu d'un nombre. */
+.fst-hbar.rl-money { grid-template-columns: minmax(0, 150px) minmax(0, 1fr) minmax(96px, auto); }
+.fst-hbar.rl-money.has-avatar { grid-template-columns: 28px minmax(0, 132px) minmax(0, 1fr) minmax(96px, auto); }
+.fst-hbar.rl-money .fst-hbar-num { white-space: nowrap; }
+.fst-hbar.rl-money .fst-tip { left: 12px; }
+.rl-name-sub { display: block; font-size: 12px; color: var(--muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rl-track { min-width: 0; }
+/* Répartition par mois : une ligne de légende cliquable qui porte sa barre et son montant. */
+.fst-legend-row.rl-month > span:first-child { width: 112px; flex: none; white-space: nowrap; }
+.fst-legend-row.rl-month .fst-hbar-track { flex: 1; min-width: 0; }
+.fst-legend-row.rl-month b { margin-left: 0; min-width: 96px; text-align: right; white-space: nowrap; }
+
+/* Cellule de texte long (motif d'une perte) : deux lignes au plus, le reste au survol. */
+.rl-clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 300px; min-width: 150px; color: var(--ink-2); line-height: 1.45; }
+/* Teintes de montant, les mêmes que les tuiles de chiffres clés. */
+.rl-tone-red { color: #c5221f; }
+.rl-tone-amber { color: #a05a05; }
+.rl-tone-zero { color: var(--faint); }
+.rl-fact-value { font-size: 24px; letter-spacing: -.025em; }
+.rl-num-sub { display: block; font-size: 12px; font-weight: 400; color: var(--muted); margin-top: 1px; white-space: nowrap; }
+
+/* Note de bas de carte précédée d'une icône. */
+.fst-note.rl-note { display: flex; align-items: flex-start; gap: 9px; max-width: 760px; }
+.fst-note.rl-note svg { flex: none; margin-top: 2px; color: var(--muted); }
+.fst-note.rl-note strong { font-weight: 500; color: var(--ink-2); }

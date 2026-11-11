@@ -13,7 +13,7 @@ import { createLatestRequestTracker, withConfirmedEtat } from '../../utils/board
 // is redirected to '/'. Pattern mirrors Campaigns.jsx :77.
 //
 // Composition (Notion-like shell, v6 refonte 2026-05-08) :
-//   - Left sidebar (collapsible, ~260px / 56px) with workspace header,
+//   - Left sidebar (56px icon rail, opens to ~260px on hover, pinnable) with workspace header,
 //     icon row, sections + items, footer composer. Depuis le 2026-09-03 les
 //     sections sont la navigation réelle de la page (suivi, encaissements,
 //     pertes, vues du tableau, export) — icônes filaires monochromes.
@@ -30,14 +30,14 @@ import { createLatestRequestTracker, withConfirmedEtat } from '../../utils/board
 
 import React, { useEffect, useLayoutEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import {
   ChevronLeft, ChevronRight, ChevronDown, RefreshCw, Search, Calendar,
   AlertCircle, CheckCircle2, Home, MessageSquare, Mail, PanelLeft,
   Edit3, Plus, Filter, ArrowUpDown, MoreHorizontal, Share2,
   CheckCircle, Sparkles, FileText, Users, Settings, Clock,
   XCircle, CircleDot, FilterX, Eye, Check, Star, Handshake, TriangleAlert, Download, Phone,
-  CircleDashed, MailCheck, PhoneOff,
+  CircleDashed, MailCheck, PhoneOff, ChartColumn,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -53,6 +53,7 @@ import ValidationsView from './components/ValidationsView.jsx';
 import { StateReviewQueue } from './components/StateReview.jsx';
 import PromisesView from './components/PromisesView.jsx';
 import SequencesView from './components/SequencesView.jsx';
+import StatisticsView from './statistics/StatisticsView.jsx';
 // Icônes de navigation dessinées pour la page (barre latérale, onglets,
 // filtre responsable) : filaires, monochromes, dans l'esprit de la référence
 // donnée par le dev (2026-09-03). Pas de bibliothèque : le trait est le nôtre.
@@ -66,7 +67,7 @@ import { parisToday } from '../../utils/parisDates.js';
 import {
   initialPeriodState, choosePeriodState, followCurrentMonth, withPeriodParam, parisCurrentPeriod,
 } from './periodFollow.js';
-import companyLogo from '../../assets/my_image.png';
+import OwnerMark from '../../components/shared/Sidebar/OwnerMark.jsx';
 import '../../index.css';
 
 import TableView from './TableView.jsx';
@@ -101,30 +102,35 @@ import {
 } from './constants.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Notion palette — single source of truth for surface tones.
-// All colors picked to match Notion's web client (light theme).
+// Palette de la page : toile grège chaude, cartes blanches, encre presque noire,
+// étiquettes pastel. Relevée sur les captures de référence de la refonte (11/2026).
 // ─────────────────────────────────────────────────────────────────────────────
 const N = {
-  pageBg:        '#ffffff',         // main area background (canvas)
-  sideBg:        '#ffffff',         // sidebar background (white, Apple clean)
-  sideHover:     '#f5f5f4',         // sidebar item hover
-  sideActive:    '#eeeeec',         // sidebar item active
-  border:        '#e9e9e7',         // dividers + borders
-  borderSoft:    '#f1f1ef',         // inline subtle borders
-  text:          '#37352f',         // primary text (Notion's signature)
-  textMuted:     '#787774',         // secondary text
-  textFaint:     '#9b9a97',         // hint / placeholder
-  accent:        '#2383e2',         // Notion blue (links, primary CTA)
-  accentBg:      '#e7f0fb',         // blue tint
-  green:         '#0f7b6c',         // "done" green
-  greenBg:       '#ddedea',
-  greenBgPill:   '#cfe9e3',
-  red:           '#b74133',
-  redBg:         '#ffe2dd',
-  yellow:        '#cb912f',
-  yellowBg:      '#fdecc8',
-  purple:        '#6940a5',
-  purpleBg:      '#eae4f2',
+  pageBg:        '#ffffff',         // carte principale, posée sur la toile
+  sideBg:        '#f4f2ef',         // toile : fond de la page et du menu de gauche
+  sideHover:     '#ebe8e3',         // survol sur la toile
+  sideActive:    '#ffffff',         // entrée active : tuile blanche relevée
+  softHover:     '#f4f2ee',         // survol sur fond blanc
+  track:         '#ebe8e3',         // rail des sélecteurs à segments
+  charcoal:      '#2b2927',         // pastilles et barres pleines
+  cardBorder:    '#ece9e4',
+  shadowTile:    '0 1px 2px rgba(50,40,30,.07), 0 6px 14px -10px rgba(50,40,30,.22)',
+  border:        '#e8e4de',         // dividers + borders
+  borderSoft:    '#f1eee9',         // inline subtle borders
+  text:          '#1c1b19',         // primary text (Notion's signature)
+  textMuted:     '#8b867e',         // secondary text
+  textFaint:     '#a8a39b',         // hint / placeholder
+  accent:        '#1b6fd0',         // Notion blue (links, primary CTA)
+  accentBg:      '#e4f0fd',         // blue tint
+  green:         '#0b7a4b',         // "done" green
+  greenBg:       '#e2f6ea',
+  greenBgPill:   '#d5f0df',
+  red:           '#c5221f',
+  redBg:         '#fde6e6',
+  yellow:        '#a8790a',
+  yellowBg:      '#fbf1c2',
+  purple:        '#6a45b8',
+  purpleBg:      '#eee9fa',
   pink:          '#ad1a72',
   pinkBg:        '#f4dfeb',
 };
@@ -180,6 +186,13 @@ const STYLE_BLOCK = `
      Filtre / Trier / Colonnes. Isolé, tout ce qu'il contient reste sous les
      blocs du haut. */
   .tsf-stage > *:last-child { isolation: isolate; }
+  /* Onglets « page » : la zone entière défile, la barre d'onglets reste en haut. */
+  .tsf-stage.is-doc { overscroll-behavior: contain; scroll-padding-top: calc(var(--tsf-tabs-h, 56px) + 96px); }
+  .tsf-stage.is-doc > .tsf-tabrow { position: sticky; top: 0; z-index: 40; background: #ffffff; margin-top: 4px !important; padding: 10px 0 8px; }
+  .tsf-stage.is-doc > .tsf-tabrow::after { content: ''; position: absolute; left: 0; right: 0; top: 100%; height: 10px; background: linear-gradient(#ffffff, rgba(255,255,255,0)); pointer-events: none; }
+  .tsf-stage.is-doc > .tsf-toolbar:empty { display: none; }
+  .tsf-stage.is-doc .fst-root { overflow: visible; min-height: 60vh; }
+  .tsf-stage.is-doc .fst-head { top: var(--tsf-tabs-h, 56px); }
 
   /* Les compteurs du bandeau se posent un à un : c'est le moment où
      l'utilisateur voit que les chiffres ont bien été calculés. */
@@ -197,26 +210,52 @@ const STYLE_BLOCK = `
     .tsf-page, .tsf-stage > *:nth-child(-n+3), .tsf-kpis > *, .tsf-sidebar-in {
       animation: none !important;
     }
+    .tsf-tab, .tsf-tab-ic, .tsf-side-item, .tsf-side-item svg, .tsf-pill-btn, .tsf-icon-btn { transition: none !important; transform: none !important; }
   }
 
-  /* Notion-style thin scrollbar (hidden until hover for a cleaner canvas). */
-  .tsf-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
-  .tsf-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
-  .tsf-scroll:hover::-webkit-scrollbar-thumb { background: rgba(55,53,47,0.16); background-clip: padding-box; }
-  .tsf-scroll::-webkit-scrollbar-thumb:hover { background: rgba(55,53,47,0.32); background-clip: padding-box; }
-  .tsf-scroll::-webkit-scrollbar-track { background: transparent; }
-  /* Coin scrollbar H+V : gris opaque par défaut → carré fantôme qui semble
-     recouvrir la dernière cellule (retour dev 2026-08-18). */
-  .tsf-scroll::-webkit-scrollbar-corner { background: transparent; }
+  /* Barres de défilement : une pilule fine de 4px, sans rail, comme dans le
+     board. Elle vaut pour toute la page et pour ce qui s'ouvre par-dessus
+     (fiche, fenêtres, menus rendus dans le body), d'où la portée sur le body
+     tant que la page Finance est affichée. La largeur reste à 10px : le
+     tableau compte dessus pour caler sa dernière colonne (TableView). */
+  /* Les !important répondent à ceux de la règle commune de l'application
+     (index.css, barre grise à rail) : sans eux elle garde la main. */
+  html body:has(.tsf-page) *::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
+  html body:has(.tsf-page) *::-webkit-scrollbar-track { background: transparent !important; }
+  html body:has(.tsf-page) *::-webkit-scrollbar-thumb { background: #e3ded6 !important; border: 3px solid transparent !important; border-radius: 999px !important; background-clip: padding-box !important; }
+  html body:has(.tsf-page) *:hover::-webkit-scrollbar-thumb { background-color: #cfc9c0 !important; }
+  html body:has(.tsf-page) *::-webkit-scrollbar-thumb:hover { background-color: #a8a39b !important; }
+  html body:has(.tsf-page) *::-webkit-scrollbar-thumb:active { background-color: #8b867e !important; }
+  /* Coin où se croisent les deux barres : transparent, sinon un carré gris
+     semble recouvrir la dernière cellule (retour dev 2026-08-18). */
+  html body:has(.tsf-page) *::-webkit-scrollbar-corner { background: transparent !important; }
+  /* Navigateurs sans ces pseudo-éléments (Firefox) : la barre fine standard. */
+  @supports not selector(::-webkit-scrollbar) {
+    body:has(.tsf-page) * { scrollbar-width: thin; scrollbar-color: #d8d3cb transparent; }
+  }
 
-  .tsf-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
-  .tsf-side-item { transition: background 0.12s ease; }
-  .tsf-side-item:hover { background: ${N.sideHover}; }
-  .tsf-icon-btn { transition: background 0.12s, color 0.12s; }
+  /* Ouvert au survol, le menu flotte sur la page : bord arrondi et ombre douce, le temps du passage. */
+  .tsf-side { border-radius: 0; box-shadow: 0 0 0 rgba(50,40,30,0); transition: box-shadow 0.3s ease, border-radius 0.3s ease; }
+  .tsf-side[data-floating] { border-radius: 0 22px 22px 0; box-shadow: 1px 0 0 ${N.cardBorder}, 0 24px 60px -24px rgba(50,40,30,.34), 0 2px 10px rgba(50,40,30,.05); }
+  .tsf-side-item { transition: background 0.16s ease, box-shadow 0.2s ease, transform 0.18s cubic-bezier(.34,1.56,.64,1); }
+  .tsf-side-item:not([data-active]):not(:disabled):hover { background: ${N.sideHover}; }
+  .tsf-side-item:not(:disabled):active { transform: scale(0.975); }
+  .tsf-side-item svg { transition: transform 0.3s cubic-bezier(.34,1.56,.64,1); }
+  .tsf-side-item:not(:disabled):hover svg { transform: translateY(-1px) scale(1.08); }
+  .tsf-icon-btn { transition: background 0.14s, color 0.14s, transform 0.18s cubic-bezier(.34,1.56,.64,1); }
   .tsf-icon-btn:hover { background: ${N.sideHover}; }
 
   /* Subtle "gallery item" hover feedback used in the main area. */
-  .tsf-tab { position: relative; transition: color 0.12s; white-space: nowrap; flex-shrink: 0; }
+  .tsf-tab { position: relative; transition: color 0.16s, transform 0.18s cubic-bezier(.34,1.56,.64,1); white-space: nowrap; flex-shrink: 0; }
+  .tsf-tab:active { transform: scale(0.97); }
+  .tsf-tab-thumb { position: absolute; inset: 0; border-radius: 10px; background: #fff; border: 1px solid #e3ded6;
+    box-shadow: 0 1px 2px rgba(50,40,30,.07), 0 4px 10px -8px rgba(50,40,30,.25); }
+  .tsf-tab-ic { position: relative; transition: transform 0.32s cubic-bezier(.34,1.56,.64,1), color 0.16s; }
+  .tsf-tab:hover .tsf-tab-ic { transform: translateY(-1px) scale(1.1); }
+  .tsf-pill-btn { transition: transform 0.18s cubic-bezier(.34,1.56,.64,1), box-shadow 0.18s, background 0.16s; }
+  .tsf-pill-btn:hover { background: #faf9f7 !important; box-shadow: 0 2px 6px -2px rgba(50,40,30,.16) !important; }
+  .tsf-pill-btn:active { transform: scale(0.96); }
+  .tsf-icon-btn:active { transform: scale(0.92); }
   /* Onglets et outils sur deux lignes distinctes (dev 2026-09-28 : « la forme
      change d'un onglet à l'autre », puis « des onglets sont cachés »). Les
      onglets ont toute la largeur et ne sont jamais coupés ni masqués ; la
@@ -224,11 +263,6 @@ const STYLE_BLOCK = `
      ses outils n'ont pas d'objet (appels, validations). */
   .tsf-toolbar > * { flex-shrink: 0; white-space: nowrap; }
   .tsf-tab:hover { color: ${N.text}; }
-  .tsf-tab[data-active="true"]::after {
-    content: '';
-    position: absolute; left: 0; right: 0; bottom: -1px;
-    height: 2px; background: ${N.text}; border-radius: 2px;
-  }
 
   /* Hide-on-collapse helper — keeps DOM but eats opacity quickly. */
   .tsf-side-collapsed-hidden { opacity: 0; pointer-events: none; }
@@ -240,41 +274,38 @@ const STYLE_BLOCK = `
   .tsf-copy-wrap:hover .tsf-copy-btn { opacity: 0.6; }
   .tsf-copy-wrap .tsf-copy-btn:hover { opacity: 1; background: ${N.sideHover}; color: ${N.text}; }
 
-  /* "OUVRIR" button — appears at hover on the Nom + entreprise cell.
-     Overlay positioning, doesn't push content, Notion-style. */
+  /* Flèche d'ouverture de la fiche, au survol de la ligne (celle du tableau des Statistiques).
+     Posée par-dessus la cellule : elle ne pousse pas le contenu. */
   .tsf-open-btn {
     position: absolute;
     right: 8px;
     top: 50%;
-    transform: translateY(-50%);
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 3px 8px;
+    width: 26px;
+    height: 26px;
+    display: grid;
+    place-items: center;
+    padding: 0;
     background: #ffffff;
-    border: 1px solid #e3e2e0;
-    border-radius: 4px;
-    box-shadow: 0 1px 2px rgba(15,15,15,0.08);
-    color: #37352f;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
+    border: 1px solid #e8e4de;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(50,40,30,0.06), 0 6px 16px -10px rgba(50,40,30,0.18);
+    color: #1c1b19;
     cursor: pointer;
     opacity: 0;
-    transition: opacity 100ms ease;
-    font-family: inherit;
+    transform: translate(-4px, -50%) scale(0.9);
+    transition: opacity 150ms ease, transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1), background 120ms ease;
     pointer-events: none;
-    user-select: none;
     z-index: 3;
   }
-  .tsf-row:hover .tsf-open-btn { opacity: 1; pointer-events: auto; }
-  .tsf-open-btn:hover { background: #f7f7f5; }
+  .tsf-row:hover .tsf-open-btn, .tsf-open-btn:focus-visible { opacity: 1; transform: translate(0, -50%); pointer-events: auto; }
+  .tsf-open-btn:hover { background: #f7f5f2; }
+  .tsf-open-btn:focus-visible { outline: 2px solid #1c1b19; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { .tsf-open-btn { transition: opacity 150ms ease; transform: translate(0, -50%); } }
 
   /* Column hide button — invisible by default, appears on sub-header hover. */
   .tsf-subheader-cell .tsf-hide-col-btn { opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
-  .tsf-subheader-cell:hover .tsf-hide-col-btn { opacity: 0.8; pointer-events: auto; }
-  .tsf-subheader-cell .tsf-hide-col-btn:hover { opacity: 1; background: rgba(0,0,0,0.08) !important; border-radius: 4px; }
+  .tsf-subheader-cell:hover .tsf-hide-col-btn { opacity: 1; pointer-events: auto; }
+  .tsf-subheader-cell .tsf-hide-col-btn:hover { opacity: 1; background: #efece7 !important; }
 `;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -850,6 +881,25 @@ export default function TrackingSheetFinance() {
   // Tableau, recherche, export et KPI partagent les mêmes lignes visibles.
   const [activeTab, setActiveTab] = useState('all');
 
+  // Onglets « page » : leur contenu se lit de haut en bas, donc toute la zone défile (et pas une boîte dans la
+  // boîte). Le tableau et les appels gardent leur défilement interne.
+  const docTab = ['receipts', 'losses', 'promises', 'sequences', 'statistics', 'state-reviews'].includes(activeTab)
+    || (activeTab === 'validations' && showValidations);
+  const stageRef = useRef(null);
+  // Changer d'onglet repart du haut : indispensable en revenant au tableau, dont la zone ne défile pas.
+  useLayoutEffect(() => { if (stageRef.current) stageRef.current.scrollTop = 0; }, [activeTab]);
+  // La barre d'onglets reste collée en haut ; l'en-tête de la vue se colle juste dessous, quelle que soit sa hauteur.
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    const bar = stage?.querySelector(':scope > .tsf-tabrow');
+    if (!stage || !bar || typeof ResizeObserver === 'undefined') return undefined;
+    const sync = () => stage.style.setProperty('--tsf-tabs-h', `${Math.round(bar.getBoundingClientRect().height)}px`);
+    sync();
+    const observer = new ResizeObserver(sync);
+    observer.observe(bar);
+    return () => observer.disconnect();
+  }, [docTab, authChecked]);
+
   // Promesses en cours : le badge de l'onglet « Promesses de règlement ».
   // L'onglet lui-même liste tout l'historique (PromisesView).
   const promiseRows = useMemo(
@@ -895,10 +945,8 @@ export default function TrackingSheetFinance() {
     });
   }, []);
 
-  // Sidebar collapsed state (persisted).
-  // Sidebar collapsée par défaut sur cette page (refonte tableau central
-  // 2026-05-11) — finance team a besoin du max d'espace horizontal pour le
-  // tableau. User peut l'ouvrir manuellement, choix préservé via localStorage.
+  // Menu de gauche : réduit à ses icônes par défaut, pour laisser toute la largeur au tableau.
+  // Il s'ouvre au survol, par-dessus la page ; le bouton du bas l'épingle (choix gardé d'une visite à l'autre).
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem('tsfSideCollapsed');
     return stored === null ? true : stored === 'true';
@@ -1177,6 +1225,9 @@ export default function TrackingSheetFinance() {
     const row = rows.find((r) => r.client?.id === clientId);
     if (row) onOpenRow(row);
   }, [rows, onOpenRow]);
+  // Les Statistiques listent des clients de plusieurs mois : seule une fiche présente dans le mois affiché s'ouvre.
+  const openableClientIds = useMemo(() => new Set(rows.map((r) => r.client?.id).filter(Boolean)), [rows]);
+  const canOpenClient = useCallback((clientId) => openableClientIds.has(clientId), [openableClientIds]);
 
   // ── Refresh ─────────────────────────────────────────────────────────
   const onRefresh = useCallback(() => {
@@ -1288,6 +1339,7 @@ export default function TrackingSheetFinance() {
           { id: 'losses',   label: 'Pertes',        Icon: LossIcon,    active: activeTab === 'losses',   action: () => setActiveTab('losses') },
           { id: 'promises', label: 'Promesses de règlement', Icon: Handshake, active: activeTab === 'promises', action: () => setActiveTab('promises'), count: promiseRows.length || undefined },
           { id: 'sequences', label: 'Suivi des séquences', Icon: MailCheck, active: activeTab === 'sequences', action: () => setActiveTab('sequences') },
+          { id: 'statistics', label: 'Statistiques', Icon: ChartColumn, active: activeTab === 'statistics', action: () => setActiveTab('statistics') },
           ...(canViewCalls ? [{ id: 'calls', label: 'Tracking des appels', Icon: Phone, active: activeTab === 'calls', action: () => setActiveTab('calls') }] : []),
           { id: 'state-reviews', label: 'États à traiter', Icon: CheckCircle2, count: pendingStateReviews || undefined, active: activeTab === 'state-reviews', action: () => setActiveTab('state-reviews') },
           ...(showValidations ? [{ id: 'validations', label: 'Validations', Icon: CheckCircle2, active: activeTab === 'validations', action: () => setActiveTab('validations'), count: pendingValidations || undefined }] : []),
@@ -1320,8 +1372,6 @@ export default function TrackingSheetFinance() {
     return null;
   }
 
-  const sideWidth = sideCollapsed ? 56 : 260;
-
   return (
     <div className="tsf-page" style={{
       height: '100vh',
@@ -1340,9 +1390,8 @@ export default function TrackingSheetFinance() {
           la CeoSidebar de CeoDispatchView prend le relais à gauche. */}
       {!embedMode && (
         <Sidebar
-          width={sideWidth}
-          collapsed={sideCollapsed}
-          onToggle={() => setSideCollapsed((v) => !v)}
+          pinned={!sideCollapsed}
+          onTogglePin={() => setSideCollapsed((v) => !v)}
           sections={sidebarSections}
         />
       )}
@@ -1358,6 +1407,12 @@ export default function TrackingSheetFinance() {
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
+        ...(embedMode ? null : {
+          margin: '10px 10px 10px 0',
+          border: `1px solid ${N.cardBorder}`,
+          borderRadius: 22,
+          boxShadow: '0 1px 2px rgba(50,40,30,.04), 0 10px 30px -22px rgba(50,40,30,.25)',
+        }),
         // Pas de marginRight quand panel ouvert : panel devient un vrai overlay
         // (position: fixed dans DetailPanel.jsx) → tableau reste pleine largeur
         // en background. Click hors panel ou ESC pour fermer.
@@ -1374,19 +1429,22 @@ export default function TrackingSheetFinance() {
         {/* Main content area — flex column pour que le tableau prenne tout
             l'espace vertical restant (refonte 2026-05-11 : tableau pleine
             hauteur comme Google Sheets, scrollbar horizontale en bas écran). */}
-        <div className="tsf-scroll tsf-stage" style={{
+        <div ref={stageRef} className={`tsf-scroll tsf-stage${docTab ? ' is-doc' : ''}`} style={{
           flex: 1,
-          display: 'flex',
+          // Tableau et appels : la vue occupe la hauteur et défile en elle-même. Les autres onglets sont des
+          // pages : c'est toute la zone qui défile, titre compris, où que soit le pointeur.
+          display: docTab ? 'block' : 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
-          padding: '0 16px 8px',
+          overflowX: 'hidden',
+          overflowY: docTab ? 'auto' : 'hidden',
+          padding: docTab ? '0 16px 16px' : '0 16px 8px',
           minHeight: 0,
         }}>
           {/* Title block */}
           <TitleBlock
             kpis={kpis}
             loading={loading}
-            showKpis={activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'promises' && activeTab !== 'sequences'}
+            showKpis={activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'promises' && activeTab !== 'sequences' && activeTab !== 'statistics'}
             view={activeTab === 'all' ? viewFilter : 'all'}
             pendingCount={exportedRows.filter((r) => r.pending).length}
           />
@@ -1490,7 +1548,7 @@ export default function TrackingSheetFinance() {
               exit={{ opacity: 0, y: -4 }}
               // Dernier à se poser : le regard descend du titre au tableau.
               transition={{ duration: 0.4, delay: 0.18, ease: [0.16, 1, 0.3, 1] }}
-              style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
+              style={docTab ? { marginTop: 12 } : { flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}
             >
               {activeTab === 'calls' && canViewCalls ? (
                 <CallsView operators={callsOperators} clients={rows} board={boardRows} />
@@ -1513,6 +1571,8 @@ export default function TrackingSheetFinance() {
                 <PromisesView scope={scope} onOpenClient={openClientById} />
               ) : activeTab === 'sequences' ? (
                 <SequencesView onOpenClient={openClientById} />
+              ) : activeTab === 'statistics' ? (
+                <StatisticsView onOpenClient={openClientById} canOpenClient={canOpenClient} />
               ) : (
               <TableView
                 rows={filteredRows}
@@ -1587,39 +1647,91 @@ export default function TrackingSheetFinance() {
 // ════════════════════════════════════════════════════════════════════════════
 // SIDEBAR
 // ════════════════════════════════════════════════════════════════════════════
-function Sidebar({ width, collapsed, onToggle, sections }) {
+// Réduit à ses icônes, le menu s'ouvre au survol PAR-DESSUS la page : le tableau ne bouge pas et ses colonnes
+// ne sont pas recalculées. Épinglé (bouton du bas), il prend sa place dans la page.
+const SIDE_RAIL = 56;
+const SIDE_FULL = 260;
+const SIDE_OPEN_DELAY = 70;    // un passage rapide vers le bord de l'écran ne l'ouvre pas
+const SIDE_CLOSE_DELAY = 200;  // un écart d'un instant hors du menu ne le referme pas
+const SIDE_MOVE_MS = 300;
+
+function Sidebar({ pinned, onTogglePin, sections }) {
+  const [peek, setPeek] = useState(false);
+  const reduced = useReducedMotion();
+  const timer = useRef(null);
+  const inside = useRef(false);
+  // Après « réduire », la souris est encore sur le menu : on attend qu'elle en sorte avant de le rouvrir.
+  const held = useRef(false);
+  const plan = (next, delay) => {
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setPeek(next), delay);
+  };
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const open = pinned || peek;
+  // Le contenu garde sa forme ouverte pendant la fermeture, puis se range en icônes : pas de saut en chemin.
+  const [settled, setSettled] = useState(!open);
+  useEffect(() => {
+    const id = setTimeout(() => setSettled(!open), open || reduced ? 0 : SIDE_MOVE_MS);
+    return () => clearTimeout(id);
+  }, [open, reduced]);
+  const collapsed = !open && settled;
+  const floating = !pinned && (peek || !settled);
+  const move = { duration: reduced ? 0 : SIDE_MOVE_MS / 1000, ease: [0.22, 1, 0.36, 1] };
+
+  const togglePin = () => {
+    if (pinned) {
+      held.current = inside.current;
+      clearTimeout(timer.current);
+      setPeek(false);
+    }
+    onTogglePin();
+  };
+
   return (
-    <motion.aside
-      className="tsf-side tsf-sidebar-in"
-      animate={{ width }}
+    <motion.div
+      animate={{ width: pinned ? SIDE_FULL : SIDE_RAIL }}
       initial={false}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        flexShrink: 0,
-        background: N.sideBg,
-        borderRight: `1px solid ${N.border}`,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden',
-        position: 'relative',
-      }}
+      transition={move}
+      // Au-dessus des blocs de la page (rang 40 au plus), sous la fiche client (50).
+      style={{ flexShrink: 0, position: 'relative', zIndex: floating ? 45 : undefined }}
     >
-      {/* Workspace header */}
-      <WorkspaceHeader collapsed={collapsed} />
+      <motion.aside
+        className="tsf-side tsf-sidebar-in"
+        data-floating={!pinned && peek ? 'true' : undefined}
+        animate={{ width: open ? SIDE_FULL : SIDE_RAIL }}
+        initial={false}
+        transition={move}
+        onMouseEnter={() => { inside.current = true; if (!held.current) plan(true, SIDE_OPEN_DELAY); }}
+        onMouseLeave={() => { inside.current = false; held.current = false; plan(false, SIDE_CLOSE_DELAY); }}
+        // Au clavier, le menu s'ouvre dès qu'on y entre et se referme quand on en sort.
+        onFocus={(e) => { if (e.target.matches(':focus-visible')) plan(true, 0); }}
+        onBlur={(e) => { if (!inside.current && !e.currentTarget.contains(e.relatedTarget)) plan(false, SIDE_CLOSE_DELAY); }}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, left: 0,
+          background: N.sideBg,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Workspace header */}
+        <WorkspaceHeader collapsed={collapsed} />
 
-      {/* Icon row : Home / Chat / Mail / Search */}
-      <IconRow collapsed={collapsed} />
+        {/* Icon row : Home / Chat / Mail / Search */}
+        <IconRow collapsed={collapsed} />
 
-      {/* Sections */}
-      <nav style={{ flex: 1, overflowY: 'auto', padding: '4px 0' }} className="tsf-scroll">
-        {sections.map((sec) => (
-          <SidebarSection key={sec.key} section={sec} collapsed={collapsed} />
-        ))}
-      </nav>
+        {/* Sections */}
+        <nav style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', padding: '4px 0' }} className="tsf-scroll">
+          {sections.map((sec) => (
+            <SidebarSection key={sec.key} section={sec} collapsed={collapsed} />
+          ))}
+        </nav>
 
-      {/* Footer composer */}
-      <SidebarFooter collapsed={collapsed} onToggle={onToggle} />
-    </motion.aside>
+        {/* Footer composer */}
+        <SidebarFooter collapsed={collapsed} pinned={pinned} onToggle={togglePin} />
+      </motion.aside>
+    </motion.div>
   );
 }
 
@@ -1634,29 +1746,19 @@ function WorkspaceHeader({ collapsed }) {
         className="tsf-icon-btn"
         style={{
           flex: 1,
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '4px 6px',
+          display: 'flex', alignItems: 'center', gap: 10,
+          padding: '5px 6px',
           borderRadius: 4,
           border: 'none', background: 'transparent', cursor: 'pointer',
           fontFamily: 'inherit', textAlign: 'left',
           minWidth: 0,
         }}
       >
-        <span style={{
-          width: 22, height: 22,
-          flexShrink: 0,
-          borderRadius: 4,
-          background: '#fff',
-          border: `1px solid ${N.border}`,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden',
-        }}>
-          <img src={companyLogo} alt="Owner" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-        </span>
+        <OwnerMark size={24} style={{ color: N.text }} />
         {!collapsed && (
           <>
             <span style={{
-              fontSize: 14, fontWeight: 600, color: N.text,
+              fontSize: 14, fontWeight: 500, color: N.text,
               letterSpacing: '-0.01em',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -1720,7 +1822,7 @@ function SidebarSection({ section, collapsed }) {
             border: 'none', background: 'transparent', cursor: 'pointer',
             fontFamily: 'inherit',
             color: N.textFaint,
-            fontSize: 12, fontWeight: 600,
+            fontSize: 12, fontWeight: 500,
             letterSpacing: '0.01em',
             borderRadius: 4,
           }}
@@ -1768,18 +1870,20 @@ function SidebarItem({ item, collapsed }) {
   return (
     <button
       className="tsf-side-item"
+      data-active={item.active ? 'true' : undefined}
       title={collapsed ? item.label : undefined}
       onClick={disabled ? undefined : item.action}
       disabled={disabled}
       style={{
         display: 'flex', alignItems: 'center', gap: 9,
-        padding: collapsed ? '6px 0' : '5px 8px',
+        padding: collapsed ? '7px 0' : '7px 9px',
         justifyContent: collapsed ? 'center' : 'flex-start',
         border: 'none',
         background: item.active ? N.sideActive : 'transparent',
+        boxShadow: item.active ? N.shadowTile : 'none',
         cursor: disabled ? 'default' : 'pointer',
         opacity: disabled ? 0.45 : 1,
-        borderRadius: 6,
+        borderRadius: 11,
         fontFamily: 'inherit',
         color: N.text,
         fontSize: 13.5,
@@ -1794,7 +1898,7 @@ function SidebarItem({ item, collapsed }) {
         <span style={{
           width: 20, height: 20, flexShrink: 0,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          color: item.active ? N.accent : N.textMuted,
+          color: item.active ? N.text : N.textMuted,
         }}>
           <item.Icon size={17} strokeWidth={1.6} />
         </span>
@@ -1805,15 +1909,15 @@ function SidebarItem({ item, collapsed }) {
         <>
           <span style={{
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            fontWeight: item.active ? 600 : 450,
-            color: N.text,
+            fontWeight: item.active ? 500 : 400,
+            color: item.active ? N.text : N.textMuted,
             flex: 1,
           }}>
             {item.label}
           </span>
           {item.count !== undefined && (
             <span style={{
-              fontSize: 11, fontWeight: 600, color: N.textFaint,
+              fontSize: 11, fontWeight: 500, color: N.textFaint,
               fontVariantNumeric: 'tabular-nums', flexShrink: 0,
             }}>
               {item.count}
@@ -1825,7 +1929,7 @@ function SidebarItem({ item, collapsed }) {
   );
 }
 
-function SidebarFooter({ collapsed, onToggle }) {
+function SidebarFooter({ collapsed, pinned, onToggle }) {
   return (
     <div style={{
       borderTop: `1px solid ${N.border}`,
@@ -1871,7 +1975,8 @@ function SidebarFooter({ collapsed, onToggle }) {
       {/* Collapse / expand toggle */}
       <button
         onClick={onToggle}
-        title={collapsed ? 'Étendre la barre latérale' : 'Réduire la barre latérale'}
+        title={pinned ? 'Réduire le menu' : 'Garder le menu ouvert'}
+        aria-pressed={pinned}
         className="tsf-icon-btn"
         style={{
           width: 28, height: 28,
@@ -1893,11 +1998,10 @@ function SidebarFooter({ collapsed, onToggle }) {
 function TopBar({ period, lastModif, syncedLabel, onShowSidebar, showSidebarToggle }) {
   return (
     <div style={{
-      height: 44,
+      height: 54,
       flexShrink: 0,
       display: 'flex', alignItems: 'center',
-      padding: '0 16px 0 16px',
-      borderBottom: `1px solid ${N.border}`,
+      padding: '0 18px 0 22px',
       background: N.pageBg,
       gap: 10,
     }}>
@@ -1939,8 +2043,9 @@ function TopBar({ period, lastModif, syncedLabel, onShowSidebar, showSidebarTogg
 
       {/* Last modif */}
       <div style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
+        display: 'inline-flex', alignItems: 'center', gap: 6,
         fontSize: 12.5, color: N.textMuted,
+        padding: '5px 11px', borderRadius: 999, background: N.softHover,
       }}>
         <Clock size={12} />
         <span>Dernière modif{lastModif ? ` : ${lastModif}` : ''}</span>
@@ -1965,13 +2070,14 @@ function TopBar({ period, lastModif, syncedLabel, onShowSidebar, showSidebarTogg
 
       {/* Share button */}
       <button
-        className="tsf-icon-btn"
+        className="tsf-pill-btn"
         style={{
-          padding: '5px 10px',
-          fontSize: 13,
+          padding: '6px 13px',
+          fontSize: 13, fontWeight: 500,
           color: N.text,
-          border: 'none', background: 'transparent', cursor: 'pointer',
-          borderRadius: 4,
+          border: `1px solid ${N.border}`, background: '#fff', cursor: 'pointer',
+          borderRadius: 999,
+          boxShadow: '0 1px 2px rgba(50,40,30,.06)',
           fontFamily: 'inherit',
           display: 'inline-flex', alignItems: 'center', gap: 4,
         }}
@@ -2002,7 +2108,7 @@ const iconBtnStyle = {
   width: 28, height: 28,
   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
   border: 'none', background: 'transparent', cursor: 'pointer',
-  borderRadius: 4,
+  borderRadius: 9,
   color: N.textMuted,
 };
 
@@ -2122,7 +2228,7 @@ function kpiTiles(kpis, loading, view, pendingCount = 0) {
       // attente qui ont déjà un numéro sont comptés dans les clients ; seul
       // le contrat sans numéro s'ajoute (dev 2026-09-18 : « + 1 » vs 14).
       sub: `+ ${pendingCount} contrat${pendingCount > 1 ? 's' : ''} sans numéro client`,
-      subColor: '#b45309',
+      subColor: '#c2500e',
       subTitle: `${pendingCount} contrat${pendingCount > 1 ? 's' : ''} Owner signé${pendingCount > 1 ? 's' : ''} sans numéro client encore (Opti’lex en attente) : affiché${pendingCount > 1 ? 's' : ''} en tête, sans montant. Les autres clients en attente Opti’lex ont un numéro et comptent dans les clients.`,
     }, ...standard];
   }
@@ -2136,28 +2242,28 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount
   const creancesView = view === 'creances';
   return (
     <div style={{
-      paddingTop: 20, paddingBottom: 12,
+      paddingTop: 8, paddingBottom: 12,
       display: 'flex', alignItems: 'center', gap: 14,
       flexWrap: 'wrap',
     }}>
       {/* Icon emblem compact */}
       <div style={{
-        width: 32, height: 32,
-        borderRadius: 8,
-        background: N.greenBgPill,
+        width: 38, height: 38,
+        borderRadius: 12,
+        background: N.greenBg,
         color: N.green,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         flexShrink: 0,
       }}>
-        <CheckCircle size={18} strokeWidth={2.2} />
+        <CheckCircle size={19} strokeWidth={1.9} />
       </div>
 
       {/* Title */}
       <h1 style={{
-        fontSize: 22, fontWeight: 700, color: N.text,
+        fontSize: 26, fontWeight: 500, color: N.text,
         margin: 0,
-        letterSpacing: '-0.01em',
-        lineHeight: 1.2,
+        letterSpacing: '-0.025em',
+        lineHeight: 1.15,
       }}>
         Tracking Finance
       </h1>
@@ -2180,23 +2286,24 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount
           gridTemplateColumns: `repeat(${tiles.length}, auto)`,
           marginLeft: 12,
           border: `1px solid ${creancesView ? N.red : N.border}`,
-          borderRadius: 10,
+          borderRadius: 14,
           overflow: 'hidden',
           background: '#fff',
+          boxShadow: '0 1px 2px rgba(50,40,30,.04)',
         }}
         title={creancesView ? 'Lecture « Créances antérieures » : les montants portent sur les créances des mois précédents.' : undefined}
       >
         {tiles.map((kpi, i) => (
           <div key={i} style={{
-            padding: '8px 16px',
+            padding: '8px 18px',
             borderRight: i < tiles.length - 1 ? `1px solid ${N.borderSoft}` : 'none',
             display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2,
-            minWidth: 90,
+            minWidth: 96,
           }}>
-            <span style={{ fontSize: 11, fontWeight: 500, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+            <span style={{ fontSize: 10.5, fontWeight: 500, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
               {kpi.label}
             </span>
-            <span style={{ fontSize: 15, fontWeight: 700, color: kpi.color, fontVariantNumeric: 'tabular-nums' }}>
+            <span style={{ fontSize: 16, fontWeight: 500, color: kpi.color, letterSpacing: '-0.01em', fontVariantNumeric: 'tabular-nums' }}>
               {kpi.value}
             </span>
             {/* Ratio discret sous le montant — masqué si dénominateur 0 */}
@@ -2204,7 +2311,7 @@ function TitleBlock({ kpis, loading, showKpis = true, view = 'all', pendingCount
               <span
                 title={kpi.subTitle}
                 style={{
-                  fontSize: 10.5, fontWeight: 600, color: kpi.subColor,
+                  fontSize: 10.5, fontWeight: 500, color: kpi.subColor,
                   fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
                 }}
               >
@@ -2242,7 +2349,7 @@ function KpiInline({ label, value, tone = 'neutral' }) {
         background: palette.dotBg,
       }} />
       <span style={{ fontWeight: 500 }}>{label}</span>
-      <span style={{ color: palette.fg, fontWeight: 600 }}>{value}</span>
+      <span style={{ color: palette.fg, fontWeight: 500 }}>{value}</span>
     </div>
   );
 }
@@ -2587,7 +2694,7 @@ function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingC
             {count !== undefined && (
               <span data-chip-count style={{
                 position: 'relative', zIndex: 1,
-                fontSize: chipCss('count'), fontWeight: 600,
+                fontSize: chipCss('count'), fontWeight: 500,
                 fontVariantNumeric: 'tabular-nums',
                 color: isActive ? 'rgba(255,255,255,0.72)' : N.textFaint,
               }}>
@@ -2616,7 +2723,7 @@ function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingC
       </AnimatePresence>
       {active === 'retard_mois' && (
         <select aria-label="Onboarding des clients en retard" value={lateOnboarding} onChange={e => onLateOnboardingChange(e.target.value)}
-          style={{ border: '1px solid #e9e9e7', borderRadius: 16, padding: '5px 10px', font: 'inherit', fontSize: 12, background: '#fff' }}>
+          style={{ border: '1px solid #e8e4de', borderRadius: 16, padding: '5px 10px', font: 'inherit', fontSize: 12, background: '#fff' }}>
           <option value="all">Tous les onboardings</option>
           <option value="past">Avec onboarding passé</option>
           <option value="not_past">Sans onboarding passé (à venir ou sans date)</option>
@@ -2687,7 +2794,7 @@ function OptilexIntegrationPicker({ value, onChange, counts }) {
             {o.Icon && <o.Icon size={12} style={{ position: 'relative', zIndex: 1, color: actif ? '#fff' : N.textFaint }} />}
             <span style={{ position: 'relative', zIndex: 1 }}>{o.label}</span>
             {count !== undefined && (
-              <span style={{ position: 'relative', zIndex: 1, fontSize: 11, fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: actif ? 'rgba(255,255,255,0.72)' : N.textFaint }}>
+              <span style={{ position: 'relative', zIndex: 1, fontSize: 11, fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: actif ? 'rgba(255,255,255,0.72)' : N.textFaint }}>
                 {count}
               </span>
             )}
@@ -2712,10 +2819,9 @@ function ScopeSelector({ scope, setScope, canGlobal }) {
   return (
     <div style={{
       display: 'inline-flex', alignItems: 'center',
-      background: '#f1f1ef',
-      border: `1px solid ${N.border}`,
-      borderRadius: 8,
-      padding: 2,
+      background: N.track,
+      borderRadius: 12,
+      padding: 3,
       gap: 2,
       marginRight: 8,
     }}>
@@ -2729,14 +2835,14 @@ function ScopeSelector({ scope, setScope, canGlobal }) {
             title={`Vision ${opt.label}`}
             style={{
               position: 'relative',
-              height: 24, padding: '0 12px',
+              height: 26, padding: '0 13px',
               border: 'none',
-              borderRadius: 6,
+              borderRadius: 9,
               background: 'transparent',
               cursor: 'pointer',
               fontFamily: 'inherit',
               fontSize: 12.5,
-              fontWeight: isActive ? 600 : 500,
+              fontWeight: isActive ? 500 : 400,
               color: isActive ? N.text : N.textMuted,
               transition: 'color 0.18s ease',
               whiteSpace: 'nowrap',
@@ -2748,9 +2854,9 @@ function ScopeSelector({ scope, setScope, canGlobal }) {
                 transition={{ type: 'spring', stiffness: 520, damping: 40 }}
                 style={{
                   position: 'absolute', inset: 0,
-                  background: '#ffffff',
-                  borderRadius: 6,
-                  boxShadow: '0 1px 3px rgba(15,15,15,0.12), 0 0 0 1px rgba(15,15,15,0.04)',
+                  background: '#faf9f8',
+                  borderRadius: 9,
+                  boxShadow: 'inset 0 0 0 1px #fff, 0 1px 2px rgba(50,40,30,.10), 0 4px 10px -6px rgba(50,40,30,.22)',
                 }}
               />
             )}
@@ -2856,7 +2962,7 @@ function FilterDropdown({
             background: N.accent,
             color: '#fff',
             fontSize: 9,
-            fontWeight: 700,
+            fontWeight: 600,
             fontFamily: 'inherit',
           }}>{activeCount}</span>
         )}
@@ -2899,7 +3005,7 @@ function FilterDropdown({
                 outline: 'none',
                 fontFamily: 'inherit',
                 color: N.text,
-                background: '#fafafa',
+                background: '#faf9f7',
                 boxSizing: 'border-box',
               }}
             />
@@ -2914,7 +3020,7 @@ function FilterDropdown({
           )}
           {filteredFinances.length > 0 && (
             <div role="group" aria-label="Finances" style={{ marginBottom: 4, paddingBottom: 4, borderBottom: `1px solid ${N.borderSoft}` }}>
-              <div style={{ padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              <div style={{ padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 500, color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 Finances
               </div>
               {filteredFinances.map((opt) => {
@@ -2987,7 +3093,7 @@ function FilterDropdown({
             <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${N.borderSoft}` }}>
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 6,
-                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600,
+                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 500,
                 color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>
                 <MeteoFilterIcon size={13} strokeWidth={1.7} />
@@ -3027,7 +3133,7 @@ function FilterDropdown({
           {savedFilters.length > 0 && (
             <div style={{ marginTop: 4, paddingTop: 4, borderTop: `1px solid ${N.borderSoft}` }}>
               <div style={{
-                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 600,
+                padding: '6px 14px 2px', fontSize: 10.5, fontWeight: 500,
                 color: N.textFaint, textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>
                 Mes filtres
@@ -3144,14 +3250,14 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           height: 26, padding: '0 12px',
-          background: open ? '#d0e8fd' : '#e8f4fd', color: '#1e6bb8',
+          background: open ? '#c9e0fa' : '#e4f0fd', color: '#1b6fd0',
           border: '1px solid #bdd8ef', borderRadius: 6,
-          fontSize: 12, fontWeight: 600, cursor: 'pointer',
+          fontSize: 12, fontWeight: 500, cursor: 'pointer',
           fontFamily: 'inherit', whiteSpace: 'nowrap',
           transition: 'background 0.15s',
         }}
-        onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = '#d0e8fd'; }}
-        onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = '#e8f4fd'; }}
+        onMouseEnter={(e) => { if (!open) e.currentTarget.style.background = '#c9e0fa'; }}
+        onMouseLeave={(e) => { if (!open) e.currentTarget.style.background = '#e4f0fd'; }}
       >
         <Eye size={13} strokeWidth={1.8} />
         <span>{count} masquée{count > 1 ? 's' : ''}</span>
@@ -3160,11 +3266,11 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
         <div style={{
           position: 'absolute', top: '100%', right: 0, marginTop: 6,
           minWidth: 220, background: '#fff',
-          border: '1px solid #e5e7eb', borderRadius: 10,
+          border: '1px solid #e8e4de', borderRadius: 10,
           boxShadow: '0 8px 24px rgba(15,15,15,0.12), 0 2px 6px rgba(15,15,15,0.06)',
           padding: '6px 0', zIndex: 200,
         }}>
-          <div style={{ padding: '6px 14px 4px', fontSize: 11, fontWeight: 600, color: '#9b9a97', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ padding: '6px 14px 4px', fontSize: 11, fontWeight: 500, color: '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Colonnes masquées
           </div>
           {hiddenKeys.map((key) => (
@@ -3174,28 +3280,28 @@ function HiddenColsPill({ hiddenKeys, labels, onShowCol, onShowAll }) {
               style={{
                 display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                 padding: '7px 14px', border: 'none', background: 'transparent',
-                color: '#37352f', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                color: '#1c1b19', fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
                 transition: 'background 0.1s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <Eye size={14} strokeWidth={1.8} style={{ color: '#1e6bb8', flexShrink: 0 }} />
+              <Eye size={14} strokeWidth={1.8} style={{ color: '#1b6fd0', flexShrink: 0 }} />
               <span>{labels[key] || key}</span>
             </button>
           ))}
           {count > 1 && (
             <>
-              <div style={{ height: 1, background: '#f1f1ef', margin: '4px 0' }} />
+              <div style={{ height: 1, background: '#f1eee9', margin: '4px 0' }} />
               <button
                 onClick={() => { onShowAll(); setOpen(false); }}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8, width: '100%',
                   padding: '7px 14px', border: 'none', background: 'transparent',
-                  color: '#787774', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
+                  color: '#8b867e', fontSize: 12.5, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
                   fontStyle: 'italic', transition: 'background 0.1s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
                 Tout réafficher
@@ -3234,6 +3340,8 @@ function TabRow({
       countTitle: `${promiseCount} client${promiseCount > 1 ? 's' : ''} avec une promesse de règlement` },
     // Les emails et SMS envoyés par la finance : remise, ouvertures (dev 2026-09-29).
     { key: 'sequences', label: 'Séquences', Icon: MailCheck },
+    // Ce que paie un client, les ventes et leur paiement, rétractations et no show (dev 2026-11-10).
+    { key: 'statistics', label: 'Statistiques', Icon: ChartColumn },
     ...(canViewCalls ? [{ key: 'calls', label: 'Tracking des appels', Icon: Phone }] : []),
     // Les demandes de l'équipe finance à valider (dev 2026-09-23).
     { key: 'state-reviews', label: 'États à traiter', Icon: CheckCircle2, count: pendingStateReviews },
@@ -3242,48 +3350,60 @@ function TabRow({
 
   // Scope, mois, recherche, filtres, export : sans objet sur les appels, les
   // validations et les séquences. Leur ligne reste là, vide, pour que rien ne bouge.
-  const showTools = activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'sequences';
+  const showTools = activeTab !== 'calls' && activeTab !== 'validations' && activeTab !== 'sequences' && activeTab !== 'statistics';
 
   return (
     <>
     <div className="tsf-tabrow" style={{
-      marginTop: 32,
+      marginTop: 14,
       display: 'flex', alignItems: 'center',
-      borderBottom: `1px solid ${N.border}`,
-      gap: 4,
-      paddingBottom: 0,
+      gap: 6,
     }}>
       {/* Tabs */}
-      <div className="tsf-tabs" style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 16, rowGap: 4 }}>
+      <div className="tsf-tabs" role="tablist" aria-label="Vues de la page Finance" style={{
+        display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2,
+        padding: 3, borderRadius: 13,
+        background: N.softHover, border: `1px solid ${N.border}`,
+      }}>
         {tabs.map((t) => {
           const active = activeTab === t.key;
           return (
             <button
               key={t.key}
+              role="tab"
+              aria-selected={active}
               data-active={active}
               className="tsf-tab"
               onClick={() => setActiveTab(t.key)}
               style={{
                 position: 'relative',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-                padding: '6px 4px 8px',
+                display: 'inline-flex', alignItems: 'center', gap: 7,
+                padding: '6px 11px',
                 border: 'none',
                 background: 'transparent',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
-                fontSize: 13.5,
-                fontWeight: active ? 600 : 500,
+                fontSize: 13,
+                fontWeight: active ? 500 : 400,
                 color: active ? N.text : N.textMuted,
-                transition: 'color 0.15s',
+                borderRadius: 10,
               }}
             >
-              <t.Icon size={14} strokeWidth={1.75} style={{ color: active ? N.text : N.textFaint }} />
-              {t.label}
+              {active && (
+                <motion.span
+                  layoutId="tsf-tab-thumb"
+                  className="tsf-tab-thumb"
+                  transition={{ type: 'spring', stiffness: 520, damping: 40 }}
+                />
+              )}
+              <t.Icon className="tsf-tab-ic" size={14} strokeWidth={1.75} style={{ color: active ? N.text : N.textFaint }} />
+              <span style={{ position: 'relative' }}>{t.label}</span>
               {t.count > 0 && (
                 <span title={t.countTitle || `${t.count} demande${t.count > 1 ? 's' : ''} en attente`} style={{
+                  position: 'relative',
                   minWidth: 18, height: 18, padding: '0 5px', borderRadius: 999,
-                  background: '#fff8ed', color: '#b45309', border: '1px solid #f5dcb5',
-                  fontSize: 11, fontWeight: 700, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: '#fdf1e6', color: '#c2500e', border: '1px solid #f8d4ba',
+                  fontSize: 11, fontWeight: 500, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                   fontVariantNumeric: 'tabular-nums',
                 }}>
                   {t.count}
@@ -3302,7 +3422,7 @@ function TabRow({
             border: 'none', background: 'transparent', cursor: 'pointer',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: N.textFaint,
-            borderRadius: 4,
+            borderRadius: 9,
           }}
         >
           <Plus size={14} />
@@ -3395,16 +3515,17 @@ function TabRow({
           {...readOnlyProps(apiClient.getUser()?.role)}
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 4,
-            background: N.accent, color: '#fff',
+            background: N.charcoal, color: '#fff',
             border: 'none', cursor: 'pointer',
-            padding: '5px 10px',
-            borderRadius: 4,
+            padding: '6px 13px',
+            borderRadius: 999,
             fontSize: 13, fontWeight: 500,
             fontFamily: 'inherit',
-            marginLeft: 4,
+            marginLeft: 6,
+            transition: 'background 0.16s',
           }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#1a6fc2'}
-          onMouseLeave={(e) => e.currentTarget.style.background = N.accent}
+          onMouseEnter={(e) => e.currentTarget.style.background = N.text}
+          onMouseLeave={(e) => e.currentTarget.style.background = N.charcoal}
         >
           Nouveau
           <ChevronDown size={13} />
@@ -3453,8 +3574,8 @@ function SearchInline({ value, onChange, resultCount = null }) {
         display: 'inline-flex', alignItems: 'center', gap: 4,
         background: '#fff',
         border: `1px solid ${N.border}`,
-        borderRadius: 4,
-        padding: '3px 6px',
+        borderRadius: 999,
+        padding: '4px 10px',
         overflow: 'hidden',
       }}
     >
@@ -3484,7 +3605,7 @@ function SearchInline({ value, onChange, resultCount = null }) {
       {value && resultCount !== null && (
         <span style={{
           flexShrink: 0,
-          fontSize: 11, fontWeight: 600,
+          fontSize: 11, fontWeight: 500,
           fontVariantNumeric: 'tabular-nums',
           color: resultCount === 0 ? N.red : N.textFaint,
           whiteSpace: 'nowrap',

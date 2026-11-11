@@ -38,9 +38,9 @@
 //   - Font 14px, padding 12px horizontal
 //   - `font-variant-numeric: tabular-nums` sur toutes les cellules numériques
 //   - Cellules numériques right-aligned
-//   - Border-bottom row 1px solid #f1f1ef (très subtil)
-//   - Hover row : background #f7f7f5 sur toute la row (sticky inclus)
-//   - Séparateurs verticaux 2px / #c7c7c2 entre blocs Owner|Opti'lex
+//   - Border-bottom row 1px solid #f1eee9 (très subtil)
+//   - Hover row : background #f7f5f2 sur toute la row (sticky inclus)
+//   - Séparateurs verticaux 2px / #c9c4bc entre blocs Owner|Opti'lex
 //     (entre cols #10–#11, #15–#16, #17–#18)
 //   - "OUVRIR" pill au hover de la cellule Nom (overlay, ne pousse pas)
 //   - Pas de row-click générique : seul le bouton OUVRIR ouvre le panel
@@ -54,7 +54,7 @@ import { Virtuoso } from 'react-virtuoso';
 import { motion } from 'framer-motion';
 import {
   GripVertical, Plus, Type, Hash, Calendar, Tag, CircleDot, AlignLeft,
-  Square, Edit3, MessageSquare, Check,
+  ArrowUpRight, Edit3, MessageSquare, Check,
   EyeOff, Eye, Columns3, ChevronLeft, ChevronRight, PhoneOff,
 } from 'lucide-react';
 import {
@@ -106,25 +106,25 @@ import { isReadOnlyViewer, readOnlyProps } from '../../utils/readOnlyRoles.js';
 // ── Notion palette (kept in sync with index.jsx N constant) ─────────────
 const N = {
   pageBg:    '#ffffff',
-  rowHover:  '#f5f4f1',     // hover row : très subtle, distinct des borders
-  rowActive: '#efeeec',
-  border:    '#d6d5d1',     // border plus marquée
-  borderSft: '#d0cfcb',     // borders verticales/horizontales encore + foncées (demande dev 2026-05-11 : restent visibles au hover)
-  borderHeavy: '#a8a7a2',   // séparateur Owner|Opti'lex (plus marqué)
-  text:      '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  green:     '#0f7b6c',
-  greenBg:   '#cfe9e3',
-  red:       '#b74133',
-  redBg:     '#ffe2dd',
-  yellow:    '#cb912f',
-  yellowBg:  '#fdecc8',
+  rowHover:  '#faf9f7',     // survol très doux, les filets restent lisibles
+  rowActive: '#f4f2ee',
+  border:    '#e8e4de',     // filet chaud des captures de référence
+  borderSft: '#f1eee9',     // filets des cellules, ceux du tableau des Statistiques
+  borderHeavy: '#e8e4de',   // séparateur de blocs : un filet plus marqué, plus une barre
+  text:      '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  green:     '#0b7a4b',
+  greenBg:   '#d5f0df',
+  red:       '#c5221f',
+  redBg:     '#fde6e6',
+  yellow:    '#a8790a',
+  yellowBg:  '#fbf1c2',
 };
 
 // ── Row layout constants (3e passe : tableau aéré) ──────────────────────
-const ROW_HEIGHT = 44;
-const HEADER_HEIGHT = 52; // augmenté pour permettre wrap sur 2 lignes (capture #36)
+const ROW_HEIGHT = 50;
+const HEADER_HEIGHT = 36; // un libellé par ligne : les colonnes sont à la largeur de leur titre
 const CELL_FONT_SIZE = 14;
 const CELL_PAD_X = 12;
 
@@ -164,15 +164,15 @@ function buildCols(scope, paymentDatesEditable = false, role = apiClient.getUser
     modalites:       { icon: CycleIcon, w: 160, group: 'modalites',   shortLabel: 'Modalités',          fullLabel: COLUMN_LABELS.modalites,                                kind: 'select', sticky: false, splitVisible: false, align: 'left',   editable: contract, heavyRight: true },
     // ── Bloc entité (Owner / Opti'lex / Global selon la vision) ───────────
     expected:        { icon: BanknoteIcon, w: 110, group: entityGroup,   shortLabel: 'Attendu',            fullLabel: stripEntitySuffix(COLUMN_LABELS.expectedOwner),         kind: 'amount', sticky: false, splitVisible: true,  align: 'right',  editable: false },
-    received:        { icon: ReceivedIcon, w: 150, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
-    overdueCum:      { icon: DebtIcon, w: 125, group: entityGroup,   shortLabel: 'Créance initiale',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
-    receivedOverdue: { icon: RecoveredPriorIcon, w: 150, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
+    received:        { icon: ReceivedIcon, w: 138, group: entityGroup,   shortLabel: 'Récupéré',           fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOwner),         kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
+    overdueCum:      { icon: DebtIcon, w: 140, group: entityGroup,   shortLabel: 'Créance initiale',   fullLabel: stripEntitySuffix(COLUMN_LABELS.overdueOwnerCum),       kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    receivedOverdue: { icon: RecoveredPriorIcon, w: 162, group: entityGroup,   shortLabel: 'Récupéré antérieur', fullLabel: stripEntitySuffix(COLUMN_LABELS.receivedOverdueOwner),  kind: 'amount', sticky: false, splitVisible: false, align: 'center', editable: !isGlobal && amounts },
     // Ce que le client doit VRAIMENT à cet instant : retard du mois +
     // créances antérieures, encaissements du mois déduits. C'est la colonne
     // « Retard de paiement » du classeur, et la seule qui baisse quand on
     // enregistre un paiement (remise en place 2026-08-26 — le « retard
     // global » que le dev avait demandé de déplacer le 2026-08-18).
-    overdueToDate:   { icon: TrendIcon, w: 125, group: entityGroup,   shortLabel: 'Retard à date',      fullLabel: COLUMN_LABELS.overdueCurrent,                           kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
+    overdueToDate:   { icon: TrendIcon, w: 130, group: entityGroup,   shortLabel: 'Retard à date',      fullLabel: COLUMN_LABELS.overdueCurrent,                           kind: 'amount', sticky: false, splitVisible: false, align: 'right',  editable: false },
     // Check / Date paiement : par entité uniquement — pas de somme possible,
     // absentes en vision Globale.
     ...(isGlobal ? {} : {
@@ -185,12 +185,14 @@ function buildCols(scope, paymentDatesEditable = false, role = apiClient.getUser
 // Group headers metadata — palette Notion light mode authentique
 // Option A 2026-05-11 : pas de color band sur cells (cellBg = null partout),
 // seul le group header est coloré. Cells restent blanches sauf status overdue.
+// Refonte 2026-11-10 : plus de bandeau teinté non plus, l'entité se lit à sa
+// pastille de couleur devant le nom du groupe (bleu Owner, pêche Opti'lex, vert Global).
 const GROUPS = {
-  identite:       { label: '',           cellBg: null, headerBg: '#ffffff' },
-  modalites:      { label: 'Modalités',  cellBg: null, headerBg: '#F1F1EF' }, // Notion gray
-  entity_owner:   { label: 'Owner',      cellBg: null, headerBg: '#E9F3F7' }, // Notion blue light
-  entity_optilex: { label: "Opti'lex",   cellBg: null, headerBg: '#F8ECDF' }, // Notion orange light
-  entity_global:  { label: 'Global',     cellBg: null, headerBg: '#EEF3ED' }, // Notion green light
+  identite:       { label: '',           cellBg: null, dot: null },
+  modalites:      { label: 'Modalités',  cellBg: null, dot: null },
+  entity_owner:   { label: 'Owner',      cellBg: null, dot: '#1b6fd0' },
+  entity_optilex: { label: "Opti'lex",   cellBg: null, dot: '#c2500e' },
+  entity_global:  { label: 'Global',     cellBg: null, dot: '#0b7a4b' },
 };
 
 // Référence statique (vision owner = jeu de clés complet) pour les lookups
@@ -207,8 +209,8 @@ const HIDDEN_COLS_LS_KEY = 'tsf-hidden-cols';
 // Une icône PAR PROPRIÉTÉ (dev 2026-09-25, référence Notion) ; l'icône du
 // type de colonne ne sert plus que de repli.
 function HeaderTypeIcon({ kind, Icon = null }) {
-  if (Icon) return <Icon size={15} style={{ color: N.textFaint }} />;
-  const props = { size: 12, strokeWidth: 1.8, style: { color: N.textFaint, flexShrink: 0 } };
+  if (Icon) return <Icon size={15} strokeWidth={1.7} style={{ color: N.textMuted, flexShrink: 0 }} />;
+  const props = { size: 14, strokeWidth: 1.7, style: { color: N.textMuted, flexShrink: 0 } };
   switch (kind) {
     case 'text':       return <Type {...props} />;
     case 'amount':     return <Hash {...props} />;
@@ -268,7 +270,7 @@ function computeGroupSegments(keys, cols) {
   return segments;
 }
 
-const GROUP_HEADER_HEIGHT = 32;
+const GROUP_HEADER_HEIGHT = 22;
 
 function getHiddenBetween(allKeys, visibleKeys, hiddenCols) {
   if (!hiddenCols?.size) return {};
@@ -295,7 +297,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
       <div style={{
         display: 'flex',
         height: GROUP_HEADER_HEIGHT,
-        borderBottom: `1px solid ${N.borderSft}`,
+        background: N.pageBg,
       }}>
         {/* Gutter */}
         <div style={{
@@ -305,6 +307,9 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
         }} />
         {segments.map((seg, i) => {
           const g = GROUPS[seg.group];
+          // Un groupe d'une seule colonne qui porte déjà son nom ne se répète pas au-dessus d'elle.
+          const only = seg.keys.length === 1 ? cols[seg.keys[0]] : null;
+          const groupLabel = only && (only.shortLabel || only.fullLabel) === g.label ? '' : g.label;
           const isLast = i === segments.length - 1;
           const lastCol = cols[seg.keys[seg.keys.length - 1]];
           // Border 2px si la dernière col du segment a heavyRight (alignement
@@ -313,31 +318,35 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
           const segBorderRight = isLast
             ? 'none'
             : lastCol.heavyRight
-              ? `3px solid ${N.borderHeavy}`
-              : `1px solid ${N.border}`;
+              ? `1px solid ${N.borderHeavy}`
+              : `1px solid ${N.borderSft}`;
           return (
             <div
               key={`seg-${seg.group}-${i}`}
               style={{
                 width: seg.width,
                 flex: `0 0 ${seg.width}px`,
-                background: g.headerBg,
-                color: N.text,
-                fontSize: 13,
-                fontWeight: 700,
-                letterSpacing: '0.06em',
+                background: N.pageBg,
+                color: N.textFaint,
+                padding: `0 ${CELL_PAD_X}px`,
+                gap: 7,
+                fontSize: 10.5,
+                fontWeight: 500,
+                letterSpacing: '0.09em',
                 textTransform: 'uppercase',
                 position: seg.sticky ? 'sticky' : 'relative',
                 left: seg.sticky ? GUTTER + seg.stickyLeft : undefined,
                 zIndex: seg.sticky ? 5 : 0,
                 display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
+                alignItems: 'flex-end',
+                paddingBottom: 2,
+                lineHeight: 1,
                 userSelect: 'none',
                 borderRight: segBorderRight,
               }}
             >
-              {g.label}
+              {g.dot && groupLabel && <span aria-hidden="true" style={{ width: 6, height: 6, borderRadius: '50%', background: g.dot, marginBottom: 2, flexShrink: 0 }} />}
+              {groupLabel}
             </div>
           );
         })}
@@ -347,7 +356,7 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
       <div style={{
         display: 'flex',
         height: HEADER_HEIGHT,
-        borderBottom: `3px solid ${N.borderHeavy}`,  // séparateur header/data marqué (capture #6)
+        borderBottom: `1px solid ${N.borderHeavy}`,  // séparateur en-tête / lignes
         background: N.pageBg,
       }}>
         {/* Gutter */}
@@ -373,9 +382,9 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                 opacity: isCollapsing ? 0 : 1,
                 overflow: 'hidden',
                 transition: 'width 0.32s cubic-bezier(0.32, 0, 0.15, 1), flex 0.32s cubic-bezier(0.32, 0, 0.15, 1), opacity 0.18s ease-out, padding 0.32s cubic-bezier(0.32, 0, 0.15, 1)',
-                padding: `8px ${CELL_PAD_X}px`,
-                fontSize: 14,
-                fontWeight: 700,
+                padding: `0 ${CELL_PAD_X}px`,
+                fontSize: 12.5,
+                fontWeight: 500,
                 color: N.text,
                 position: c.sticky ? 'sticky' : 'relative',
                 left: c.sticky ? GUTTER + stickyLefts[k] : undefined,
@@ -383,14 +392,12 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                 zIndex: c.sticky ? 4 : 2,
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: c.align === 'right'
-                  ? 'flex-end'
-                  : c.align === 'center'
-                    ? 'center'
-                    : 'flex-start',
+                // Chaque titre part du même retrait à gauche de sa colonne, quel que soit le calage des
+                // valeurs dessous : la ligne garde un rythme régulier. Seul le N°, sans icône, reste centré.
+                justifyContent: c.hideKindIcon && c.align === 'center' ? 'center' : 'flex-start',
                 gap: 6,
                 borderRight: c.heavyRight
-                  ? `3px solid ${N.borderHeavy}`
+                  ? `1px solid ${N.borderHeavy}`
                   : `1px solid ${N.borderSft}`,
                 userSelect: 'none',
               }}
@@ -398,15 +405,13 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
               {!c.hideKindIcon && <HeaderTypeIcon kind={c.kind} Icon={c.icon} />}
               {!c.headerIconOnly && (
                 <span style={{
-                  // Wrap sur 2 lignes max au lieu de tronquer (capture #36).
-                  // L'utilisateur voit le label entier sans avoir à hover.
-                  whiteSpace: 'normal',
-                  wordBreak: 'break-word',
-                  lineHeight: 1.2,
+                  // Une seule ligne : les colonnes sont taillées pour leur titre, les points de
+                  // suspension ne servent que de filet (le titre complet reste en infobulle).
+                  minWidth: 0,
+                  whiteSpace: 'nowrap',
                   overflow: 'hidden',
-                  display: '-webkit-box',
-                  WebkitLineClamp: 2,
-                  WebkitBoxOrient: 'vertical',
+                  textOverflow: 'ellipsis',
+                  lineHeight: 1.3,
                 }}>
                   {c.shortLabel || c.fullLabel}
                 </span>
@@ -423,8 +428,8 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                   }}
                   style={{
                     position: 'absolute',
-                    top: 3,
-                    right: 3,
+                    top: (HEADER_HEIGHT - 22) / 2,
+                    right: 4,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -432,15 +437,17 @@ function Header({ keys, cols, stickyLefts, hiddenCols, onHideCol, onShowCol, all
                     height: 22,
                     padding: 0,
                     border: 'none',
-                    borderRadius: 3,
-                    background: 'transparent',
+                    borderRadius: 6,
+                    // Fond plein et halo : le bouton recouvre proprement la fin d'un titre long.
+                    background: subHeaderBg,
+                    boxShadow: `-8px 0 8px ${subHeaderBg}`,
                     color: N.textFaint,
                     cursor: 'pointer',
                     transition: 'opacity 0.15s, background 0.12s',
                     zIndex: 5,
                   }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = '#e3e2e0'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = '#efece7'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = subHeaderBg; }}
                 >
                   <EyeOff size={12} strokeWidth={2} />
                 </button>
@@ -481,7 +488,7 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 5,
           height: 28, padding: '0 14px',
-          background: open ? '#d0e8fd' : '#e8f4fd', color: '#1e6bb8',
+          background: open ? '#c9e0fa' : '#e4f0fd', color: '#1b6fd0',
           border: '1px solid #bdd8ef', borderRadius: 6,
           fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
           fontFamily: 'inherit', whiteSpace: 'nowrap',
@@ -501,7 +508,7 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
           fontSize: 12, cursor: 'pointer', fontFamily: 'inherit',
           transition: 'background 0.12s',
         }}
-        onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
         onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
       >
         Tout réafficher
@@ -533,10 +540,10 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
                   color: N.text, fontSize: 13, fontFamily: 'inherit', cursor: 'pointer', textAlign: 'left',
                   transition: 'background 0.1s',
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
               >
-                <Eye size={14} strokeWidth={1.8} style={{ color: '#1e6bb8', flexShrink: 0 }} />
+                <Eye size={14} strokeWidth={1.8} style={{ color: '#1b6fd0', flexShrink: 0 }} />
                 <span style={{ flex: 1 }}>{label}</span>
                 {groupLabel && <span style={{ fontSize: 11, color: N.textFaint }}>{groupLabel}</span>}
               </button>
@@ -554,7 +561,9 @@ function HiddenColsBar({ hiddenCols, onShowCol, onShowAll }) {
 // ressortent, en rouge — c'est ce que la finance doit repérer d'un œil, et le
 // rouge ne vaut que s'il est seul. L'état client garde sa teinte pastel sur les
 // deux cellules d'identité (N° + nom), zone distincte.
-const PRIOR_DEBT_RED = { bg: '#FAECEC', fg: '#b74133' }; // rouge Notion désaturé
+const PRIOR_DEBT_RED = { bg: '#fde6e6', fg: '#c5221f' };
+// Fond des deux cellules d'identité d'un client en créances antérieures : un voile, l'étiquette du numéro porte le rouge.
+const PRIOR_DEBT_ROW = '#fdf4f3';
 
 // ── Cell wrapper helper ─────────────────────────────────────────────────────
 function Cell({
@@ -578,7 +587,7 @@ function Cell({
         opacity: isCollapsing ? 0 : 1,
         transition: isCollapsing ? 'width 0.28s cubic-bezier(0.4, 0, 0.2, 1), flex 0.28s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease, padding 0.28s cubic-bezier(0.4, 0, 0.2, 1)' : undefined,
         borderRight: c.heavyRight
-          ? `3px solid ${N.borderHeavy}`
+          ? `1px solid ${N.borderHeavy}`
           : `1px solid ${N.borderSft}`,
         position: c.sticky ? 'sticky' : 'relative',
         left: c.sticky ? GUTTER + stickyLefts[k] : undefined,
@@ -608,7 +617,7 @@ function Cell({
         // Outline sélection : appliqué partout (read-only ET éditables).
         // L'EditableNumber/Select interne ne montre plus de focus border native
         // pour éviter le doublé. Style Google Sheets / Notion (capture #32).
-        outline: selected ? '2px solid #2383e2' : undefined,
+        outline: selected ? '2px solid #1b6fd0' : undefined,
         outlineOffset: '-2px',
         ...extraStyle,
       }}
@@ -674,8 +683,8 @@ function Cell({
             height: 22,
             padding: commentCount > 0 ? '0 7px 0 6px' : '0 5px',
             background: '#ffffff',
-            color: '#37352f',
-            border: '1px solid #e3e2e0',
+            color: '#1c1b19',
+            border: '1px solid #e3ded6',
             borderRadius: 4,
             fontSize: 12,
             fontWeight: 500,
@@ -685,7 +694,7 @@ function Cell({
             boxShadow: '0 1px 2px rgba(15,15,15,0.06)',
             zIndex: 12,
           }}
-          onMouseEnter={(e) => { e.currentTarget.style.background = '#f7f7f5'; }}
+          onMouseEnter={(e) => { e.currentTarget.style.background = '#f7f5f2'; }}
           onMouseLeave={(e) => { e.currentTarget.style.background = '#ffffff'; }}
         >
           <MessageSquare size={12} strokeWidth={2} style={{ color: N.textMuted }} />
@@ -706,7 +715,7 @@ function Cell({
             right: -4, bottom: -4,
             width: 8, height: 8,
             borderRadius: '50%',
-            background: '#2383e2',
+            background: '#1b6fd0',
             border: '1.5px solid #ffffff',
             pointerEvents: 'none',
             zIndex: 999,
@@ -854,7 +863,7 @@ const RowRenderer = React.memo(function RowRenderer({
           couleur ici : c'est le seul repère du tableau. */}
       {keys.includes('numero') && C('numero', (
         <NumeroCell numero={row.client?.numero_client} priorDebt={hasPriorDebt} />
-      ), hasPriorDebt ? { background: PRIOR_DEBT_RED.bg, transition: 'background 0.25s ease' } : undefined)}
+      ), hasPriorDebt ? { background: PRIOR_DEBT_ROW, transition: 'background 0.25s ease' } : undefined)}
 
       {/* Identité — Nom client + entreprise + météo + bouton OUVRIR au hover */}
       {keys.includes('societe') && C('societe', (
@@ -867,13 +876,13 @@ const RowRenderer = React.memo(function RowRenderer({
               e.stopPropagation();
               onOpenRow?.(row);
             }}
-            title="Ouvrir le détail du client"
+            title="Ouvrir la fiche du client"
+            aria-label="Ouvrir la fiche du client"
           >
-            <Square size={12} strokeWidth={2} />
-            <span>OUVRIR</span>
+            <ArrowUpRight size={14} />
           </button>
         </>
-      ), hasPriorDebt ? { background: PRIOR_DEBT_RED.bg, transition: 'background 0.25s ease' } : undefined)}
+      ), hasPriorDebt ? { background: PRIOR_DEBT_ROW, transition: 'background 0.25s ease' } : undefined)}
 
       {/* Modalités — chip N×/M/A + pastilles prélèvement O/X (colonne fusionnée) */}
       {keys.includes('modalites') && C('modalites', (
@@ -965,9 +974,9 @@ const RowRenderer = React.memo(function RowRenderer({
           créance mais avec un trop-perçu reporté : montant vert négatif. */}
       {keys.includes('overdueCum') && C('overdueCum', (
         <div style={{ textAlign: 'right' }}>
-          <AnimatedAmount value={scopedOpeningDebt(row, scope)} style={{ fontWeight: 600, color: N.text }} />
+          <AnimatedAmount value={scopedOpeningDebt(row, scope)} style={{ fontWeight: 500, color: N.text }} />
           {scopedOpeningDebt(row, scope) > 0 && overdueCum <= 0 && (
-            <div style={{ fontSize: 10, color: '#0f7b6c', marginTop: 2 }}>Réglée</div>
+            <div style={{ fontSize: 10, color: '#0b7a4b', marginTop: 2 }}>Réglée</div>
           )}
         </div>
       ))}
@@ -981,7 +990,7 @@ const RowRenderer = React.memo(function RowRenderer({
               value={recoveredOverdue}
               style={{
                 fontSize: CELL_FONT_SIZE,
-                fontWeight: 700,
+                fontWeight: 500,
                 color: N.text,
                 fontVariantNumeric: 'tabular-nums',
               }}
@@ -1045,7 +1054,7 @@ const RowRenderer = React.memo(function RowRenderer({
 // numéro client, pas d'attendu, rien à saisir. Même grille que les autres
 // lignes, mais aucune cellule éditable, aucun bouton OUVRIR : le flag ambre
 // dit ce qui manque, la colonne Modalités dit où en est le contrat.
-const PENDING = { fg: '#b45309', bg: '#fff3e3' };
+const PENDING = { fg: '#c2500e', bg: '#fde9da' };
 // Flag « Attente Opti'Lex », après le nom : le même pour un contrat sans
 // numéro client et pour un client que le board affiche dans cet état.
 function PendingFlag() {
@@ -1150,16 +1159,18 @@ function NumeroCell({ numero, priorDebt }) {
     <span
       title={priorDebt ? 'Créances antérieures à recouvrer' : undefined}
       style={{
+        display: 'inline-flex', alignItems: 'center', height: 22, padding: '0 7px',
+        borderRadius: 7,
+        border: `1px solid ${priorDebt ? '#f8cccc' : '#e3ded6'}`,
+        background: priorDebt ? PRIOR_DEBT_RED.bg : '#f1eee9',
+        color: priorDebt ? PRIOR_DEBT_RED.fg : '#4a4540',
         fontSize: 12,
-        color: priorDebt ? PRIOR_DEBT_RED.fg : N.textMuted,
-        fontWeight: priorDebt ? 700 : 400,
-        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-        letterSpacing: '-0.01em',
+        fontWeight: 500,
         fontVariantNumeric: 'tabular-nums',
         whiteSpace: 'nowrap',
         maxWidth: '100%',
         overflow: 'hidden', textOverflow: 'ellipsis',
-        transition: 'color 0.25s ease',
+        transition: 'color 0.25s ease, background 0.25s ease, border-color 0.25s ease',
       }}
     >
       {numero}
@@ -1200,7 +1211,7 @@ function SocieteCell({ row, boardRow }) {
           {societeName || <EmptyCell />}
         </span>
         {row.client?.do_not_call && <span title="Client à ne pas rappeler" role="img" aria-label="Client à ne pas rappeler"
-          style={{ display: 'inline-flex', color: '#92400e', flexShrink: 0 }}><PhoneOff size={14}/></span>}
+          style={{ display: 'inline-flex', color: '#a8480f', flexShrink: 0 }}><PhoneOff size={14}/></span>}
         {/* Contrat Opti'lex encore en vol (état du board) : même flag que
             les contrats sans numéro client, pour que la vue « Attente
             Opti'Lex » se lise d'un coup d'œil. */}
@@ -1311,7 +1322,7 @@ function RemainingAmount({ expected, paid, advance = null, surplus = null, onboa
       advance?.title, surplus?.title].filter(Boolean).join(' ') + upcomingTitle}
       style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
       <span style={{ fontSize: CELL_FONT_SIZE, color: N.text, fontVariantNumeric: 'tabular-nums' }}>{formatEUR(exp)}</span>
-      {Number(paid || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0f7b6c', whiteSpace: 'nowrap' }}>
+      {Number(paid || 0) > 0 && <span style={{ fontSize: 10, color: remaining ? '#a4581d' : '#0b7a4b', whiteSpace: 'nowrap' }}>
         {/* Au-delà de 10 000 €, le symbole ne tient plus dans la colonne. */}
         {remaining ? `Reste ${formatEUR(remaining, { withSymbol: remaining < 10000 })}` : 'Réglé'}
       </span>}
@@ -1334,7 +1345,7 @@ function RecoveredAmount({ value, previous }) {
       previous={previous}
       style={{
         fontSize: CELL_FONT_SIZE,
-        fontWeight: 700,
+        fontWeight: 500,
         color: N.text, // neutre depuis 2026-08-24 : seul le retard antérieur est coloré
         fontVariantNumeric: 'tabular-nums',
       }}
@@ -1351,10 +1362,10 @@ function OverduePill({ amount, previous, credit = 0 }) {
   return <span style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
     {amount > 0 && <span style={{ padding: '2px 8px', borderRadius: 5, background: PRIOR_DEBT_RED.bg }}>
       <AnimatedAmount value={Number(amount)} previous={previous}
-        style={{ fontSize: CELL_FONT_SIZE, fontWeight: 700, color: PRIOR_DEBT_RED.fg, fontVariantNumeric: 'tabular-nums' }} />
+        style={{ fontSize: CELL_FONT_SIZE, fontWeight: 600, color: PRIOR_DEBT_RED.fg, fontVariantNumeric: 'tabular-nums' }} />
     </span>}
     {credit > 0 && <span title="Trop-perçu à déduire ou rembourser, distinct de la dette"
-      style={{ fontSize: amount > 0 ? 10 : 12, fontWeight: 600, color: '#0f7b6c', whiteSpace: 'nowrap' }}>
+      style={{ fontSize: amount > 0 ? 10 : 12, fontWeight: 600, color: '#0b7a4b', whiteSpace: 'nowrap' }}>
       Crédit {formatEUR(credit)}
     </span>}
   </span>;
@@ -1379,7 +1390,7 @@ function DeltaPill({ delta }) {
         display: 'inline-flex',
         alignItems: 'center',
         background: positive ? '#d3f1e5' : '#fdecd5',  // vert Notion / orange Notion light
-        color:      positive ? '#0f7b6c' : '#a4581d',  // vert dark / orange dark
+        color:      positive ? '#0b7a4b' : '#a4581d',  // vert dark / orange dark
         borderRadius: 4,
         padding: '0 5px',
         marginLeft: 4,
@@ -1430,7 +1441,7 @@ function AmountWithDelta({ children, delta, note = null, ghost = null }) {
         <span style={{
           position: 'absolute', left: 0, right: 0, top: lift, transform: 'translateY(-50%)',
           textAlign: 'center', pointerEvents: 'none',
-          fontSize: CELL_FONT_SIZE, fontWeight: 600, color: '#0f7b6c', fontVariantNumeric: 'tabular-nums',
+          fontSize: CELL_FONT_SIZE, fontWeight: 600, color: '#0b7a4b', fontVariantNumeric: 'tabular-nums',
         }}>
           {formatEUR(ghost)}
         </span>
@@ -1439,7 +1450,7 @@ function AmountWithDelta({ children, delta, note = null, ghost = null }) {
         <span style={{
           position: 'absolute', left: 2, right: 2, bottom: 2,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3, pointerEvents: 'none',
-          fontSize: 10, color: '#0f7b6c', whiteSpace: 'nowrap', overflow: 'hidden',
+          fontSize: 10, color: '#0b7a4b', whiteSpace: 'nowrap', overflow: 'hidden',
         }}>
           {delta > 0 && <DeltaPill delta={delta} />}
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{note.text}</span>
@@ -1748,7 +1759,7 @@ export default function TableView({
         overflow: 'auto',
         flex: 1,
         minHeight: 0,
-        border: `1px solid ${N.borderSft}`,
+        border: `1px solid ${N.border}`,
         borderRadius: 14,
         // Le wrapper s'arrête à la dernière colonne au lieu de continuer sur
         // toute la largeur du viewport (retour dev 2026-08-18 : gouttière
@@ -1886,7 +1897,7 @@ function SkeletonTable({ keys, cols, stickyLefts }) {
                 width: cols[k].w, flex: `0 0 ${cols[k].w}px`,
                 padding: `8px ${CELL_PAD_X}px`,
                 borderRight: cols[k].heavyRight
-                  ? `3px solid ${N.borderHeavy}`
+                  ? `1px solid ${N.borderHeavy}`
                   : `1px solid ${N.borderSft}`,
               }}>
                 <div style={{

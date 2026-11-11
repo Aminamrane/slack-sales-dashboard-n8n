@@ -14,13 +14,13 @@ import { X, Handshake } from 'lucide-react';
 import { formatDateFR } from '../constants.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  red: '#b42318',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  red: '#c5221f',
 };
 
 const todayISO = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Paris' });
@@ -102,7 +102,7 @@ export default function PromiseDialog({ open, client, onClose, onSubmit }) {
             <div style={{ minWidth: 0, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <Handshake size={18} style={{ color: N.textMuted, marginTop: 1, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: N.text }}>Noter une promesse de règlement</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: N.text }}>Noter une promesse de règlement</div>
                 <div style={{
                   fontSize: 12, color: N.textMuted, marginTop: 3,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -120,7 +120,7 @@ export default function PromiseDialog({ open, client, onClose, onSubmit }) {
           </div>
 
           <section style={{ padding: '16px 20px 6px' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 8 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 8 }}>
               Règlement promis pour
             </div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
@@ -162,8 +162,8 @@ export default function PromiseDialog({ open, client, onClose, onSubmit }) {
           </section>
 
           <section style={{ padding: '14px 20px 4px' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 6 }}>
-              Commentaire <span style={{ color: N.red, fontWeight: 600 }}>obligatoire</span>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 6 }}>
+              Commentaire <span style={{ color: N.red, fontWeight: 500 }}>obligatoire</span>
             </div>
             <textarea
               value={note}
@@ -186,7 +186,7 @@ export default function PromiseDialog({ open, client, onClose, onSubmit }) {
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px 18px' }}>
             <button type="button" onClick={onClose} style={{
               border: `1px solid ${N.border}`, background: '#fff', color: N.text, borderRadius: 7,
-              padding: '8px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              padding: '8px 14px', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
             }}>
               Annuler
             </button>
@@ -196,7 +196,7 @@ export default function PromiseDialog({ open, client, onClose, onSubmit }) {
               disabled={!ready || busy}
               title={ready ? '' : 'Une date et un commentaire sont nécessaires'}
               style={{
-                border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12.5, fontWeight: 600,
+                border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12.5, fontWeight: 500,
                 fontFamily: 'inherit',
                 background: ready ? N.text : N.sideBg, color: ready ? '#fff' : N.textFaint,
                 cursor: ready && !busy ? 'pointer' : 'default',

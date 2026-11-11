@@ -155,7 +155,7 @@ export default function ClientDetailModal({
           {/* Header */}
           <div style={{
             padding: '20px 24px',
-            borderBottom: '1px solid #f3f4f6',
+            borderBottom: '1px solid #f4f2ee',
             display: 'flex',
             alignItems: 'flex-start',
             gap: 16,
@@ -163,13 +163,13 @@ export default function ClientDetailModal({
           }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{
-                fontSize: 11, color: '#9ca3af', textTransform: 'uppercase',
-                letterSpacing: '0.06em', fontWeight: 600, marginBottom: 4,
+                fontSize: 11, color: '#a8a39b', textTransform: 'uppercase',
+                letterSpacing: '0.06em', fontWeight: 500, marginBottom: 4,
               }}>
                 Détail finance client
               </div>
               <h2 style={{
-                fontSize: 22, fontWeight: 700, color: '#111827',
+                fontSize: 22, fontWeight: 600, color: '#1c1b19',
                 margin: 0, letterSpacing: '-0.02em',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
               }}>
@@ -179,7 +179,7 @@ export default function ClientDetailModal({
                 <div style={{ marginTop: 8 }}>
                   <EtatPill etat={client.etat} />
                   {client.finance_contract_end_date && (
-                    <span style={{ fontSize: 12, color: '#6b7280', marginLeft: 12 }}>
+                    <span style={{ fontSize: 12, color: '#8b867e', marginLeft: 12 }}>
                       Fin contrat : {formatDateFR(client.finance_contract_end_date)}
                     </span>
                   )}
@@ -190,14 +190,14 @@ export default function ClientDetailModal({
               onClick={onClose}
               title="Fermer"
               style={{
-                border: 'none', background: '#f3f4f6', cursor: 'pointer',
+                border: 'none', background: '#f4f2ee', cursor: 'pointer',
                 width: 32, height: 32, borderRadius: 8,
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                color: '#6b7280', flexShrink: 0,
+                color: '#8b867e', flexShrink: 0,
                 transition: 'background 0.15s, color 0.15s',
               }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#e5e7eb'; e.currentTarget.style.color = '#111827'; }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '#f3f4f6'; e.currentTarget.style.color = '#6b7280'; }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = '#e8e4de'; e.currentTarget.style.color = '#1c1b19'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = '#f4f2ee'; e.currentTarget.style.color = '#8b867e'; }}
             >
               <X size={16} />
             </button>
@@ -206,7 +206,7 @@ export default function ClientDetailModal({
           {/* Tabs */}
           <div style={{
             display: 'flex', gap: 4, padding: '8px 24px 0',
-            borderBottom: '1px solid #f3f4f6', flexShrink: 0,
+            borderBottom: '1px solid #f4f2ee', flexShrink: 0,
           }}>
             <TabButton
               active={tab === 'timeline'}
@@ -230,7 +230,7 @@ export default function ClientDetailModal({
               <div style={{
                 margin: '20px 0', padding: 14,
                 background: '#fef2f2', border: '1px solid #fecaca',
-                color: '#991b1b', borderRadius: 8, fontSize: 13,
+                color: '#b3211e', borderRadius: 8, fontSize: 13,
               }}>
                 {error}
               </div>
@@ -267,7 +267,7 @@ function TabButton({ active, onClick, icon: Icon, label, count }) {
       style={{
         border: 'none', background: 'transparent', cursor: 'pointer',
         padding: '10px 14px', fontSize: 13, fontWeight: 500,
-        color: active ? '#111827' : '#6b7280',
+        color: active ? '#1c1b19' : '#8b867e',
         borderBottom: `2px solid ${active ? '#6366f1' : 'transparent'}`,
         marginBottom: -1, fontFamily: 'inherit',
         display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -278,9 +278,9 @@ function TabButton({ active, onClick, icon: Icon, label, count }) {
       {label}
       {count !== null && count !== undefined && (
         <span style={{
-          background: active ? '#eef2ff' : '#f3f4f6',
-          color: active ? '#4338ca' : '#6b7280',
-          padding: '1px 7px', borderRadius: 999, fontSize: 11, fontWeight: 600,
+          background: active ? '#eae9fb' : '#f4f2ee',
+          color: active ? '#4338ca' : '#8b867e',
+          padding: '1px 7px', borderRadius: 999, fontSize: 11, fontWeight: 500,
         }}>
           {count}
         </span>
@@ -308,7 +308,7 @@ function TimelineTable({ periods, loading, onRowClick }) {
       <div style={{ padding: '20px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
         {Array.from({ length: 6 }).map((_, i) => (
           <div key={i} style={{
-            height: 36, background: '#f3f4f6', borderRadius: 6,
+            height: 36, background: '#f4f2ee', borderRadius: 6,
             animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.1,
           }} />
         ))}
@@ -316,7 +316,7 @@ function TimelineTable({ periods, loading, onRowClick }) {
     );
   }
   if (!periods.length) {
-    return <div style={{ padding: 24, color: '#6b7280', fontSize: 13 }}>Aucune ligne.</div>;
+    return <div style={{ padding: 24, color: '#8b867e', fontSize: 13 }}>Aucune ligne.</div>;
   }
   return (
     <div style={{ paddingTop: 16 }}>
@@ -324,9 +324,9 @@ function TimelineTable({ periods, loading, onRowClick }) {
         display: 'grid',
         gridTemplateColumns: '120px 1fr 1fr 1fr 1fr 56px',
         gap: 8, padding: '8px 12px',
-        fontSize: 11, fontWeight: 600, color: '#6b7280',
+        fontSize: 11, fontWeight: 500, color: '#8b867e',
         textTransform: 'uppercase', letterSpacing: '0.04em',
-        borderBottom: '1px solid #f3f4f6',
+        borderBottom: '1px solid #f4f2ee',
       }}>
         <div>Période</div>
         <div style={{ textAlign: 'right' }}>Att. global</div>
@@ -349,7 +349,7 @@ function TimelineTable({ periods, loading, onRowClick }) {
               border: 'none',
               background: 'transparent',
               cursor: 'pointer',
-              borderBottom: '1px solid #f9fafb',
+              borderBottom: '1px solid #faf9f7',
               textAlign: 'left',
               fontSize: 13,
               fontFamily: 'inherit',
@@ -358,18 +358,18 @@ function TimelineTable({ periods, loading, onRowClick }) {
               alignItems: 'center',
               width: '100%',
             }}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#faf9f7'}
             onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
           >
             <div style={{ fontWeight: 500 }}>{formatMonthLabel(periodFromDate(p.period))}</div>
             <div style={{ textAlign: 'right' }}>{formatEUR(p.expected_global_ttc)}</div>
-            <div style={{ textAlign: 'right', color: '#374151' }}>{formatEUR(p.received_owner)}</div>
-            <div style={{ textAlign: 'right', color: '#374151' }}>{formatEUR(p.received_optilex_ttc)}</div>
+            <div style={{ textAlign: 'right', color: '#3a3733' }}>{formatEUR(p.received_owner)}</div>
+            <div style={{ textAlign: 'right', color: '#3a3733' }}>{formatEUR(p.received_optilex_ttc)}</div>
             <div>
               {p.finance_status_detail ? (
                 <span style={{
-                  background: detailMeta?.bg || '#f3f4f6',
-                  color: detailMeta?.fg || '#6b7280',
+                  background: detailMeta?.bg || '#f4f2ee',
+                  color: detailMeta?.fg || '#8b867e',
                   padding: '2px 8px', borderRadius: 999,
                   fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
                   display: 'inline-block', maxWidth: '100%',
@@ -378,11 +378,11 @@ function TimelineTable({ periods, loading, onRowClick }) {
                   {p.finance_status_detail}
                 </span>
               ) : (
-                <span style={{ color: '#9ca3af' }}>—</span>
+                <span style={{ color: '#a8a39b' }}>—</span>
               )}
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-              <ChevronRight size={14} style={{ color: '#9ca3af' }} />
+              <ChevronRight size={14} style={{ color: '#a8a39b' }} />
             </div>
           </button>
         );
@@ -406,8 +406,8 @@ function AuditPanel({ focusedRow, periods, onPickRow, entries, loading }) {
               onClick={() => onPickRow(p.id)}
               style={{
                 border: 'none', outline: 'none',
-                background: isActive ? '#1f2937' : '#f3f4f6',
-                color: isActive ? '#fff' : '#374151',
+                background: isActive ? '#1f2937' : '#f4f2ee',
+                color: isActive ? '#fff' : '#3a3733',
                 padding: '5px 10px', borderRadius: 999, fontSize: 12,
                 cursor: 'pointer', fontFamily: 'inherit',
                 transition: 'background 0.15s, color 0.15s',
@@ -421,22 +421,22 @@ function AuditPanel({ focusedRow, periods, onPickRow, entries, loading }) {
       </div>
 
       {!focusedRow ? (
-        <div style={{ color: '#6b7280', fontSize: 13 }}>
+        <div style={{ color: '#8b867e', fontSize: 13 }}>
           Sélectionne une période pour voir son historique.
         </div>
       ) : loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} style={{
-              height: 56, background: '#f3f4f6', borderRadius: 8,
+              height: 56, background: '#f4f2ee', borderRadius: 8,
               animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.12,
             }} />
           ))}
         </div>
       ) : !entries?.entries?.length ? (
         <div style={{
-          padding: 24, textAlign: 'center', color: '#6b7280', fontSize: 13,
-          background: '#fafafa', borderRadius: 8,
+          padding: 24, textAlign: 'center', color: '#8b867e', fontSize: 13,
+          background: '#faf9f7', borderRadius: 8,
         }}>
           Aucune modification enregistrée pour cette période.
         </div>
@@ -457,21 +457,21 @@ function AuditRow({ entry }) {
     <div style={{
       padding: '12px 14px',
       background: '#fff',
-      border: '1px solid #f3f4f6',
+      border: '1px solid #f4f2ee',
       borderRadius: 8,
       display: 'flex',
       flexDirection: 'column',
       gap: 6,
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{label}</span>
-        <span style={{ fontSize: 11, color: '#9ca3af' }}>
+        <span style={{ fontSize: 13, fontWeight: 500, color: '#1c1b19' }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#a8a39b' }}>
           {formatAuditDate(entry.changed_at)} · {entry.changed_by_name || '—'}
         </span>
       </div>
       <div style={{ fontSize: 12, color: '#4b5563', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
         <AuditValue v={entry.old_value} muted />
-        <span style={{ color: '#9ca3af' }}>→</span>
+        <span style={{ color: '#a8a39b' }}>→</span>
         <AuditValue v={entry.new_value} />
       </div>
     </div>
@@ -484,8 +484,8 @@ function AuditValue({ v, muted = false }) {
     <span style={{
       padding: '2px 8px',
       borderRadius: 4,
-      background: muted ? '#f9fafb' : '#eef2ff',
-      color: muted ? '#9ca3af' : '#3730a3',
+      background: muted ? '#faf9f7' : '#eae9fb',
+      color: muted ? '#a8a39b' : '#4a3fc4',
       fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
       fontSize: 12,
       maxWidth: 360,

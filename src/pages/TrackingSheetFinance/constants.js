@@ -846,69 +846,69 @@ export const PROFILE_CHANGE_LABELS = {
 // Color palette for finance_status_detail pills. Maps to text + bg colors.
 // Falls back to neutral grey if the detail is unknown.
 export const STATUS_DETAIL_COLORS = {
-  'Traité':                                          { fg: '#065f46', bg: '#d1fae5' },
-  'Non traité':                                      { fg: '#6b7280', bg: '#f3f4f6' },
-  'Relancer Owner':                                  { fg: '#92400e', bg: '#fef3c7' },
-  'Relancer Optilex':                                { fg: '#92400e', bg: '#fef3c7' },
-  'A partiellement validé sur certaine structure':   { fg: '#3730a3', bg: '#e0e7ff' },
-  'En attente de retour':                            { fg: '#3730a3', bg: '#e0e7ff' },
-  'À rembourser':                                    { fg: '#991b1b', bg: '#fee2e2' },
-  'Relancé à voir si pas payé':                      { fg: '#92400e', bg: '#fef3c7' },
-  'Promesse de règlement':                           { fg: '#1e40af', bg: '#dbeafe' },
-  'Attente retour cabinet':                          { fg: '#3730a3', bg: '#e0e7ff' },
-  'Prélèvement en cours':                            { fg: '#0e7490', bg: '#cffafe' },
-  'Pas de réponse':                                  { fg: '#991b1b', bg: '#fee2e2' },
-  'Promesse de règlement partiel':                   { fg: '#1e40af', bg: '#dbeafe' },
-  'RDV lancement reprogrammé':                       { fg: '#3730a3', bg: '#e0e7ff' },
-  'VIP':                                             { fg: '#7c2d12', bg: '#fed7aa' },
-  'Mandataire':                                      { fg: '#581c87', bg: '#f3e8ff' },
+  'Traité':                                          { fg: '#0b7a4b', bg: '#e2f6ea' },
+  'Non traité':                                      { fg: '#8b867e', bg: '#f4f2ee' },
+  'Relancer Owner':                                  { fg: '#7a5a05', bg: '#fbf1c2' },
+  'Relancer Optilex':                                { fg: '#7a5a05', bg: '#fbf1c2' },
+  'A partiellement validé sur certaine structure':   { fg: '#4a3fc4', bg: '#eae9fb' },
+  'En attente de retour':                            { fg: '#4a3fc4', bg: '#eae9fb' },
+  'À rembourser':                                    { fg: '#c5221f', bg: '#fde6e6' },
+  'Relancé à voir si pas payé':                      { fg: '#7a5a05', bg: '#fbf1c2' },
+  'Promesse de règlement':                           { fg: '#1b6fd0', bg: '#e4f0fd' },
+  'Attente retour cabinet':                          { fg: '#4a3fc4', bg: '#eae9fb' },
+  'Prélèvement en cours':                            { fg: '#0f7286', bg: '#d9f3f7' },
+  'Pas de réponse':                                  { fg: '#c5221f', bg: '#fde6e6' },
+  'Promesse de règlement partiel':                   { fg: '#1b6fd0', bg: '#e4f0fd' },
+  'RDV lancement reprogrammé':                       { fg: '#4a3fc4', bg: '#eae9fb' },
+  'VIP':                                             { fg: '#c2500e', bg: '#fde9da' },
+  'Mandataire':                                      { fg: '#6a45b8', bg: '#eee9fa' },
 };
 
-export const STATUS_DETAIL_FALLBACK = { fg: '#6b7280', bg: '#f3f4f6' };
+export const STATUS_DETAIL_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee' };
 
 // Etat client (top-level pill)
 export const ETAT_COLORS = {
-  a_signe:           { fg: '#065f46', bg: '#d1fae5', label: 'À signer' },
-  en_attente:        { fg: '#92400e', bg: '#fef3c7', label: 'En attente' },
-  resilie:           { fg: '#991b1b', bg: '#fee2e2', label: 'Résilié' },
-  sans_suite:        { fg: '#6b7280', bg: '#f3f4f6', label: 'Sans suite' },
-  liquidation:       { fg: '#991b1b', bg: '#fee2e2', label: 'Liquidation' },
-  pause:             { fg: '#3730a3', bg: '#e0e7ff', label: 'Pause' },
-  self_resiliation:  { fg: '#991b1b', bg: '#fee2e2', label: 'Self résil.' },
-  retractation:      { fg: '#7c2d12', bg: '#fed7aa', label: 'Rétractation' },
+  a_signe:           { fg: '#0b7a4b', bg: '#e2f6ea', label: 'À signer' },
+  en_attente:        { fg: '#7a5a05', bg: '#fbf1c2', label: 'En attente' },
+  resilie:           { fg: '#c5221f', bg: '#fde6e6', label: 'Résilié' },
+  sans_suite:        { fg: '#8b867e', bg: '#f4f2ee', label: 'Sans suite' },
+  liquidation:       { fg: '#c5221f', bg: '#fde6e6', label: 'Liquidation' },
+  pause:             { fg: '#4a3fc4', bg: '#eae9fb', label: 'Pause' },
+  self_resiliation:  { fg: '#c5221f', bg: '#fde6e6', label: 'Self résil.' },
+  retractation:      { fg: '#c2500e', bg: '#fde9da', label: 'Rétractation' },
 };
 
-export const ETAT_FALLBACK = { fg: '#6b7280', bg: '#f3f4f6', label: '—' };
+export const ETAT_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee', label: '—' };
 
 // PSP pills (Notion solid green family — "validation" semantic).
 export const PSP_COLORS = {
-  Learnypay: { fg: '#0f7b6c', bg: '#cfe9e3' },
-  IFX:       { fg: '#0f7b6c', bg: '#cfe9e3' },
-  whop:      { fg: '#0f7b6c', bg: '#cfe9e3' },
-  Quonto:    { fg: '#0f7b6c', bg: '#cfe9e3' },
+  Learnypay: { fg: '#0b7a4b', bg: '#e2f6ea' },
+  IFX:       { fg: '#0b7a4b', bg: '#e2f6ea' },
+  whop:      { fg: '#0b7a4b', bg: '#e2f6ea' },
+  Quonto:    { fg: '#0b7a4b', bg: '#e2f6ea' },
 };
-export const PSP_FALLBACK = { fg: '#6b7280', bg: '#f3f4f6' };
+export const PSP_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee' };
 
 // Auto-debit pills (semantic colors per case).
 export const AUTO_DEBIT_COLORS = {
-  'OUI':                                       { fg: '#065f46', bg: '#d1fae5' },
-  'NON':                                       { fg: '#991b1b', bg: '#fee2e2' },
-  'Partiellement Owner':                       { fg: '#3730a3', bg: '#e0e7ff' },
-  'Partiellement Optilex':                     { fg: '#3730a3', bg: '#e0e7ff' },
-  'En attend':                                 { fg: '#92400e', bg: '#fef3c7' },
-  'Non souhaitais':                            { fg: '#6b7280', bg: '#f3f4f6' },
-  'Partiellement Optilex Non souhaité Owner':  { fg: '#7c2d12', bg: '#fed7aa' },
+  'OUI':                                       { fg: '#0b7a4b', bg: '#e2f6ea' },
+  'NON':                                       { fg: '#c5221f', bg: '#fde6e6' },
+  'Partiellement Owner':                       { fg: '#4a3fc4', bg: '#eae9fb' },
+  'Partiellement Optilex':                     { fg: '#4a3fc4', bg: '#eae9fb' },
+  'En attend':                                 { fg: '#7a5a05', bg: '#fbf1c2' },
+  'Non souhaitais':                            { fg: '#8b867e', bg: '#f4f2ee' },
+  'Partiellement Optilex Non souhaité Owner':  { fg: '#c2500e', bg: '#fde9da' },
 };
-export const AUTO_DEBIT_FALLBACK = { fg: '#6b7280', bg: '#f3f4f6' };
+export const AUTO_DEBIT_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee' };
 
 // Payment specificity pills (Notion blue family).
 export const PAYMENT_SPECIFICITY_COLORS = {
-  'Paye / 2 sct': { fg: '#1e40af', bg: '#dbeafe' },
-  'Paye / 3 sct': { fg: '#1e40af', bg: '#dbeafe' },
-  'Paye / 4 sct': { fg: '#1e40af', bg: '#dbeafe' },
-  'Paye / 5 sct': { fg: '#1e40af', bg: '#dbeafe' },
+  'Paye / 2 sct': { fg: '#1b6fd0', bg: '#e4f0fd' },
+  'Paye / 3 sct': { fg: '#1b6fd0', bg: '#e4f0fd' },
+  'Paye / 4 sct': { fg: '#1b6fd0', bg: '#e4f0fd' },
+  'Paye / 5 sct': { fg: '#1b6fd0', bg: '#e4f0fd' },
 };
-export const PAYMENT_SPECIFICITY_FALLBACK = { fg: '#6b7280', bg: '#f3f4f6' };
+export const PAYMENT_SPECIFICITY_FALLBACK = { fg: '#8b867e', bg: '#f4f2ee' };
 
 // Lookup label par valeur enum (pour les dropdowns et display).
 export const etatLabel = (etat) => (ETAT_COLORS[etat]?.label) || etat || '—';

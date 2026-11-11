@@ -1,0 +1,86 @@
+/* Promesses, Séquences, Validations, États à traiter : les quelques règles que le kit des Statistiques n'a pas encore. */
+
+/* Barre de répartition dont la ligne porte une icône ronde au lieu d'un avatar, et un montant au bout si besoin. */
+.fst-hbar .fup-ico { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #fff; border: 1px solid var(--line); color: var(--ink-2); transition: transform .3s var(--spring); }
+.fst-hbar:hover .fup-ico { transform: scale(1.08); }
+.fst-hbar.fup-wide { grid-template-columns: 28px minmax(0, 168px) minmax(0, 1fr) 30px; }
+
+/* Lignes « libellé, barre, montant » : la colonne de droite des Statistiques (44 px) est trop étroite pour des euros. */
+.fst-dist.fup-money .fst-dist-row { grid-template-columns: minmax(0, 128px) minmax(0, 1fr) minmax(96px, auto); }
+.fst-dist.fup-money .fst-dist-row > span:last-child { white-space: nowrap; }
+.fst-dist.fup-rates .fst-dist-row { grid-template-columns: 84px minmax(0, 1fr) minmax(52px, auto); }
+.fst-dist.fup-rates .fst-dist-row small { color: var(--muted); font-weight: 400; margin-left: 6px; }
+.fst-goal .fst-dist { flex: 1; min-width: 0; }
+
+/* Teintes de montant et de taux, les mêmes que les tuiles de chiffres clés. */
+.fup-tone-red { color: #c5221f; }
+.fup-tone-green { color: #0b7a4b; }
+.fup-tone-amber { color: #a05a05; }
+.fup-tone-zero { color: var(--faint); }
+
+/* Texte long dans une cellule (commentaire d'une promesse) : deux lignes, le reste au survol. */
+.fup-clip { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; min-width: 170px; max-width: 320px; color: var(--ink-2); line-height: 1.45; }
+
+/* Taux dans une cellule : le pourcentage, le décompte, et une barre fine dessous. */
+.fup-rate { display: flex; align-items: baseline; justify-content: flex-end; gap: 7px; white-space: nowrap; }
+.fup-rate b { font-weight: 500; }
+.fup-rate small { font-size: 12px; color: var(--muted); }
+.fup-mini { margin-top: 7px; min-width: 84px; }
+.fup-mini .fst-track { height: 4px; }
+
+/* Canaux d'un envoi (email, SMS) : deux étiquettes serrées devant l'objet. */
+.fup-channels { display: inline-flex; gap: 4px; flex: none; }
+.fup-channels .fst-tag { padding: 0 6px; }
+.fup-envoi { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.fup-envoi > div { min-width: 0; flex: 1; }
+.fup-status { display: flex; align-items: center; gap: 7px; margin-top: 5px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+
+/* Destinataire dont l'email est affiché : la ligne reste marquée. */
+.fst-table tbody tr.fup-on, .fst-table tbody tr.fup-on:hover { background: var(--hover); }
+.fst-table tbody tr.fup-on td:first-child { box-shadow: inset 3px 0 0 var(--charcoal); }
+
+/* Aperçu d'un email : un bandeau « reçu par », puis le contenu tel qu'il est parti. */
+.fup-mail-head { padding: 11px 16px; border-bottom: 1px solid var(--line); background: #faf9f7; font-size: 13px; color: var(--muted); }
+.fup-mail-head strong { font-weight: 500; color: var(--ink); }
+.fup-mail-body { padding: 30px 18px; text-align: center; color: var(--muted); font-size: 13.5px; white-space: pre-wrap; }
+.fup-mail-frame { width: 100%; height: 480px; border: 0; display: block; background: #fff; }
+
+/* Demande à valider : une carte de cas plus aérée, posée directement sur la toile. */
+.fup-stack { display: grid; gap: 14px; }
+.fst-case.fup-req { padding: 18px 20px 20px; border-radius: 20px; border-color: #ece9e4; }
+.fst-case.fup-req[data-drift="true"] { border-color: #f0e09a; }
+.fup-facts { display: flex; align-items: center; gap: 8px 18px; flex-wrap: wrap; margin-top: 12px; font-size: 12.5px; color: var(--ink-2); }
+.fup-facts > div { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+.fup-k { color: var(--muted); }
+.fup-ask { font-size: 15px; line-height: 1.5; margin: 16px 0 0; color: var(--ink); }
+.fup-ask strong { font-weight: 500; }
+.fup-quote { font-size: 13px; color: var(--ink-2); font-style: italic; margin: 6px 0 0; padding-left: 12px; border-left: 2px solid var(--line); line-height: 1.5; }
+.fup-changes { margin-top: 14px; }
+.fup-changes .fst-table td, .fup-changes .fst-table th { padding: 9px 12px; }
+.fup-arrow { width: 34px; text-align: center; color: var(--faint); }
+.fup-arrow svg { display: block; margin: 0 auto; }
+.fup-after { font-weight: 500; }
+.fup-warn { display: flex; align-items: flex-start; gap: 9px; margin-top: 14px; padding: 11px 13px; border-radius: 12px; background: #fbf1c2; border: 1px solid #f0e09a; color: #7a5a05; font-size: 13px; line-height: 1.45; }
+.fup-warn svg { flex: none; margin-top: 2px; }
+.fup-decided { font-size: 12.5px; color: var(--muted); margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line-soft); line-height: 1.5; }
+.fup-actions { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+.fup-actions-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fup-actions-row > span { font-size: 13.5px; color: var(--ink); margin-right: 4px; }
+.fup-input { flex: 1 1 260px; min-width: 0; height: 36px; border-radius: 999px; border: 1px solid var(--line); background: #fff; padding: 0 15px; font: inherit; font-size: 13px; color: var(--ink); transition: border-color .2s, box-shadow .2s; }
+.fup-input::placeholder { color: var(--faint); }
+.fup-input:focus { border-color: #d6d1c9; box-shadow: 0 0 0 4px rgba(50, 40, 30, .06); outline: none; }
+.fst-btn.fup-danger { background: var(--red-bg); border-color: #f8cccc; color: #c5221f; }
+.fst-btn.fup-danger svg { color: #c5221f; }
+.fst-btn.fup-quiet { background: transparent; border-color: transparent; box-shadow: none; color: var(--muted); }
+.fst-btn.fup-quiet:hover:not(:disabled) { box-shadow: none; color: var(--ink); background: var(--hover); }
+
+/* Titre d'une liste posée sur la toile, avec ses filtres actifs et sa recherche. */
+.fup-list-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.fup-list-head p { font-size: 13px; color: var(--muted); margin: 0; flex: 1 1 100%; line-height: 1.5; max-width: 860px; }
+.fup-more { display: flex; justify-content: center; }
+.fup-back svg { transition: transform .3s var(--ease); }
+.fup-back:hover:not(:disabled) svg { transform: translateX(-3px); }
+
+@media (max-width: 900px) {
+  .fst-goal.fup-goal { flex-wrap: wrap; }
+}

@@ -71,8 +71,8 @@ export function MeteoPicker({ value, onChange, size = 19 }) {
         const on = value === n;
         return (
           <button key={n} type="button" aria-label={`Météo ${n} : ${METEO_MEANING[n].txt}`} aria-pressed={on} onClick={() => onChange(n)}
-            style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: on ? `2px solid ${st.color}` : "1px solid #e9ebf0", background: on ? st.bg : "#ffffff", color: on ? st.color : "#1e2330", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-            <MeteoIcon score={n} size={size} color={on ? st.color : "#9aa0ab"} />{n}
+            style={{ flex: 1, padding: "9px 0", borderRadius: 9, border: on ? `2px solid ${st.color}` : "1px solid #ece9e4", background: on ? st.bg : "#ffffff", color: on ? st.color : "#1c1b19", fontSize: 15, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+            <MeteoIcon score={n} size={size} color={on ? st.color : "#a8a39b"} />{n}
           </button>
         );
       })}
@@ -85,8 +85,8 @@ export function MeteoMeaning({ value }) {
   if (!value) return null;
   const st = METEO_BANDS[meteoBandOf(value)];
   return (
-    <div style={{ fontSize: 11.5, color: "#8a93a4", lineHeight: 1.45 }}>
-      <span style={{ fontWeight: 700, color: st.color }}>{METEO_MEANING[value].txt}.</span>
+    <div style={{ fontSize: 11.5, color: "#8b867e", lineHeight: 1.45 }}>
+      <span style={{ fontWeight: 500, color: st.color }}>{METEO_MEANING[value].txt}.</span>
       {METEO_MEANING[value].action ? ` → ${METEO_MEANING[value].action}` : ""}
     </div>
   );

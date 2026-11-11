@@ -12,45 +12,61 @@
 // partout ailleurs, qui tient compte de la date d'effet. On ne redéfinit pas
 // la règle ici : c'est cette duplication qui avait fait diverger le tableau et
 // la fiche (incident n°454).
+//
+// Rendu (dev 10/11/2026) : le langage des Statistiques. Une page (titre, phrase,
+// actualisation à droite), les chiffres clés, deux lectures (par état du client ;
+// ARR perdu et mois où les pertes ont été actées), puis le détail. Les tuiles et
+// les barres filtrent le détail ; les deux montants gardent chacun leur colonne.
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { TriangleAlert, RefreshCw } from 'lucide-react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
+import {
+  Building2, CalendarCheck, CalendarX, Eraser, FileX, ListX, MessageSquareText, PenLine, Search, Split, Tags,
+  TrendingDown, TriangleAlert, Undo2, UserX, X,
+} from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
+import { useDrawn } from '../../../components/perfSales/motion.jsx';
 import { displayEtat } from '../../OptilexBoard.jsx';
-import { formatEUR, formatDateFR } from '../constants.js';
-
-const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  red: '#b42318',
-  redBg: '#fdecec',
-  green: '#0f7b6c',
-  amber: '#b45309',
-  amberBg: '#fff3e3',
-};
+import { formatEUR, formatDateFR, formatMonthLabel } from '../constants.js';
+import {
+  Card, Empty, Num, OpenCue, Page, RefreshButton, Reveal, Stat, Stats, TableBox, Tag, Th, Who,
+} from './PageKit.jsx';
+import './ReceiptsLosses.css';
 
 // Regroupement métier demandé : on veut lire « combien nous coûtent les
 // résiliations » et « combien les liquidations ». Les états proches sont
-// rassemblés sous le mot que la finance emploie.
+// rassemblés sous le mot que la finance emploie. `tone` : étiquette pastel de la famille.
 const FAMILLES = [
-  { key: 'resiliation',  label: 'Résiliations',  etats: ['Résiliation', 'Self-Résiliation'] },
-  { key: 'liquidation',  label: 'Liquidations',  etats: ['Liquidation', 'En cours de liquidation'] },
-  { key: 'retractation', label: 'Rétractations', etats: ['Rétractation'] },
+  { key: 'resiliation',  label: 'Résiliations',  tone: 'red',   etats: ['Résiliation', 'Self-Résiliation'] },
+  { key: 'liquidation',  label: 'Liquidations',  tone: 'lilac', etats: ['Liquidation', 'En cours de liquidation'] },
+  { key: 'retractation', label: 'Rétractations', tone: 'peach', etats: ['Rétractation'] },
 ];
 const AUTRES = { key: 'autres', label: 'Autres', etats: [] };
+const TOUTES_FAMILLES = [...FAMILLES, AUTRES];
 
 // ARR perdu, part Owner seule (demande dev 2026-09-30 : « l'ARR des résiliations et des rétractations,
 // les pertes d'Owner uniquement ») : l'attendu Owner HT de la Finance, annualisé, chaque client compté une fois.
 const ARR_FAMILLES = [
-  { key: 'resiliation', label: 'ARR des résiliations', accent: N.red },
-  { key: 'retractation', label: 'ARR des rétractations', accent: N.amber },
+  { key: 'resiliation', label: 'ARR des résiliations', tone: 'red' },
+  { key: 'retractation', label: 'ARR des rétractations', tone: 'amber' },
 ];
+
+// Les trois natures d'une perte : trois décisions distinctes, donc trois lectures.
+const NATURES = [
+  { key: 'declared', label: 'Clients mis en perte' },
+  { key: 'correction', label: 'Attendus supprimés' },
+  { key: 'withdrawal', label: 'Rétractations' },
+];
+const natureOf = (l) => (l.correction ? 'correction' : l.withdrawal ? 'withdrawal' : 'declared');
+
+// Part de chaque montant dans les barres.
+const COLOR = { creance: '#ee8f8a', futur: '#dedad3' };
+const PAGE = 25;
+const SPRING = { type: 'spring', stiffness: 520, damping: 40 };
+const NO_FILTER = { nature: 'all', famille: null, month: null, query: '' };
+const plural = (n, one, many = `${one}s`) => `${n} ${n > 1 ? many : one}`;
+const monthOf = (l) => (l.declared_at ? String(l.declared_at).slice(0, 7) : '');
 
 const familleOf = (etat) =>
   FAMILLES.find((f) => f.etats.includes(etat))?.key || AUTRES.key;
@@ -67,6 +83,8 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
   const [losses, setLosses] = useState(null);
   const [error, setError] = useState(null);
   const [reloading, setReloading] = useState(false);
+  // Filtres du détail : locaux, ils ne relancent aucun chargement.
+  const [filter, setFilter] = useState(NO_FILTER);
 
   const load = React.useCallback(() => {
     setReloading(true);
@@ -99,7 +117,7 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
 
   const totaux = useMemo(() => {
     const acc = {};
-    for (const f of [...FAMILLES, AUTRES]) acc[f.key] = { creance: 0, futur: 0, n: 0 };
+    for (const f of TOUTES_FAMILLES) acc[f.key] = { creance: 0, futur: 0, n: 0 };
     let creance = 0; let futur = 0;
     for (const l of enriched) {
       creance += l.creance;
@@ -116,7 +134,7 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
                         correction: { creance: 0, futur: 0, n: 0 },
                         withdrawal: { creance: 0, futur: 0, n: 0 } };
     for (const l of enriched) {
-      const k = l.correction ? 'correction' : l.withdrawal ? 'withdrawal' : 'declared';
+      const k = natureOf(l);
       parNature[k].creance += l.creance;
       parNature[k].futur += l.futur;
       parNature[k].n += 1;
@@ -135,303 +153,307 @@ export default function LossesView({ boardMap, scope, onOpenClient }) {
         sansMontant: values.filter((v) => v == null).length,
       };
     }
-    return { acc, creance, futur, n: enriched.length, parNature, arr };
+    // Mois où les pertes ont été actées, du plus récent au plus ancien : les deux montants restent côte à côte.
+    const mois = new Map();
+    for (const l of enriched) {
+      const key = monthOf(l);
+      const m = mois.get(key) || { key, creance: 0, futur: 0, n: 0 };
+      m.creance += l.creance;
+      m.futur += l.futur;
+      m.n += 1;
+      mois.set(key, m);
+    }
+    const parMois = [...mois.values()].sort((a, b) => b.key.localeCompare(a.key));
+    return { acc, creance, futur, n: enriched.length, parNature, arr, parMois };
   }, [enriched]);
 
-  if (error) {
-    return <Message texte={`Pertes indisponibles — ${error}`} />;
-  }
-  if (losses === null) {
-    return <Message texte="Chargement des pertes…" />;
-  }
-  if (!losses.length) {
-    return <Message texte="Aucune perte actée. Rien n’a été abandonné à ce jour." />;
-  }
+  // Le détail, du plus coûteux au moins coûteux.
+  const sorted = useMemo(() => [...enriched].sort((a, b) => b.creance - a.creance), [enriched]);
+
+  const toggle = (key, value) => setFilter((f) => ({ ...f, [key]: f[key] === value ? NO_FILTER[key] : value }));
+
+  const loading = losses === null && !error;
+  const known = losses !== null && !error;
+  const amount = (value) => (known ? value : null);
+  const n = totaux.parNature;
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 2px 40px' }}>
+    <Page
+      title="Pertes"
+      sub="Ce qui a été abandonné : la créance facturée et jamais encaissée d’un côté, l’attendu futur annulé de l’autre. Deux montants qui ne s’additionnent pas."
+      actions={<RefreshButton onClick={load} busy={reloading} />}
+    >
       {/* Les deux totaux, séparés — ne jamais les additionner. */}
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 18 }}
-      >
-        <Carte
-          label="Créance abandonnée"
-          value={totaux.creance}
-          hint={`${totaux.n} dossier${totaux.n > 1 ? 's' : ''} · facturé et jamais encaissé`}
-          accent={N.red}
+      <Stats>
+        <Stat
+          label="Créance abandonnée" Icon={FileX} tone="red" value={amount(totaux.creance)} format={formatEUR}
+          note={known ? `${plural(totaux.n, 'dossier')} · facturé et jamais encaissé` : 'facturé et jamais encaissé'}
         />
-        <Carte
-          label="Attendu futur annulé"
-          value={totaux.futur}
-          hint="Chiffre qui ne rentrera pas · jamais facturé"
-          accent={N.textMuted}
+        <Stat
+          label="Attendu futur annulé" Icon={CalendarX} value={amount(totaux.futur)} format={formatEUR}
+          note="Chiffre qui ne rentrera pas · jamais facturé"
         />
         {/* Deux décisions distinctes, donc deux lectures. Un client mis en
             perte, c'est une relation qui s'arrête ; un attendu supprimé, c'est
             une facturation corrigée. Les additionner sans le dire donnerait un
             chiffre que personne ne saurait interpréter. */}
-        <Carte
-          label="Clients mis en perte"
-          value={totaux.parNature.declared.creance}
-          hint={`${totaux.parNature.declared.n} client${totaux.parNature.declared.n > 1 ? 's' : ''} · créance abandonnée`}
-          accent={N.red}
+        <Stat
+          label="Clients mis en perte" Icon={UserX} tone="red" value={amount(n.declared.creance)} format={formatEUR}
+          note={`${plural(n.declared.n, 'client')} · créance abandonnée`}
+          onClick={() => toggle('nature', 'declared')} pressed={filter.nature === 'declared'} title="Ne voir que les clients mis en perte"
         />
-        <Carte
-          label="Attendus supprimés"
-          value={totaux.parNature.correction.creance}
-          hint={`${totaux.parNature.correction.n} correction${totaux.parNature.correction.n > 1 ? 's' : ''} · facturé à tort`}
-          accent={N.textMuted}
+        <Stat
+          label="Attendus supprimés" Icon={Eraser} value={amount(n.correction.creance)} format={formatEUR}
+          note={`${plural(n.correction.n, 'correction')} · facturé à tort`}
+          onClick={() => toggle('nature', 'correction')} pressed={filter.nature === 'correction'} title="Ne voir que les attendus supprimés"
         />
         {/* Les rétractations actées : le chiffre signé qui ne rentrera pas.
             Comptées à part pour être rapportées aux signatures. */}
-        <Carte
-          label="Rétractations"
-          value={totaux.parNature.withdrawal.creance + totaux.parNature.withdrawal.futur}
-          hint={`${totaux.parNature.withdrawal.n} fausse${totaux.parNature.withdrawal.n > 1 ? 's' : ''} vente${totaux.parNature.withdrawal.n > 1 ? 's' : ''} · signé puis rétracté`}
-          accent={N.amber}
+        <Stat
+          label="Rétractations" Icon={Undo2} tone="amber" value={amount(n.withdrawal.creance + n.withdrawal.futur)} format={formatEUR}
+          note={`${n.withdrawal.n} fausse${n.withdrawal.n > 1 ? 's' : ''} vente${n.withdrawal.n > 1 ? 's' : ''} · signé puis rétracté`}
+          onClick={() => toggle('nature', 'withdrawal')} pressed={filter.nature === 'withdrawal'} title="Ne voir que les rétractations actées"
         />
-        <button
-          type="button"
-          onClick={load}
-          title="Recharger"
-          style={{
-            border: `1px solid ${N.borderSft}`, background: '#fff', borderRadius: 10,
-            padding: '0 14px', cursor: 'pointer', color: N.textMuted,
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
-            fontSize: 12.5,
-          }}
-        >
-          <motion.span
-            animate={{ rotate: reloading ? 360 : 0 }}
-            transition={reloading
-              ? { duration: 1, repeat: Infinity, ease: 'linear' }
-              : { duration: 0 }}
-            style={{ display: 'inline-flex' }}
-          >
-            <RefreshCw size={13} />
-          </motion.span>
-          Actualiser
-        </button>
-      </motion.div>
+      </Stats>
 
-      {/* Ventilation : c'est la réponse à « combien coûtent les résiliations ». */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-        gap: 10, marginBottom: 22,
-      }}>
-        {[...FAMILLES, AUTRES].map((f, i) => {
-          const t = totaux.acc[f.key];
-          if (!t.n) return null;
-          return (
-            <motion.div
-              key={f.key}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28, delay: 0.04 + i * 0.05, ease: [0.4, 0, 0.2, 1] }}
-              style={{
-                border: `1px solid ${N.borderSft}`, borderRadius: 10,
-                padding: '12px 14px', background: '#fff',
-              }}
-            >
-              <div style={{
-                fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-                textTransform: 'uppercase', letterSpacing: '0.04em',
-              }}>
-                {f.label} · {t.n}
-              </div>
-              <div style={{
-                fontSize: 18, fontWeight: 700, color: N.red, marginTop: 4,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {formatEUR(t.creance)}
-              </div>
-              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
-                + {formatEUR(t.futur)} de futur annulé
-              </div>
-            </motion.div>
-          );
-        })}
-      </div>
+      {error ? (
+        <div className="fst-error" role="alert">
+          Pertes indisponibles — {error}
+          <button type="button" onClick={load}>Réessayer</button>
+        </div>
+      ) : known && !losses.length ? (
+        <Empty boxed>Aucune perte actée. Rien n’a été abandonné à ce jour.</Empty>
+      ) : (
+        <>
+          <Reveal className="fst-grid is-even" amount={0.05}>
+            <FamiliesCard totals={totaux.acc} loading={loading} selected={filter.famille} onSelect={(key) => toggle('famille', key)} />
+            <ArrCard arr={totaux.arr} months={totaux.parMois} loading={loading} month={filter.month} onMonth={(key) => toggle('month', key)} />
+          </Reveal>
+          <Reveal amount={0.03}>
+            <Detail rows={sorted} loading={loading} scope={scope} filter={filter} setFilter={setFilter} onOpenClient={onOpenClient} />
+          </Reveal>
+        </>
+      )}
+    </Page>
+  );
+}
 
-      {/* ARR perdu : l'attendu Owner HT des clients sortis, annualisé, quel que soit le périmètre. */}
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))',
-        gap: 10, marginBottom: 22,
-      }}>
-        {ARR_FAMILLES.map((f, i) => {
-          const a = totaux.arr[f.key];
+const cardState = (loading) => ({ data: loading ? null : true, loading });
+
+// Ventilation : c'est la réponse à « combien coûtent les résiliations ».
+function FamiliesCard({ totals, loading, selected, onSelect }) {
+  const drawn = useDrawn();
+  const families = TOUTES_FAMILLES.filter((f) => totals[f.key].n > 0);
+  const largest = Math.max(1, ...families.map((f) => totals[f.key].creance + totals[f.key].futur));
+  return (
+    <Card title="Par état du client" Icon={Split} state={cardState(loading)} skeleton={260}
+      hint="Ce que coûtent les résiliations, les liquidations, les rétractations. Un attendu supprimé ne tient à aucun état : il n’y figure pas. Un clic filtre le détail.">
+      {families.length === 0 ? <Empty>Aucune perte rattachée à un état.</Empty> : (
+        <>
+          {families.map((f) => {
+            const t = totals[f.key];
+            const sum = t.creance + t.futur;
+            return (
+              <button key={f.key} type="button" className="fst-hbar rl-money" data-on={selected === f.key || undefined} aria-pressed={selected === f.key}
+                onClick={() => onSelect(f.key)}>
+                <span className="fst-tip" role="presentation">
+                  <b>{f.label}</b> <span>· {plural(t.n, 'dossier')}</span><br />
+                  Créance abandonnée <span>· {formatEUR(t.creance)}</span><br />
+                  Futur annulé <span>· {formatEUR(t.futur)}</span>
+                </span>
+                <span className="fst-hbar-name">{f.label}<span className="rl-name-sub">{plural(t.n, 'dossier')}</span></span>
+                <span className="fst-hbar-track rl-track" style={{ width: `${Math.max(0, sum / largest) * 100}%` }}>
+                  {['creance', 'futur'].filter((key) => t[key] > 0).map((key) => (
+                    <i key={key} style={{ width: `${drawn ? (t[key] / sum) * 100 : 0}%`, background: COLOR[key] }} />
+                  ))}
+                </span>
+                <span className="fst-hbar-num fst-num">
+                  <span className="rl-tone-red">{formatEUR(t.creance)}</span>
+                  <span className="rl-num-sub">+ {formatEUR(t.futur)} de futur annulé</span>
+                </span>
+              </button>
+            );
+          })}
+          <div className="fst-keys">
+            <span><span className="fst-dot" style={{ background: COLOR.creance }} />Créance abandonnée</span>
+            <span><span className="fst-dot" style={{ background: COLOR.futur }} />Futur annulé</span>
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ARR perdu : l'attendu Owner HT des clients sortis, annualisé, quel que soit le périmètre.
+// En dessous, les mois où les pertes ont été actées.
+function ArrCard({ arr, months, loading, month, onMonth }) {
+  const drawn = useDrawn();
+  const largest = Math.max(1, ...months.map((m) => m.creance + m.futur));
+  return (
+    <Card title="ARR perdu, part Owner" Icon={TrendingDown} state={cardState(loading)} skeleton={260}
+      hint="L’attendu Owner HT des clients sortis, annualisé, chaque client compté une fois, quel que soit le périmètre.">
+      <div className="fst-facts" style={{ marginTop: 0, borderTop: 0 }}>
+        {ARR_FAMILLES.map((f) => {
+          const a = arr[f.key];
           return (
-            <motion.div
-              key={f.key}
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28, delay: 0.2 + i * 0.05, ease: [0.4, 0, 0.2, 1] }}
-              style={{
-                border: `1px solid ${N.borderSft}`, borderRadius: 10,
-                padding: '12px 14px', background: '#fff',
-              }}
-            >
-              <div style={{
-                fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-                textTransform: 'uppercase', letterSpacing: '0.04em',
-              }}>
-                {f.label} · {a.n}
-              </div>
-              <div style={{
-                fontSize: 18, fontWeight: 700, color: a.n ? f.accent : N.textFaint, marginTop: 4,
-                fontVariantNumeric: 'tabular-nums',
-              }}>
-                {formatEUR(a.total)}
-              </div>
-              <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>
+            <div key={f.key} className="fst-fact">
+              <span className="fst-fact-label">{f.label} · {a.n}</span>
+              <span className={`fst-fact-value rl-fact-value ${a.n ? `rl-tone-${f.tone}` : 'rl-tone-zero'}`}>
+                <Num value={a.total} format={formatEUR} />
+              </span>
+              <div className="fst-cell-sub">
                 attendu Owner HT annualisé
                 {a.sansMontant > 0 && ` · ${a.sansMontant} sans montant`}
               </div>
-            </motion.div>
+            </div>
           );
         })}
       </div>
 
-      {/* Le détail, du plus coûteux au moins coûteux. */}
-      <div style={{
-        border: `1px solid ${N.borderSft}`, borderRadius: 10, overflow: 'hidden',
-        background: '#fff',
-      }}>
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: '84px minmax(180px, 2fr) 150px 120px 120px minmax(150px, 1fr) 110px',
-          gap: 10, padding: '9px 14px', background: N.sideBg,
-          borderBottom: `1px solid ${N.borderSft}`,
-          fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-          textTransform: 'uppercase', letterSpacing: '0.04em',
-        }}>
-          <span>N° client</span>
-          <span>Client</span>
-          <span>État</span>
-          <span style={{ textAlign: 'right' }}>Créance abandonnée</span>
-          <span style={{ textAlign: 'right' }}>Futur annulé</span>
-          <span>Motif</span>
-          <span>Actée le</span>
+      <div className="fst-chart">
+        <div className="fst-chart-title"><span>Actées par mois</span><span>créance abandonnée, puis futur annulé</span></div>
+        <div className="fst-legend">
+          {months.map((m) => (
+            <button key={m.key || 'none'} type="button" className="fst-legend-row rl-month" aria-pressed={month === m.key} onClick={() => onMonth(m.key)}
+              title={`${plural(m.n, 'perte actée', 'pertes actées')} · + ${formatEUR(m.futur)} de futur annulé. Un clic filtre le détail.`}>
+              <span>{m.key ? formatMonthLabel(m.key) : 'Sans date'}</span>
+              <span className="fst-hbar-track">
+                {['creance', 'futur'].filter((key) => m[key] > 0).map((key) => (
+                  <i key={key} style={{ width: `${drawn ? (m[key] / largest) * 100 : 0}%`, background: COLOR[key] }} />
+                ))}
+              </span>
+              <b className="fst-num rl-tone-red">{formatEUR(m.creance)}</b>
+            </button>
+          ))}
         </div>
+      </div>
+    </Card>
+  );
+}
 
-        {[...enriched].sort((a, b) => b.creance - a.creance).map((l, i) => (
-          <div
-            key={l.id}
-            onClick={() => onOpenClient?.(l.client_id)}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '84px minmax(180px, 2fr) 150px 120px 120px minmax(150px, 1fr) 110px',
-              gap: 10, padding: '10px 14px', fontSize: 12.5, alignItems: 'center',
-              borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
-              cursor: onOpenClient ? 'pointer' : 'default',
-            }}
-            onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-          >
-            <span style={{ color: N.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-              {l.numero_client || '—'}
-            </span>
-            <span style={{
-              color: N.text, fontWeight: 500,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {l.societe || '—'}
-            </span>
-            <span style={{ color: N.textMuted, fontSize: 12 }}>
-              {l.correction ? (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, color: N.textMuted,
-                  background: N.sideBg, borderRadius: 4, padding: '2px 7px',
-                  whiteSpace: 'nowrap',
-                }}>
-                  Attendu supprimé
-                </span>
-              ) : l.withdrawal ? (
-                <span style={{
-                  fontSize: 11, fontWeight: 600, color: N.amber,
-                  background: N.amberBg, borderRadius: 4, padding: '2px 7px',
-                  whiteSpace: 'nowrap',
-                }}>
-                  Rétractation actée
-                </span>
-              ) : (l.etat || '—')}
-            </span>
-            <span style={{
-              textAlign: 'right', fontWeight: 700, fontVariantNumeric: 'tabular-nums',
-              color: l.creance > 0 ? N.red : N.textFaint,
-            }}>
-              {formatEUR(l.creance)}
-            </span>
-            <span style={{
-              textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted,
-            }}>
-              {formatEUR(l.futur)}
-            </span>
-            <span style={{
-              color: N.textFaint, fontSize: 11.5,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }} title={l.reason || ''}>
-              {l.reason || '—'}
-            </span>
-            <span style={{ color: N.textFaint, fontSize: 11.5 }}>
-              {l.declared_at ? formatDateFR(l.declared_at) : '—'}
-              {l.declared_by_name ? (
-                <span style={{ display: 'block', fontSize: 10.5 }}>{l.declared_by_name}</span>
-              ) : null}
-            </span>
-          </div>
-        ))}
+const matches = (l, f) => (f.nature === 'all' || natureOf(l) === f.nature)
+  // Comme la ventilation : une correction ne tient à aucun état.
+  && (!f.famille || (!l.correction && l.famille === f.famille))
+  && (f.month == null || monthOf(l) === f.month);
+
+function Detail({ rows, loading, scope, filter, setFilter, onOpenClient }) {
+  const tabId = useId();
+  const query = filter.query.trim().toLowerCase();
+  // Les compteurs des onglets suivent les autres filtres, pas la nature elle-même.
+  const scopedRows = useMemo(() => rows.filter((l) => matches(l, { ...filter, nature: 'all' })
+    && (!query || `${l.societe || ''} ${l.numero_client || ''} ${l.reason || ''} ${l.etat || ''} ${l.declared_by_name || ''}`.toLowerCase().includes(query))), [rows, filter, query]);
+  const shownRows = useMemo(() => (filter.nature === 'all' ? scopedRows : scopedRows.filter((l) => natureOf(l) === filter.nature)), [scopedRows, filter.nature]);
+  const counts = useMemo(() => scopedRows.reduce((acc, l) => { const k = natureOf(l); acc[k] = (acc[k] || 0) + 1; return acc; }, {}), [scopedRows]);
+  const totals = useMemo(() => shownRows.reduce((acc, l) => ({ creance: acc.creance + l.creance, futur: acc.futur + l.futur }), { creance: 0, futur: 0 }), [shownRows]);
+
+  const signature = `${JSON.stringify(filter)}|${scope}`;
+  const [page, setPage] = useState({ signature: '', shown: PAGE });
+  const shown = page.signature === signature ? page.shown : PAGE;
+
+  const tabs = [
+    { key: 'all', label: 'Toutes', n: scopedRows.length },
+    ...NATURES.filter(({ key }) => counts[key] > 0 || filter.nature === key).map(({ key, label }) => ({ key, label, n: counts[key] || 0 })),
+  ];
+  const chips = [
+    filter.famille && { key: 'famille', label: TOUTES_FAMILLES.find((f) => f.key === filter.famille)?.label || filter.famille },
+    filter.month != null && { key: 'month', label: filter.month ? `Actées en ${formatMonthLabel(filter.month).toLowerCase()}` : 'Sans date' },
+  ].filter(Boolean);
+  const clear = (key) => setFilter((f) => ({ ...f, [key]: NO_FILTER[key] }));
+  const openable = Boolean(onOpenClient);
+
+  return (
+    <Card title="Détail des pertes" Icon={ListX} state={cardState(loading)} skeleton={340}
+      hint="Chaque perte actée, de la plus coûteuse à la moins coûteuse. Un clic sur une ligne ouvre la fiche du client.">
+      <div className="fst-tools">
+        <div className="fst-tabs" role="group" aria-label="Nature de la perte">
+          {tabs.map((tab) => (
+            <button key={tab.key} type="button" className="fst-tab" aria-pressed={filter.nature === tab.key} onClick={() => setFilter((f) => ({ ...f, nature: tab.key }))}>
+              {filter.nature === tab.key && <Motion.span layoutId={`rl-losses-tab-${tabId}`} className="fst-tab-bg" transition={SPRING} />}
+              <span>{tab.label}</span><span className="fst-tab-count fst-num">{tab.n}</span>
+            </button>
+          ))}
+        </div>
+        <AnimatePresence initial={false}>
+          {chips.map((chip) => (
+            <Motion.button key={chip.key} type="button" className="fst-chip" layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.2 }} onClick={() => clear(chip.key)} title="Retirer ce filtre">
+              {chip.label}<X size={13} />
+            </Motion.button>
+          ))}
+        </AnimatePresence>
+        <label className="fst-search">
+          <Search size={14} />
+          <input type="search" placeholder="Client, n°, motif, état…" value={filter.query}
+            onChange={(e) => setFilter((f) => ({ ...f, query: e.target.value }))} aria-label="Chercher une perte" />
+        </label>
       </div>
 
-      <div style={{
-        marginTop: 12, fontSize: 11.5, color: N.textFaint, lineHeight: 1.6,
-        display: 'flex', alignItems: 'flex-start', gap: 7, maxWidth: 720,
-      }}>
-        <TriangleAlert size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+      <TableBox minWidth={1040} after={(
+        <>
+          {shownRows.length === 0 && <Empty>Aucune perte ne correspond à ces filtres.</Empty>}
+          {shownRows.length > shown && (
+            <div className="fst-more">
+              <button type="button" onClick={() => setPage({ signature, shown: shown + PAGE * 2 })}>
+                Afficher les {Math.min(PAGE * 2, shownRows.length - shown)} suivantes
+              </button>
+            </div>
+          )}
+        </>
+      )}>
+        <thead>
+          <tr>
+            <Th Icon={Building2}>Client</Th>
+            <Th Icon={Tags}>État</Th>
+            <Th Icon={FileX} num title="Dû, facturé, jamais encaissé">Créance abandonnée</Th>
+            <Th Icon={CalendarX} num title="Chiffre d’affaires qui ne rentrera pas, jamais facturé">Futur annulé</Th>
+            <Th Icon={MessageSquareText}>Motif</Th>
+            <Th Icon={CalendarCheck}>Actée le</Th>
+            <Th Icon={PenLine}>Actée par</Th>
+          </tr>
+        </thead>
+        <tbody key={signature}>
+          {shownRows.slice(0, shown).map((l, i) => (
+            <tr key={l.id} style={{ '--i': i % PAGE }} data-open={openable || undefined}
+              onClick={() => onOpenClient?.(l.client_id)} title={openable ? 'Ouvrir la fiche du client' : undefined}>
+              <td>
+                <div className="fst-cell-main">{l.societe || '—'}{openable && <OpenCue />}</div>
+                <div className="fst-cell-sub fst-num">{l.numero_client ? `n° ${l.numero_client}` : '—'}</div>
+              </td>
+              <td>
+                {l.correction ? <Tag title="Attendu supprimé parce qu’il n’aurait pas dû être facturé">Attendu supprimé</Tag>
+                  : l.withdrawal ? <Tag tone="peach" title="Signé puis rétracté : une fausse vente">Rétractation actée</Tag>
+                    : l.etat ? <Tag tone={FAMILLES.find((f) => f.key === l.famille)?.tone}>{l.etat}</Tag>
+                      : <span className="fst-cell-muted">—</span>}
+              </td>
+              <td className={`is-num fst-num ${l.creance > 0 ? 'rl-tone-red' : 'rl-tone-zero'}`} style={{ fontWeight: l.creance > 0 ? 500 : 400 }}>{formatEUR(l.creance)}</td>
+              <td className="is-num fst-num fst-cell-muted">{formatEUR(l.futur)}</td>
+              <td className="is-wrap">{l.reason ? <span className="rl-clip" title={l.reason}>{l.reason}</span> : <span className="fst-cell-muted">—</span>}</td>
+              <td className="fst-num fst-cell-muted">{l.declared_at ? formatDateFR(l.declared_at) : '—'}</td>
+              <td><Who name={l.declared_by_name} /></td>
+            </tr>
+          ))}
+        </tbody>
+        {shownRows.length > 0 && (
+          <tfoot>
+            <tr>
+              <td colSpan={2}>{plural(shownRows.length, 'dossier')}{shownRows.length !== rows.length ? ` sur ${rows.length}` : ''}</td>
+              <td className="is-num fst-num rl-tone-red">{formatEUR(totals.creance)}</td>
+              <td className="is-num fst-num">{formatEUR(totals.futur)}</td>
+              <td colSpan={3} />
+            </tr>
+          </tfoot>
+        )}
+      </TableBox>
+
+      <p className="fst-note rl-note">
+        <TriangleAlert size={14} />
         <span>
           Ces montants sont <strong>sortis des totaux</strong> de la page : ils ne
           comptent plus ni dans l’attendu, ni dans les retards, ni dans les créances
           antérieures. Une perte reste annulable depuis la fiche du client, ce qui
           restaure l’attendu au centime.
         </span>
-      </div>
-    </div>
-  );
-}
-
-function Carte({ label, value, hint, accent }) {
-  return (
-    <div style={{
-      border: `1px solid ${N.borderSft}`, borderRadius: 10, background: '#fff',
-      padding: '12px 18px', minWidth: 210,
-    }}>
-      <div style={{
-        fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-        textTransform: 'uppercase', letterSpacing: '0.04em',
-      }}>
-        {label}
-      </div>
-      <div style={{
-        fontSize: 24, fontWeight: 700, color: accent, marginTop: 3,
-        fontVariantNumeric: 'tabular-nums',
-      }}>
-        {formatEUR(value)}
-      </div>
-      <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>{hint}</div>
-    </div>
-  );
-}
-
-function Message({ texte }) {
-  return (
-    <div style={{
-      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: N.textMuted, fontSize: 13, padding: 40,
-    }}>
-      {texte}
-    </div>
+      </p>
+    </Card>
   );
 }

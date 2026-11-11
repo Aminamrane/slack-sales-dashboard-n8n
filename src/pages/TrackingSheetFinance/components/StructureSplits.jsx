@@ -29,14 +29,14 @@ import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 import { formatEUR, formatMonthLabel } from '../constants.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  green: '#15794a',
-  amber: '#b45309',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  green: '#0b7a4b',
+  amber: '#c2500e',
 };
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -236,7 +236,7 @@ export default function StructureSplits({
               display: 'inline-flex', alignItems: 'center', gap: 6,
               border: `1px solid ${N.border}`, background: '#fff',
               borderRadius: 7, padding: '6px 11px', fontSize: 12,
-              fontWeight: 600, fontFamily: 'inherit',
+              fontWeight: 500, fontFamily: 'inherit',
               cursor: suggesting ? 'default' : 'pointer',
               color: suggesting ? N.textFaint : N.text, whiteSpace: 'nowrap',
             }}
@@ -268,7 +268,7 @@ export default function StructureSplits({
           </select>
           {current && (
             <span style={{
-              fontSize: 11.5, fontWeight: 600,
+              fontSize: 11.5, fontWeight: 500,
               color: Math.abs(reste) < 0.005 ? N.green : N.amber,
             }}>
               {Math.abs(reste) < 0.005
@@ -371,7 +371,7 @@ export default function StructureSplits({
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               border: 'none', borderRadius: 6, padding: '7px 13px',
-              fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+              fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
               cursor: saving ? 'default' : 'pointer',
               background: saving ? N.sideBg : N.text,
               color: saving ? N.textFaint : '#fff',

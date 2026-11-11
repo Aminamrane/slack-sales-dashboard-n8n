@@ -16,16 +16,16 @@ import apiClient from '../../../services/apiClient.js';
 import { formatEUR, formatMonthLabel, formatDateFR, shiftMonth } from '../constants.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  green: '#15794a',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  green: '#0b7a4b',
   greenBg: '#eaf7f0',
-  red: '#b42318',
-  redBg: '#fdecec',
+  red: '#c5221f',
+  redBg: '#fde6e6',
 };
 
 // Mois (« AAAA-MM ») qui précède une date ISO : le dernier mois facturé par
@@ -109,12 +109,12 @@ export default function BillingStopDialog({
     return (
       <label style={{
         display: 'block', cursor: 'pointer', borderRadius: 10, padding: '11px 13px',
-        border: `1px solid ${actif ? N.text : N.border}`, background: actif ? '#fafaf9' : '#fff',
+        border: `1px solid ${actif ? N.text : N.border}`, background: actif ? '#faf9f7' : '#fff',
       }}>
         <span style={{ display: 'flex', alignItems: 'flex-start', gap: 9 }}>
           <input type="radio" checked={actif} onChange={() => setMode(key)} style={{ marginTop: 2, accentColor: N.text }} />
           <span style={{ minWidth: 0, flex: 1 }}>
-            <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: N.text }}>{title}</span>
+            <span style={{ display: 'block', fontSize: 13, fontWeight: 500, color: N.text }}>{title}</span>
             <span style={{ display: 'block', fontSize: 12, color: N.textMuted, marginTop: 2, lineHeight: 1.45 }}>{detail}</span>
             {actif && children}
           </span>
@@ -156,7 +156,7 @@ export default function BillingStopDialog({
             <div style={{ minWidth: 0, display: 'flex', gap: 10 }}>
               <CalendarRange size={18} style={{ color: N.textMuted, marginTop: 1, flexShrink: 0 }} />
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 15, fontWeight: 700, color: N.text }}>Fin de facturation</div>
+                <div style={{ fontSize: 15, fontWeight: 600, color: N.text }}>Fin de facturation</div>
                 <div style={{ fontSize: 12, color: N.textMuted, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {client?.company_name || client?.societe || '—'}{client?.numero_client ? ` · ${client.numero_client}` : ''}
                   {etat ? ` · ${etat}${etatDate ? ` le ${formatDateFR(etatDate)}` : ''}` : ''}
@@ -200,7 +200,7 @@ export default function BillingStopDialog({
           </div>
 
           <section style={{ padding: '12px 20px 4px' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 6 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 6 }}>
               Ce que ça change
               {lastShown && <span style={{ fontWeight: 500, color: N.textMuted }}> · facturé jusqu’à {formatMonthLabel(lastShown).toLowerCase()} inclus</span>}
             </div>
@@ -219,7 +219,7 @@ export default function BillingStopDialog({
                       borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
                     }}>
                       <span style={{ color: N.text }}>{formatMonthLabel(m.period)}</span>
-                      <span style={{ fontVariantNumeric: 'tabular-nums', color: garde ? N.green : N.red, fontWeight: 600 }}
+                      <span style={{ fontVariantNumeric: 'tabular-nums', color: garde ? N.green : N.red, fontWeight: 500 }}
                         title={`Owner ${formatEUR(m.before.owner)} → ${formatEUR(m.after.owner)} · Opti’Lex ${formatEUR(m.before.optilex)} → ${formatEUR(m.after.optilex)}`}>
                         {formatEUR(avant)} → {formatEUR(apres)}
                       </span>
@@ -228,7 +228,7 @@ export default function BillingStopDialog({
                 })}
                 <div style={{
                   display: 'flex', justifyContent: 'space-between', gap: 10, padding: '8px 11px', fontSize: 12.5,
-                  borderTop: `1px solid ${N.border}`, background: N.sideBg, fontWeight: 700,
+                  borderTop: `1px solid ${N.border}`, background: N.sideBg, fontWeight: 600,
                 }}>
                   <span style={{ color: N.text }}>Total</span>
                   <span style={{ fontVariantNumeric: 'tabular-nums' }}>
@@ -249,7 +249,7 @@ export default function BillingStopDialog({
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, padding: '14px 20px 18px' }}>
             <button type="button" onClick={onClose} style={{
               border: `1px solid ${N.border}`, background: '#fff', color: N.text, borderRadius: 7,
-              padding: '8px 14px', fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+              padding: '8px 14px', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
             }}>
               Annuler
             </button>
@@ -259,7 +259,7 @@ export default function BillingStopDialog({
               disabled={saving || unchanged || (mode === 'keep' && !month)}
               title={unchanged ? 'C’est déjà la situation enregistrée' : ''}
               style={{
-                border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+                border: 'none', borderRadius: 7, padding: '8px 14px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
                 background: unchanged ? N.sideBg : N.text, color: unchanged ? N.textFaint : '#fff',
                 cursor: unchanged || saving ? 'default' : 'pointer',
               }}

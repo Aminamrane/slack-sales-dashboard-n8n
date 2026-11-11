@@ -148,7 +148,7 @@ const PortalDropdown = React.memo(function PortalDropdown({
         minWidth,
         maxHeight,
         background: '#ffffff',
-        border: '1px solid #e5e7eb',
+        border: '1px solid #e8e4de',
         borderRadius: 8,
         boxShadow: '0 10px 28px rgba(0,0,0,0.12)',
         padding: 4,

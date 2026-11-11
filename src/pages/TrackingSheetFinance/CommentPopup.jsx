@@ -36,26 +36,26 @@ import { READ_ONLY_PROPS } from '../../utils/readOnlyRoles.js';
 const N = {
   pageBg:    '#ffffff',
   bg:        '#ffffff',
-  border:    '#e9e9e7',
-  borderSft: '#e3e2e0',
-  text:      '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  accent:    '#2383e2',
-  red:       '#b74133',
-  redBg:     '#ffe2dd',
-  hover:     '#f7f7f5',
+  border:    '#e8e4de',
+  borderSft: '#e3ded6',
+  text:      '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  accent:    '#1b6fd0',
+  red:       '#c5221f',
+  redBg:     '#fde6e6',
+  hover:     '#f7f5f2',
 };
 
 // 8 deterministic avatar colors (mirror existing pattern from LeadsManagement).
 const AVATAR_PALETTE = [
-  { bg: '#dbeafe', fg: '#1e40af' }, // blue
-  { bg: '#fee2e2', fg: '#991b1b' }, // red
-  { bg: '#d1fae5', fg: '#065f46' }, // green
-  { bg: '#eae4f2', fg: '#6940a5' }, // purple
-  { bg: '#fef3c7', fg: '#92400e' }, // amber
+  { bg: '#e4f0fd', fg: '#1b6fd0' }, // blue
+  { bg: '#fde6e6', fg: '#b3211e' }, // red
+  { bg: '#e2f6ea', fg: '#0b7a4b' }, // green
+  { bg: '#eee9fa', fg: '#6a45b8' }, // purple
+  { bg: '#fbf1c2', fg: '#a8480f' }, // amber
   { bg: '#f4dfeb', fg: '#ad1a72' }, // pink
-  { bg: '#cffafe', fg: '#0e7490' }, // teal
+  { bg: '#cffafe', fg: '#0f7286' }, // teal
 ];
 
 function avatarColorFor(seed) {
@@ -446,13 +446,13 @@ function CommentItem({
           background: palette.bg,
           color: palette.fg,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 10.5, fontWeight: 600,
+          fontSize: 10.5, fontWeight: 500,
           letterSpacing: '0.02em',
         }}>
           {initials}
         </span>
         <span style={{
-          fontSize: 13, fontWeight: 600, color: N.text,
+          fontSize: 13, fontWeight: 500, color: N.text,
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           maxWidth: 160,
         }}>
@@ -819,7 +819,7 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
             }}
             style={{
               ...composerIconBtnStyle,
-              background: mentionOpen ? N.sideHover || '#f1f1ef' : 'transparent',
+              background: mentionOpen ? N.sideHover || '#f1eee9' : 'transparent',
             }}
           >
             <AtSign size={22} />
@@ -880,14 +880,14 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
                       width: '100%',
                       padding: '8px 12px',
                       border: 'none',
-                      background: isFirst ? '#f1f1ef' : 'transparent',
+                      background: isFirst ? '#f1eee9' : 'transparent',
                       borderRadius: 4,
                       cursor: 'pointer',
                       textAlign: 'left',
                       fontFamily: 'inherit',
                     }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#f1f1ef'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = isFirst ? '#f1f1ef' : 'transparent'}
+                    onMouseEnter={(e) => e.currentTarget.style.background = '#f1eee9'}
+                    onMouseLeave={(e) => e.currentTarget.style.background = isFirst ? '#f1eee9' : 'transparent'}
                   >
                     <span style={{
                       width: 26, height: 26,
@@ -895,7 +895,7 @@ function Composer({ inputRef, value, onChange, onSubmit, submitting, hasComments
                       background: isMe ? '#6b6862' : '#e8e7e4',
                       color: isMe ? '#fff' : N.textMuted,
                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 12, fontWeight: 600,
+                      fontSize: 12, fontWeight: 500,
                       fontFamily: 'inherit',
                       flexShrink: 0,
                     }}>

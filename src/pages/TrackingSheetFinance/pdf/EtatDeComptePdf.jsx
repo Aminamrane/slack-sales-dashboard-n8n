@@ -67,11 +67,11 @@ const eur = (v) => pdfSafe(formatEUR(v));
 
 // Navy charte Owner (ref_owner_brand_colors) — bandeau + en-têtes du Sheet.
 const NAVY = '#121b35';
-const INK = '#1e2330';
-const MUTED = '#5b6472';
-const BORDER = '#1e2330';
+const INK = '#2b2927';
+const MUTED = '#6f6a63';
+const BORDER = '#2b2927';
 const RED = '#e11919';   // rouge vif du total de la référence
-const GREEN = '#15794a'; // solde négatif = trop-perçu global (crédit)
+const GREEN = '#0b7a4b'; // solde négatif = trop-perçu global (crédit)
 
 const styles = StyleSheet.create({
   page: {

@@ -7,38 +7,39 @@
 // client soit à jour), tenue (le client ne doit plus rien, levée
 // automatiquement) ou retirée.
 //
+// Refonte dev 10/11/2026 : la vue parle le langage des Statistiques (chiffres
+// clés, répartition des issues, montants en barres, tableau à en-têtes
+// illustrés). Les chargements, les statuts et les règles de montant sont
+// ceux d'origine.
+//
 // Source : GET /finance-periods/client/payment-promises.
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { RefreshCw } from 'lucide-react';
+import { motion as Motion } from 'framer-motion';
+import {
+  Banknote, Building2, CalendarClock, CalendarDays, CircleCheck, CircleDot, Coins, FileText, Hourglass, ListChecks, MessageSquare, PieChart,
+  Search, User, Wallet,
+} from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
+import { useDrawn } from '../../../components/perfSales/motion.jsx';
 import { formatEUR, formatDateFR } from '../constants.js';
+import { count, pct } from '../statistics/model.js';
+import { Fill, ProgressRing } from '../statistics/parts.jsx';
+import { Card, Empty, Num, OpenCue, Page, Pill, RefreshButton, Reveal, Stat, Stats, TableBox, Tag, Th, Who } from './PageKit.jsx';
+import './FollowupTabs.css';
 
-const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  green: '#0f7b6c',
-  greenBg: '#e9f9f0',
-  blue: '#1e40af',
-  blueBg: '#e7f0fb',
-  amber: '#b45309',
-  amberBg: '#fff8ed',
-  red: '#b42318',
-  redBg: '#fdecec',
-};
+const SPRING = { type: 'spring', stiffness: 520, damping: 40 };
+const PAGE = 25;
 
+// `tone` : couleur de la pastille de statut ; `color` : la même issue dans la répartition.
 const STATUS = {
-  open:      { label: 'En cours',     fg: N.blue,      bg: N.blueBg },
-  late:      { label: 'Dépassée',     fg: N.red,       bg: N.redBg },
-  kept:      { label: 'Tenue · payé', fg: N.green,     bg: N.greenBg },
-  withdrawn: { label: 'Retirée',      fg: N.textMuted, bg: '#f1f1ef' },
+  open:      { label: 'En cours',     many: 'En cours',  tone: 'blue',  color: '#8fbdf3' },
+  late:      { label: 'Dépassée',     many: 'Dépassées', tone: 'red',   color: '#ee8f8a' },
+  kept:      { label: 'Tenue · payé', many: 'Tenues',    tone: 'green', color: '#6cc493' },
+  withdrawn: { label: 'Retirée',      many: 'Retirées',  tone: 'ghost', color: '#dedad3' },
 };
+const ORDER = ['open', 'late', 'kept', 'withdrawn'];
 
 const FILTERS = [
   { key: 'all',       label: 'Toutes' },
@@ -47,10 +48,6 @@ const FILTERS = [
   { key: 'kept',      label: 'Tenues' },
   { key: 'withdrawn', label: 'Retirées' },
 ];
-
-// Tient dans l'écran intégré (/ceo/dispatch, ~950 px) : minimums serrés, le
-// reste de la largeur réparti.
-const GRID = 'minmax(84px, 0.8fr) minmax(150px, 1.6fr) minmax(88px, 0.8fr) minmax(150px, 2fr) minmax(84px, 0.8fr) minmax(84px, 0.8fr) minmax(84px, 0.8fr) minmax(120px, 1.1fr)';
 
 // Montant vu dans la vision active (Owner, Opti'Lex ou les deux).
 const inScope = (scope, owner, optilex) => {
@@ -68,11 +65,33 @@ const dayLabel = (iso) => {
     : d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris' });
 };
 
+// Écart en jours entre aujourd'hui et la date promise (négatif : la date est passée).
+const daysTo = (ymd) => {
+  if (!ymd) return null;
+  const [y, m, d] = String(ymd).slice(0, 10).split('-').map(Number);
+  if (!y || !m || !d) return null;
+  const now = new Date();
+  return Math.round((new Date(y, m - 1, d).getTime() - new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()) / 86400000);
+};
+
+const delay = (p) => {
+  if (p.status !== 'open' && p.status !== 'late') return null;
+  const days = daysTo(p.promised_for);
+  if (days == null) return null;
+  if (days === 0) return 'aujourd’hui';
+  return days > 0 ? `dans ${days} j` : `depuis ${-days} j`;
+};
+
+const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const euros = (n) => formatEUR(n);
+
 export default function PromisesView({ scope, onOpenClient }) {
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [reloading, setReloading] = useState(false);
   const [filter, setFilter] = useState('all');
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState({ signature: '', shown: PAGE });
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
@@ -99,225 +118,267 @@ export default function PromisesView({ scope, onOpenClient }) {
     return c;
   }, [items]);
 
-  const visible = useMemo(
-    () => (items || []).filter((p) => filter === 'all' || p.status === filter),
-    [items, filter],
-  );
+  const visible = useMemo(() => {
+    const q = fold(query.trim());
+    return (items || []).filter((p) => (filter === 'all' || p.status === filter)
+      && (!q || fold([p.client?.societe, p.client?.numero_client, p.note, p.created_by_name].join(' ')).includes(q)));
+  }, [items, filter, query]);
 
   // Ce qui est rentré depuis les promesses, et ce qui reste à récupérer sur
   // celles qui courent encore.
   const totaux = useMemo(() => {
-    let recu = 0; let reste = 0;
+    let recu = 0; let reste = 0; let du = 0; let resteDepasse = 0; let sansDate = 0;
     for (const p of items || []) {
+      du += inScope(scope, p.due_owner, p.due_optilex) || 0;
       recu += inScope(scope, p.received_owner, p.received_optilex) || 0;
       if (p.status === 'open' || p.status === 'late') {
-        reste += inScope(scope, p.remaining_owner, p.remaining_optilex) || 0;
+        const r = inScope(scope, p.remaining_owner, p.remaining_optilex) || 0;
+        reste += r;
+        if (p.status === 'late') resteDepasse += r;
+        if (!p.promised_for) sansDate += 1;
       }
     }
-    return { recu, reste };
+    return { recu, reste, du, resteDepasse, sansDate };
   }, [items, scope]);
 
-  if (error && items === null) return <Message texte={`Promesses indisponibles — ${error}`} />;
-  if (items === null) return <Message texte="Chargement des promesses…" />;
+  // Pied du tableau : la somme des lignes filtrées, pas seulement de celles affichées.
+  const pied = useMemo(() => {
+    let du = 0; let recu = 0; let reste = 0;
+    for (const p of visible) {
+      du += inScope(scope, p.due_owner, p.due_optilex) || 0;
+      recu += inScope(scope, p.received_owner, p.received_optilex) || 0;
+      if (p.status === 'open' || p.status === 'late') reste += inScope(scope, p.remaining_owner, p.remaining_optilex) || 0;
+    }
+    return { du, recu, reste };
+  }, [visible, scope]);
+
+  const reload = () => setRefresh((n) => n + 1);
+  const signature = `${filter}|${query}`;
+  const shown = page.signature === signature ? page.shown : PAGE;
+  const rows = visible.slice(0, shown);
+
+  const head = {
+    title: 'Promesses de règlement',
+    sub: 'Chaque client qui a promis de régler : la date annoncée, ce qu’il devait, ce qui est rentré depuis.',
+    actions: <RefreshButton onClick={reload} busy={reloading} />,
+  };
+
+  if (error && items === null) {
+    return (
+      <Page {...head}>
+        <div className="fst-error" role="alert">Promesses indisponibles — {error}<button type="button" onClick={reload}>Réessayer</button></div>
+      </Page>
+    );
+  }
+  if (items === null) return <Page {...head}><Empty boxed>Chargement des promesses…</Empty></Page>;
+
+  const running = counts.open + counts.late;
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 2px 40px' }}>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.32, ease: [0.16, 1, 0.3, 1] }}
-        style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'stretch', marginBottom: 18 }}
-      >
-        <Carte label="En cours" value={counts.open + counts.late}
-          hint={counts.late ? `dont ${counts.late} dépassée${counts.late > 1 ? 's' : ''}` : 'aucune dépassée'}
-          accent={counts.late ? N.red : N.blue} />
-        <Carte label="Tenues" value={counts.kept} hint="le client s'est mis à jour" accent={N.green} />
-        <Carte label="Reçu depuis les promesses" value={formatEUR(totaux.recu)}
-          hint="saisies et encaissements détectés" accent={N.green} />
-        <Carte label="Reste à récupérer" value={formatEUR(totaux.reste)}
-          hint="sur les promesses en cours" accent={N.amber} />
+    <Page {...head}>
+      <Stats>
+        <Stat label="En cours" Icon={Hourglass} value={running} tone={counts.late ? 'red' : undefined}
+          note={counts.late ? `dont ${counts.late} dépassée${counts.late > 1 ? 's' : ''}` : 'aucune dépassée'} />
+        <Stat label="Tenues" Icon={CircleCheck} value={counts.kept} tone="green" note="le client s'est mis à jour" />
+        <Stat label="Reçu depuis les promesses" Icon={Banknote} value={totaux.recu} format={euros} tone="green" note="saisies et encaissements détectés" />
+        <Stat label="Reste à récupérer" Icon={Wallet} value={totaux.reste} format={euros} tone={totaux.reste > 0 ? 'amber' : undefined}
+          note="sur les promesses en cours" />
+      </Stats>
 
-        <button
-          type="button"
-          onClick={() => setRefresh((n) => n + 1)}
-          title="Recharger"
-          style={{
-            marginLeft: 'auto', alignSelf: 'center',
-            border: `1px solid ${N.borderSft}`, background: '#fff', borderRadius: 10,
-            padding: '0 14px', height: 40, cursor: 'pointer', color: N.textMuted,
-            display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: 'inherit',
-            fontSize: 12.5,
-          }}
-        >
-          <motion.span
-            animate={{ rotate: reloading ? 360 : 0 }}
-            transition={reloading ? { duration: 1, repeat: Infinity, ease: 'linear' } : { duration: 0 }}
-            style={{ display: 'inline-flex' }}
-          >
-            <RefreshCw size={13} />
-          </motion.span>
-          Actualiser
-        </button>
-      </motion.div>
+      {counts.all > 0 && (
+        <Reveal className="fst-grid is-even">
+          <Outcomes counts={counts} filter={filter} onFilter={setFilter} />
+          <Amounts totaux={totaux} running={running} />
+        </Reveal>
+      )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
-        {FILTERS.map((f) => {
-          const actif = filter === f.key;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              style={{
-                height: 26, padding: '0 10px', borderRadius: 999, cursor: 'pointer',
-                border: `1px solid ${actif ? N.text : N.border}`,
-                background: actif ? N.text : '#fff', color: actif ? '#fff' : N.textMuted,
-                fontFamily: 'inherit', fontSize: 12, fontWeight: actif ? 600 : 500,
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              {f.label}
-              <span style={{ fontVariantNumeric: 'tabular-nums', opacity: 0.75 }}>{counts[f.key] || 0}</span>
-            </button>
-          );
-        })}
-        <span style={{ color: N.textFaint, fontSize: 11.5, marginLeft: 6 }}>
-          Les plus récentes d'abord{error ? ' · Actualisation indisponible, réessayez.' : ''}
-        </span>
-      </div>
-
-      {visible.length === 0 ? (
-        <Message texte={filter === 'all' ? 'Aucune promesse de règlement notée.' : 'Aucune promesse dans cet état.'} />
-      ) : (
-        <div style={{ border: `1px solid ${N.borderSft}`, borderRadius: 10, overflowX: 'auto', background: '#fff' }}>
-          <div style={{
-            display: 'grid', gridTemplateColumns: GRID, minWidth: 900,
-            gap: 10, padding: '9px 14px', background: N.sideBg,
-            borderBottom: `1px solid ${N.borderSft}`,
-            fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-            textTransform: 'uppercase', letterSpacing: '0.04em',
-          }}>
-            <span>Notée le</span>
-            <span>Client</span>
-            <span>Règlement promis</span>
-            <span>Commentaire</span>
-            <span style={{ textAlign: 'right' }}>Dû à la pose</span>
-            <span style={{ textAlign: 'right' }}>Reçu depuis</span>
-            <span style={{ textAlign: 'right' }}>Reste dû</span>
-            <span>Statut</span>
+      <Reveal amount={0.03}>
+        <Card title="Toutes les promesses" Icon={ListChecks}
+          hint={`Les plus récentes d'abord${error ? ' · Actualisation indisponible, réessayez.' : ''}`}>
+          <div className="fst-tools">
+            <div className="fst-tabs" role="group" aria-label="Issue de la promesse">
+              {FILTERS.map((f) => (
+                <button key={f.key} type="button" className="fst-tab" aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                  {filter === f.key && <Motion.span layoutId="fup-promise-tab" className="fst-tab-bg" transition={SPRING} />}
+                  <span>{f.label}</span><span className="fst-tab-count fst-num">{count(counts[f.key] || 0)}</span>
+                </button>
+              ))}
+            </div>
+            <label className="fst-search">
+              <Search size={14} />
+              <input type="search" placeholder="Client, n°, commentaire, auteur…" value={query} onChange={(e) => setQuery(e.target.value)}
+                aria-label="Chercher une promesse" />
+            </label>
           </div>
 
-          {visible.map((p, i) => {
-            const st = STATUS[p.status] || STATUS.open;
-            const du = inScope(scope, p.due_owner, p.due_optilex);
-            const recu = inScope(scope, p.received_owner, p.received_optilex);
-            const reste = inScope(scope, p.remaining_owner, p.remaining_optilex);
-            return (
-              <motion.div
-                key={p.id}
-                initial={{ opacity: 0, y: 4 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2, delay: Math.min(i, 12) * 0.02, ease: [0.4, 0, 0.2, 1] }}
-                onClick={() => onOpenClient?.(p.client.id)}
-                style={{
-                  display: 'grid', gridTemplateColumns: GRID, minWidth: 900,
-                  gap: 10, padding: '10px 14px', fontSize: 12.5, alignItems: 'center',
-                  borderTop: i === 0 ? 'none' : `1px solid ${N.borderSft}`,
-                  cursor: onOpenClient ? 'pointer' : 'default',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', color: N.textMuted, fontVariantNumeric: 'tabular-nums' }}>
-                    {dayLabel(p.created_at)}
-                  </span>
-                  <span style={{ fontSize: 11, color: N.textFaint, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
-                    {p.created_by_name || '—'}
-                  </span>
-                </span>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{
-                    display: 'block', color: N.text, fontWeight: 500,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {p.client?.societe || '—'}
-                  </span>
-                  <span style={{ fontSize: 11, color: N.textFaint }}>{p.client?.numero_client || ''}</span>
-                </span>
-                <span style={{
-                  fontVariantNumeric: 'tabular-nums', fontWeight: 600,
-                  color: p.status === 'late' ? N.red : p.promised_for ? N.text : N.textFaint,
-                }}>
-                  {p.promised_for ? formatDateFR(p.promised_for) : 'Non précisée'}
-                </span>
-                <span title={p.note} style={{
-                  color: N.text, fontSize: 12, lineHeight: 1.4,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-                }}>
-                  {p.note}
-                </span>
-                <Montant value={du} />
-                <Montant value={recu} color={recu > 0 ? N.green : N.textFaint} />
-                <Montant value={p.status === 'open' || p.status === 'late' ? reste : null}
-                  color={reste > 0 ? N.amber : N.textFaint} />
-                <span style={{ minWidth: 0 }}>
-                  <span style={{
-                    display: 'inline-block', padding: '2px 8px', borderRadius: 4,
-                    background: st.bg, color: st.fg, fontSize: 11.5, fontWeight: 600,
-                  }}>
-                    {st.label}
-                  </span>
-                  {p.closed_at && (
-                    <span title={p.close_note || ''} style={{
-                      display: 'block', fontSize: 11, color: N.textFaint, marginTop: 2,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      le {dayLabel(p.closed_at)}{p.closed_by_name ? ` · ${p.closed_by_name}` : ''}
-                    </span>
-                  )}
-                </span>
-              </motion.div>
-            );
-          })}
+          <TableBox minWidth={1180}
+            after={(
+              <>
+                {visible.length === 0 && (
+                  <Empty>{query.trim() ? 'Aucune promesse ne correspond à cette recherche.'
+                    : filter === 'all' ? 'Aucune promesse de règlement notée.' : 'Aucune promesse dans cet état.'}</Empty>
+                )}
+                {visible.length > shown && (
+                  <div className="fst-more">
+                    <button type="button" onClick={() => setPage({ signature, shown: shown + PAGE * 2 })}>
+                      Afficher les {count(Math.min(PAGE * 2, visible.length - shown))} suivantes
+                    </button>
+                  </div>
+                )}
+              </>
+            )}>
+            <thead>
+              <tr>
+                <Th Icon={Building2}>Client</Th>
+                <Th Icon={CalendarDays}>Notée le</Th>
+                <Th Icon={User}>Par</Th>
+                <Th Icon={CalendarClock}>Règlement promis</Th>
+                <Th Icon={MessageSquare}>Commentaire</Th>
+                <Th Icon={FileText} num>Dû à la pose</Th>
+                <Th Icon={Banknote} num>Reçu depuis</Th>
+                <Th Icon={Wallet} num>Reste dû</Th>
+                <Th Icon={CircleDot}>Statut</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p, i) => {
+                const st = STATUS[p.status] || STATUS.open;
+                const du = inScope(scope, p.due_owner, p.due_optilex);
+                const recu = inScope(scope, p.received_owner, p.received_optilex);
+                const reste = inScope(scope, p.remaining_owner, p.remaining_optilex);
+                const live = p.status === 'open' || p.status === 'late';
+                const openable = Boolean(onOpenClient) && p.client?.id != null;
+                const eta = delay(p);
+                return (
+                  <tr key={p.id} style={{ '--i': Math.min(i, 14) }} data-open={openable || undefined}
+                    onClick={openable ? () => onOpenClient(p.client.id) : undefined} title={openable ? 'Ouvrir la fiche du client' : undefined}>
+                    <td>
+                      <div className="fst-cell-main">{p.client?.societe || '—'}<OpenCue /></div>
+                      {p.client?.numero_client && <div className="fst-cell-sub fst-num">n° {p.client.numero_client}</div>}
+                    </td>
+                    <td className="is-nowrap fst-num">{dayLabel(p.created_at)}</td>
+                    <td><Who name={p.created_by_name} /></td>
+                    <td className="is-nowrap">
+                      {p.promised_for
+                        ? (p.status === 'late'
+                          ? <Tag tone="red" title="Date promise passée sans que le client soit à jour">{formatDateFR(p.promised_for)}</Tag>
+                          : <span className="fst-num" style={{ fontWeight: 500 }}>{formatDateFR(p.promised_for)}</span>)
+                        : <span className="fst-cell-muted">Non précisée</span>}
+                      {eta && <div className={`fst-cell-sub${p.status === 'late' ? ' fup-tone-red' : ''}`}>{eta}</div>}
+                    </td>
+                    <td className="is-wrap">
+                      {p.note ? <div className="fup-clip" title={p.note}>{p.note}</div> : <span className="fst-cell-muted">–</span>}
+                    </td>
+                    <td className="is-num fst-num">{du == null ? '—' : formatEUR(du)}</td>
+                    <td className={`is-num fst-num ${recu > 0 ? 'fup-tone-green' : 'fup-tone-zero'}`}>{recu == null ? '—' : formatEUR(recu)}</td>
+                    <td className={`is-num fst-num ${live && reste > 0 ? 'fup-tone-amber' : 'fup-tone-zero'}`}>
+                      {live && reste != null ? formatEUR(reste) : '—'}
+                    </td>
+                    <td>
+                      <Pill tone={st.tone}>{st.label}</Pill>
+                      {p.closed_at && (
+                        <div className="fst-cell-sub" title={p.close_note || ''}>
+                          le {dayLabel(p.closed_at)}{p.closed_by_name ? ` · ${p.closed_by_name}` : ''}
+                        </div>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            {visible.length > 1 && (
+              <tfoot>
+                <tr>
+                  <td colSpan={5}>{count(visible.length)} promesses{filter !== 'all' || query.trim() ? ' dans cette sélection' : ''}</td>
+                  <td className="is-num fst-num">{formatEUR(pied.du)}</td>
+                  <td className="is-num fst-num">{formatEUR(pied.recu)}</td>
+                  <td className="is-num fst-num">{formatEUR(pied.reste)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
+          </TableBox>
+        </Card>
+      </Reveal>
+    </Page>
+  );
+}
+
+// ── Où en sont les promesses : la part tenue, puis chaque issue (un clic filtre la liste) ───────────
+function Outcomes({ counts, filter, onFilter }) {
+  const drawn = useDrawn();
+  const judged = counts.all - counts.withdrawn;
+  const rate = judged ? counts.kept / judged : 0;
+  const present = ORDER.filter((key) => counts[key] > 0);
+
+  return (
+    <Card title="Où en sont les promesses" Icon={PieChart} hint="La part des promesses tenues, puis chaque issue. Un clic filtre la liste.">
+      <div className="fst-goal fup-goal">
+        <ProgressRing value={rate} color="#6cc493" label={`${counts.kept} promesses tenues sur ${judged}`}>
+          <Num className="fst-ring-num" value={counts.kept} />
+          <div className="fst-ring-sub">sur {count(judged)}</div>
+        </ProgressRing>
+        <div style={{ minWidth: 0 }}>
+          <Num className="fst-rate-big" value={rate} format={(n) => pct(n, 0)} />
+          <div className="fst-rate-note">
+            {judged ? 'des promesses ont été tenues : le client s’est mis à jour.' : 'Aucune promesse à juger pour l’instant.'}
+            {counts.withdrawn > 0 && ` Hors ${counts.withdrawn} retirée${counts.withdrawn > 1 ? 's' : ''}.`}
+          </div>
         </div>
-      )}
-    </div>
-  );
-}
-
-function Montant({ value, color = N.text }) {
-  return (
-    <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600, color }}>
-      {value == null ? '—' : formatEUR(value)}
-    </span>
-  );
-}
-
-function Carte({ label, value, hint, accent }) {
-  return (
-    <div style={{
-      border: `1px solid ${N.borderSft}`, borderRadius: 10, background: '#fff',
-      padding: '12px 18px', minWidth: 170,
-    }}>
-      <div style={{
-        fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-        textTransform: 'uppercase', letterSpacing: '0.04em',
-      }}>
-        {label}
       </div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: accent, marginTop: 3, fontVariantNumeric: 'tabular-nums' }}>
-        {value}
+
+      <div className="fst-split" aria-hidden="true">
+        {present.map((key) => (
+          <i key={key} style={{ flexGrow: drawn ? counts[key] : 0, flexBasis: 0, background: STATUS[key].color, opacity: filter === 'all' || filter === key ? 1 : 0.25 }} />
+        ))}
       </div>
-      <div style={{ fontSize: 11, color: N.textFaint, marginTop: 2 }}>{hint}</div>
-    </div>
+      <div className="fst-legend">
+        {present.map((key) => (
+          <button key={key} type="button" className="fst-legend-row" aria-pressed={filter === key} onClick={() => onFilter(filter === key ? 'all' : key)}
+            title="Voir ces promesses dans la liste">
+            <span className="fst-dot" style={{ background: STATUS[key].color }} />
+            {STATUS[key].many}
+            <b className="fst-num">{count(counts[key])}</b>
+            <small className="fst-num">{pct(counts.all ? counts[key] / counts.all : 0, 0)}</small>
+          </button>
+        ))}
+      </div>
+    </Card>
   );
 }
 
-function Message({ texte }) {
+// ── Les montants : ce qui était dû à la pose des promesses, ce qui est rentré, ce qui court encore ──
+function Amounts({ totaux, running }) {
+  const largest = Math.max(1, totaux.du, totaux.recu, totaux.reste);
+  const lines = [
+    { label: 'Dû à la pose', value: totaux.du, color: '#cfc8bd' },
+    { label: 'Reçu depuis', value: totaux.recu, color: '#6cc493' },
+    { label: 'Reste en cours', value: totaux.reste, color: '#f1b76a' },
+  ];
+
   return (
-    <div style={{ padding: '40px 20px', textAlign: 'center', color: N.textMuted, fontSize: 13 }}>
-      {texte}
-    </div>
+    <Card title="Les montants" Icon={Coins} hint="Ce que ces clients devaient quand la promesse a été notée, et ce qui est rentré depuis.">
+      <div className="fst-rate-top">
+        <div>
+          <Num className="fst-rate-big" value={totaux.du ? totaux.recu / totaux.du : 0} format={(n) => pct(n, 0)} />
+          <div className="fst-rate-note">du dû à la pose est rentré depuis.</div>
+        </div>
+      </div>
+      <div className="fst-dist fup-money">
+        {lines.map((line) => (
+          <div key={line.label} className="fst-dist-row">
+            <span>{line.label}</span>
+            <Fill value={line.value / largest} color={line.color} />
+            <span><Num value={line.value} format={euros} /></span>
+          </div>
+        ))}
+      </div>
+      <dl className="fst-kv">
+        <dt>Promesses qui courent encore</dt><dd className="fst-num">{count(running)}</dd>
+        <dt>Reste dû sur les dépassées</dt>
+        <dd className={totaux.resteDepasse > 0 ? 'fup-tone-red' : undefined}><Num value={totaux.resteDepasse} format={euros} /></dd>
+        <dt>En cours sans date précisée</dt><dd className="fst-num">{count(totaux.sansDate)}</dd>
+      </dl>
+    </Card>
   );
 }

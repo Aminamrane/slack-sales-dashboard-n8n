@@ -84,7 +84,7 @@ export const CopyButton = React.memo(function CopyButton({
         background: phase === 'copied' ? '#dcfce7' : 'transparent',
         border: 'none',
         borderRadius: 4,
-        color: phase === 'copied' ? '#166534' : '#787774',
+        color: phase === 'copied' ? '#166534' : '#8b867e',
         cursor: 'pointer',
         opacity: phase === 'copied' ? 1 : 0,
         transition: 'opacity 0.12s ease, background 0.12s ease, color 0.12s ease',
@@ -150,7 +150,7 @@ const cellStyle = (state) => {
     case 'saved':
       return { ...CELL_BASE, background: '#dcfce7', color: '#166534' };
     case 'error':
-      return { ...CELL_BASE, background: '#fee2e2', color: '#991b1b' };
+      return { ...CELL_BASE, background: '#fde6e6', color: '#b3211e' };
     default:
       return CELL_BASE;
   }
@@ -236,7 +236,7 @@ export const EditableText = React.memo(function EditableText({
           borderRadius: 0,
           outline: 'none',
           background: 'transparent',
-          color: '#111827',
+          color: '#1c1b19',
         }}
       />
     );
@@ -250,7 +250,7 @@ export const EditableText = React.memo(function EditableText({
       style={{
         ...cellStyle(state),
         width,
-        color: isEmpty ? (placeholderItalic ? '#c7c7c2' : '#9ca3af') : '#111827',
+        color: isEmpty ? (placeholderItalic ? '#c9c4bc' : '#a8a39b') : '#1c1b19',
         cursor: disabled ? 'default' : 'pointer',
         fontStyle: isEmpty && placeholderItalic ? 'italic' : 'normal',
         overflow: 'hidden',
@@ -361,7 +361,7 @@ export const EditableNumber = React.memo(function EditableNumber({
           borderRadius: 0,
           outline: 'none',
           background: 'transparent',
-          color: '#111827',
+          color: '#1c1b19',
         }}
       />
     );
@@ -381,9 +381,9 @@ export const EditableNumber = React.memo(function EditableNumber({
           onMouseDown={(e) => { e.preventDefault(); commit(suggested.toFixed(2)); }}
           style={{
             position: 'absolute', left: 4, top: '50%', transform: 'translateY(-50%)',
-            background: '#eef2ff', color: '#4338ca',
+            background: '#eae9fb', color: '#4338ca',
             borderRadius: 4, padding: '0 5px',
-            fontSize: 10, fontWeight: 600, lineHeight: 1.6,
+            fontSize: 10, fontWeight: 500, lineHeight: 1.6,
             fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
             cursor: 'pointer', userSelect: 'none',
           }}
@@ -422,8 +422,8 @@ export const EditableNumber = React.memo(function EditableNumber({
         width: '100%',
         height: '100%',
         color: isEmpty
-          ? (placeholderItalic ? '#c7c7c2' : '#9ca3af')
-          : (valueColor || '#111827'),
+          ? (placeholderItalic ? '#c9c4bc' : '#a8a39b')
+          : (valueColor || '#1c1b19'),
         fontWeight: !isEmpty && valueBold ? 700 : 'normal',
         cursor: disabled ? 'default' : 'pointer',
         fontStyle: isEmpty && placeholderItalic ? 'italic' : 'normal',
@@ -500,7 +500,7 @@ export const EditableDate = React.memo(function EditableDate({
           borderRadius: 0,
           outline: 'none',
           background: 'transparent',
-          color: '#111827',
+          color: '#1c1b19',
         }}
       />
     );
@@ -516,7 +516,7 @@ export const EditableDate = React.memo(function EditableDate({
       style={{
         ...cellStyle(state),
         width,
-        color: !value ? '#9ca3af' : isProjected ? '#9ca3af' : '#111827',
+        color: !value ? '#a8a39b' : isProjected ? '#a8a39b' : '#1c1b19',
         fontStyle: isProjected ? 'italic' : 'normal',
         cursor: disabled ? 'default' : 'pointer',
         display: 'inline-flex', alignItems: 'baseline', gap: 5,
@@ -524,7 +524,7 @@ export const EditableDate = React.memo(function EditableDate({
     >
       {value ? display : placeholder}
       {isProjected && (
-        <span style={{ fontSize: 9.5, fontStyle: 'normal', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#b5b5b1' }}>
+        <span style={{ fontSize: 9.5, fontStyle: 'normal', fontWeight: 500, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#b5b5b1' }}>
           prévue
         </span>
       )}
@@ -591,8 +591,8 @@ export const EditableSelect = React.memo(function EditableSelect({
   }, [value, pillColors, pillFallback]);
 
   const labelStyle = pillColors && value ? {
-    background: meta?.bg || '#f3f4f6',
-    color: meta?.fg || '#374151',
+    background: meta?.bg || '#f4f2ee',
+    color: meta?.fg || '#3a3733',
     padding: '2px 8px',
     borderRadius: notionSolid ? 4 : 999,
     fontSize: 12,
@@ -620,7 +620,7 @@ export const EditableSelect = React.memo(function EditableSelect({
         style={{
           ...cellStyle(state),
           width,
-          color: !value ? '#9ca3af' : '#111827',
+          color: !value ? '#a8a39b' : '#1c1b19',
           cursor: disabled ? 'default' : 'pointer',
           maxWidth: '100%',
           overflow: 'hidden',
@@ -628,7 +628,7 @@ export const EditableSelect = React.memo(function EditableSelect({
           ...(chip && !disabled ? {
             display: 'inline-flex', alignItems: 'center', gap: 6,
             padding: '3px 8px 3px 10px', borderRadius: 6,
-            border: `1px solid ${hover || open ? '#9b9a97' : '#d5d5d2'}`,
+            border: `1px solid ${hover || open ? '#a8a39b' : '#d8d3cb'}`,
             background: hover || open ? '#f7f6f3' : '#fff',
             transition: 'border-color 0.12s, background 0.12s',
           } : {}),
@@ -653,9 +653,9 @@ export const EditableSelect = React.memo(function EditableSelect({
                     // pas avec les valeurs réelles (demande dev 2026-05-11 #38).
                     display: 'inline-block',
                     background: 'transparent',
-                    color: '#9b9a97',
+                    color: '#a8a39b',
                     padding: '1px 8px',
-                    border: '1px dashed #c7c7c2',
+                    border: '1px dashed #c9c4bc',
                     borderRadius: notionSolid ? 4 : 999,
                     fontSize: 12,
                     fontStyle: 'italic',
@@ -670,7 +670,7 @@ export const EditableSelect = React.memo(function EditableSelect({
             : placeholder
         )}
         {chip && !disabled && (
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#787774" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#8b867e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ flexShrink: 0 }}>
             <path d="m6 9 6 6 6-6" />
           </svg>
         )}
@@ -687,12 +687,12 @@ export const EditableSelect = React.memo(function EditableSelect({
           <button
             onClick={() => onPick(null)}
             style={pickerItemStyle(value === null)}
-            onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-            onMouseLeave={(e) => e.currentTarget.style.background = value === null ? '#eef2ff' : 'transparent'}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f4f2ee'}
+            onMouseLeave={(e) => e.currentTarget.style.background = value === null ? '#eae9fb' : 'transparent'}
           >
-            <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>— effacer —</span>
+            <span style={{ color: '#a8a39b', fontStyle: 'italic' }}>— effacer —</span>
           </button>
-          <div style={{ height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+          <div style={{ height: 1, background: '#f4f2ee', margin: '4px 0' }} />
           {options.map((opt) => {
             const isActive = opt === value;
             const optMeta = pillColors && pillColors[opt] ? pillColors[opt] : null;
@@ -706,8 +706,8 @@ export const EditableSelect = React.memo(function EditableSelect({
                   alignItems: 'center',
                   gap: 8,
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = '#f3f4f6'}
-                onMouseLeave={(e) => e.currentTarget.style.background = isActive ? '#eef2ff' : 'transparent'}
+                onMouseEnter={(e) => e.currentTarget.style.background = '#f4f2ee'}
+                onMouseLeave={(e) => e.currentTarget.style.background = isActive ? '#eae9fb' : 'transparent'}
               >
                 {optMeta && (
                   <span style={{
@@ -728,13 +728,13 @@ export const EditableSelect = React.memo(function EditableSelect({
 const pickerItemStyle = (active) => ({
   border: 'none',
   outline: 'none',
-  background: active ? '#eef2ff' : 'transparent',
+  background: active ? '#eae9fb' : 'transparent',
   cursor: 'pointer',
   textAlign: 'left',
   padding: '6px 10px',
   fontSize: 13,
   fontFamily: 'inherit',
-  color: '#111827',
+  color: '#1c1b19',
   borderRadius: 4,
   width: '100%',
 });

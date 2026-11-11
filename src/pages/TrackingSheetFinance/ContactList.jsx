@@ -55,7 +55,7 @@ function CopyableValue({ value, muted = false, onCopied }) {
         display: 'inline-flex', alignItems: 'center', gap: 5,
         border: 'none', background: 'transparent', padding: 0, minWidth: 0,
         font: 'inherit', fontSize: 13, cursor: 'pointer', textAlign: 'left',
-        color: copied ? '#15794a' : (muted ? N.textMuted : N.text),
+        color: copied ? '#0b7a4b' : (muted ? N.textMuted : N.text),
         transition: 'color 0.14s ease',
       }}
     >
@@ -70,16 +70,16 @@ function CopyableValue({ value, muted = false, onCopied }) {
 }
 
 const N = {
-  sideBg:    '#f7f7f5',
-  sideHover: '#efeeec',
-  border:    '#e9e9e7',
-  borderSft: '#f1f1ef',
-  text:      '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  green:     '#0f7b6c',
-  red:       '#b74133',
-  redBg:     '#ffe2dd',
+  sideBg:    '#f7f5f2',
+  sideHover: '#efece7',
+  border:    '#e8e4de',
+  borderSft: '#f1eee9',
+  text:      '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  green:     '#0b7a4b',
+  red:       '#c5221f',
+  redBg:     '#fde6e6',
 };
 
 // Un glyphe par TYPE de contact — il dit à qui on s'adresse.
@@ -224,7 +224,7 @@ export default function ContactList({
         )}
 
         {!list.length && !showInherited && !adding && (
-          <div style={{ fontSize: 12.5, color: '#c7c7c2', fontStyle: 'italic', padding: '2px 8px' }}>
+          <div style={{ fontSize: 12.5, color: '#c9c4bc', fontStyle: 'italic', padding: '2px 8px' }}>
             Aucun
           </div>
         )}
@@ -272,9 +272,9 @@ function ContactRow({ contact, canEdit, busy, onRetype, onMakePrimary, onArchive
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           border: 'none', borderRadius: 4, padding: '2px 7px',
-          background: contact.label ? '#eef1f6' : 'transparent',
-          color: contact.label ? '#41496b' : N.textFaint,
-          fontSize: 11, fontWeight: 600, cursor: canEdit ? 'pointer' : 'default',
+          background: contact.label ? '#f1eee9' : 'transparent',
+          color: contact.label ? '#55514b' : N.textFaint,
+          fontSize: 11, fontWeight: 500, cursor: canEdit ? 'pointer' : 'default',
           fontFamily: 'inherit', flexShrink: 0,
         }}
       >
@@ -425,9 +425,9 @@ function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
               style={{
                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 width: 26, height: 26, borderRadius: 5,
-                border: `1px solid ${active ? '#41496b' : N.border}`,
-                background: active ? '#eef1f6' : '#fff',
-                color: active ? '#41496b' : N.textFaint, cursor: 'pointer',
+                border: `1px solid ${active ? '#55514b' : N.border}`,
+                background: active ? '#f1eee9' : '#fff',
+                color: active ? '#55514b' : N.textFaint, cursor: 'pointer',
               }}
             >
               <Icon size={13} />
@@ -444,7 +444,7 @@ function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
           type="checkbox"
           checked={isPrimary}
           onChange={(e) => setIsPrimary(e.target.checked)}
-          style={{ accentColor: '#41496b' }}
+          style={{ accentColor: '#55514b' }}
         />
         Principal
       </label>
@@ -456,8 +456,8 @@ function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
         style={{
           display: 'inline-flex', alignItems: 'center', gap: 4,
           border: 'none', borderRadius: 4, padding: '5px 10px',
-          background: canSubmit ? N.green : '#d5d5d2', color: '#fff',
-          fontSize: 12, fontWeight: 600, cursor: canSubmit ? 'pointer' : 'default',
+          background: canSubmit ? N.green : '#d8d3cb', color: '#fff',
+          fontSize: 12, fontWeight: 500, cursor: canSubmit ? 'pointer' : 'default',
           fontFamily: 'inherit',
         }}
       >

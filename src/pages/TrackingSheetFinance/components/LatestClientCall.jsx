@@ -1,8 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Phone } from 'lucide-react';
+import { Phone, RefreshCw } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
 import { CallDetail } from './CallsView.jsx';
 
+const RESULTS = { ANSWERED: 'Répondu', CLOSED: 'Non abouti', MISSED: 'Manqué', NO_ANSWER: 'Sans réponse', BUSY: 'Occupé', FAILED: 'Échoué', VOICEMAIL: 'Messagerie', TRANSFERRED: 'Transféré' };
+
+// Dernier appel Allo du client, dans le périmètre de la personne (rapprochement par les téléphones de la fiche).
 export default function LatestClientCall({ clientId }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
@@ -15,15 +18,35 @@ export default function LatestClientCall({ clientId }) {
     return () => { live = false; };
   }, [clientId, revision]);
   const call = data?.call;
-  return <div style={{ border: '1px solid #e9e9e7', borderRadius: 10, padding: 14, marginBottom: 22, fontSize: 12.5 }}>
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}><strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Phone size={15}/> Dernier appel Allo</strong><button type="button" disabled={!data && !error} onClick={() => setRevision(r => r + 1)} style={{ border: 0, background: 'none', font: 'inherit', cursor: 'pointer', color: '#787774' }}>Actualiser l’appel</button></div>
-    <p style={{ color: '#787774', margin: '6px 0' }}>Appels de votre périmètre · rapprochement par les téléphones de cette fiche</p>
-    {error ? <p role="alert">{error} <button onClick={() => setRevision(r => r + 1)}>Réessayer</button></p> : !data ? <p role="status">Recherche du dernier appel…</p> : !call ?
-      <p>{data.has_phone ? 'Aucun appel trouvé pour ces numéros.' : 'Aucun numéro de téléphone exploitable dans cette fiche.'}</p> : <>
-      <div>{new Date(call.date).toLocaleString('fr-FR', { timeZone: 'Europe/Paris' })} · {call.operator_name}</div>
-      <div style={{ margin: '6px 0' }}>{call.contact_number} · {call.direction === 'INBOUND' ? 'Entrant' : 'Sortant'} · {({ANSWERED: 'Répondu', CLOSED: 'Non abouti', MISSED: 'Manqué', NO_ANSWER: 'Sans réponse', BUSY: 'Occupé', FAILED: 'Échoué', VOICEMAIL: 'Messagerie', TRANSFERRED: 'Transféré'})[call.result] || call.result}</div>
-      <button type="button" onClick={() => setOpened(true)} style={{ font: 'inherit', padding: '6px 12px', background: '#fff', border: '1px solid #e9e9e7', borderRadius: 6 }}>Voir le détail de l’appel</button>
-    </>}
-    {opened && call && <CallDetail id={call.id} onClose={() => setOpened(false)}/>}
-  </div>;
+  const loading = !data && !error;
+  const tone = !call ? '' : call.result === 'ANSWERED' ? ' is-ok' : ['MISSED', 'NO_ANSWER', 'BUSY', 'FAILED', 'CLOSED'].includes(call.result) ? ' is-ko' : '';
+  return (
+    <section className="fd-call" aria-label="Dernier appel Allo">
+      <header className="fd-call-head">
+        <span className="fd-call-ic"><Phone size={15} /></span>
+        <div className="fd-call-tx">
+          <strong>Dernier appel Allo</strong>
+          <span>Appels de votre périmètre · rapprochement par les téléphones de cette fiche</span>
+        </div>
+        <button type="button" className="fd-icon-btn" disabled={loading} onClick={() => setRevision(r => r + 1)}
+          aria-label="Actualiser l’appel" title="Actualiser l’appel"><RefreshCw size={15} className={loading ? 'fd-spin' : ''} /></button>
+      </header>
+      {error ? <p role="alert" className="fd-call-line is-error">{error} <button type="button" onClick={() => setRevision(r => r + 1)}>Réessayer</button></p>
+        : !data ? <p role="status" className="fd-call-line">Recherche du dernier appel…</p>
+        : !call ? <p className="fd-call-line">{data.has_phone ? 'Aucun appel trouvé pour ces numéros.' : 'Aucun numéro de téléphone exploitable dans cette fiche.'}</p>
+        : (
+          <button type="button" className="fd-call-open" onClick={() => setOpened(true)} title="Voir le détail de l’appel">
+            <span className="fd-call-main">
+              <span className="fd-call-title">
+                Appel {call.direction === 'INBOUND' ? 'entrant' : 'sortant'}
+                <span className={`fd-call-chip${tone}`}>{RESULTS[call.result] || call.result}</span>
+              </span>
+              <span className="fd-call-sub">{[new Date(call.date).toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }), call.operator_name, call.contact_number].filter(Boolean).join(' · ')}</span>
+            </span>
+            <span className="fd-call-cta">Voir le détail</span>
+          </button>
+        )}
+      {opened && call && <CallDetail id={call.id} onClose={() => setOpened(false)} />}
+    </section>
+  );
 }

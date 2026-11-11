@@ -26,11 +26,11 @@ import { motion } from "framer-motion";
 import apiClient from "../../../services/apiClient";
 import { READ_ONLY_PROPS } from "../../../utils/readOnlyRoles.js";
 
-const GREEN = "#15794a";
-const NAVY = "#1e2330";
-const MUTED = "#8a93a4";
-const BORDER = "#e9ebf0";
-const RED = "#b42318";
+const GREEN = "#0b7a4b";
+const NAVY = "#2b2927";
+const MUTED = "#9d9890";
+const BORDER = "#e8e4de";
+const RED = "#c5221f";
 const CARD = "#ffffff";
 
 const todayIso = () =>
@@ -138,7 +138,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
           padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 15, fontWeight: 800, color: NAVY }}>Reprogrammer le rendez-vous</div>
+            <div style={{ fontSize: 15, fontWeight: 600, color: NAVY }}>Reprogrammer le rendez-vous</div>
             <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden",
               textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {label} : le créneau change aussi pour {hostName || "l’animateur"} et pour le sales sur le lead
@@ -152,12 +152,12 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
           padding: "10px 20px", borderBottom: `1px solid ${BORDER}` }}>
           <button type="button" onClick={() => shiftWeek(-1)} disabled={saving || uncertain || start <= todayIso()}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
-              fontSize: 12, fontWeight: 600, color: start <= todayIso() ? MUTED : NAVY,
+              fontSize: 12, fontWeight: 500, color: start <= todayIso() ? MUTED : NAVY,
               cursor: start <= todayIso() ? "default" : "pointer", fontFamily: "inherit" }}>← Sem. préc.</button>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: NAVY }}>Créneaux libres ({hostName || "animateur"} + facturation)</span>
+          <span style={{ fontSize: 12.5, fontWeight: 600, color: NAVY }}>Créneaux libres ({hostName || "animateur"} + facturation)</span>
           <button type="button" disabled={saving || uncertain} onClick={() => shiftWeek(1)}
             style={{ border: `1px solid ${BORDER}`, background: CARD, borderRadius: 8, padding: "5px 11px",
-              fontSize: 12, fontWeight: 600, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
+              fontSize: 12, fontWeight: 500, color: NAVY, cursor: "pointer", fontFamily: "inherit" }}>Sem. suiv. →</button>
         </div>
 
         <div style={{ padding: "14px 20px", overflowY: "auto", flex: 1 }}>
@@ -167,7 +167,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
             <div style={{ padding: 30, textAlign: "center", color: MUTED, fontSize: 13 }}>Aucun créneau libre sur cette semaine.</div>
           ) : shown.map((d) => (
             <div key={d.date} style={{ marginBottom: 14 }}>
-              <div style={{ fontSize: 11.5, fontWeight: 700, color: MUTED,
+              <div style={{ fontSize: 11.5, fontWeight: 600, color: MUTED,
                 textTransform: "capitalize", marginBottom: 7 }}>{dayLabel(d.date)}</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 7 }}>
                 {d.slots.map((s) => {
@@ -180,10 +180,10 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
                       title={host || undefined}
                       style={{ padding: "6px 12px", borderRadius: 8,
                         border: `1px solid ${on ? GREEN : (s.free ? BORDER : "transparent")}`,
-                        background: on ? GREEN : (s.free ? CARD : "#f3f4f6"),
+                        background: on ? GREEN : (s.free ? CARD : "#f4f2ee"),
                         color: on ? "#fff" : (s.free ? NAVY : "#c3cad6"),
                         textDecoration: s.free ? "none" : "line-through",
-                        fontSize: 12.5, fontWeight: 600, cursor: s.free ? "pointer" : "default",
+                        fontSize: 12.5, fontWeight: 500, cursor: s.free ? "pointer" : "default",
                         fontFamily: "inherit", transition: "all .12s ease" }}>
                       {s.t}
                       {/* Animateur : sa photo comme sur le calendrier du sales, sinon son prénom
@@ -206,7 +206,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
 
         <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex",
           alignItems: "center", justifyContent: "space-between", gap: 10 }}>
-          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#b42318" : MUTED, minWidth: 0,
+          <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#c5221f" : MUTED, minWidth: 0,
             overflow: "hidden", textOverflow: "ellipsis" }}>
             {error || (sel ? `Nouveau créneau : ${dayLabel(sel.date)} à ${sel.slot}` : "Sélectionne un créneau")}
           </span>
@@ -214,7 +214,7 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
             disabled={!sel || saving} onClick={confirm}
             style={{ padding: "9px 18px", borderRadius: 10, border: "none",
               background: sel ? GREEN : "#e5e8ee", color: sel ? "#fff" : MUTED,
-              fontSize: 13, fontWeight: 700, cursor: sel && !saving ? "pointer" : "default",
+              fontSize: 13, fontWeight: 600, cursor: sel && !saving ? "pointer" : "default",
               fontFamily: "inherit", flexShrink: 0 }}>
             {saving ? "Reprogrammation…" : (uncertain ? "Vérifier ce créneau" : "Confirmer")}
           </motion.button>
@@ -268,7 +268,7 @@ export default function OnboardingFacturation({ numeroClient, boardRow, readOnly
           border: `1px solid ${active ? tone : BORDER}`,
           background: active ? tone : CARD,
           color: active ? "#fff" : NAVY,
-          fontSize: 12.5, fontWeight: 700, cursor: busy ? "default" : "pointer",
+          fontSize: 12.5, fontWeight: 600, cursor: busy ? "default" : "pointer",
           fontFamily: "inherit", opacity: busy ? 0.6 : 1, transition: "all .12s ease" }}
         {...(readOnly ? READ_ONLY_PROPS : {})}>
         {label}
@@ -279,7 +279,7 @@ export default function OnboardingFacturation({ numeroClient, boardRow, readOnly
   return (
     <div style={{ marginTop: 12, padding: "12px 14px", borderRadius: 12,
       border: `1px solid ${BORDER}`, background: "#fbfcfd" }}>
-      <div style={{ fontSize: 12.5, fontWeight: 800, color: NAVY }}>Facturation Owner</div>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: NAVY }}>Facturation Owner</div>
 
       <div style={{ fontSize: 12, color: MUTED, marginTop: 4 }}>
         {when ? whenLabel(when) : "Aucune date de rendez-vous connue"}
@@ -313,7 +313,7 @@ export function OnboardingRescheduleButton({ numeroClient, boardRow, onDone, rea
     <>
       <button type="button" onClick={() => setOpen(true)} title="Reprogrammer le rendez-vous d’onboarding"
         style={{ display: "inline-flex", alignItems: "center", gap: 5, border: `1px solid ${BORDER}`, background: CARD,
-          borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 600, color: NAVY,
+          borderRadius: 7, padding: "4px 9px", fontSize: 12, fontWeight: 500, color: NAVY,
           cursor: "pointer", fontFamily: "inherit", flexShrink: 0, lineHeight: 1.2 }}
         {...(readOnly ? READ_ONLY_PROPS : {})}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={NAVY} strokeWidth="2" strokeLinecap="round"

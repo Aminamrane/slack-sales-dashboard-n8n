@@ -35,11 +35,11 @@ import { formatDateFR, pauseRange, canEditAmounts, ACTED_EXIT_ETATS } from '../c
 import apiClient from '../../../services/apiClient.js';
 
 // Palette locale minimale (sync avec la charte du board — Attio/Linear sobre).
-const MUTED = '#8a93a4';
-const TEXT = '#1e2330';
-const BORDER = '#e9ebf0';
-const GREEN = '#15794a';
-const AMBER = '#b45309';
+const MUTED = '#9d9890';
+const TEXT = '#2b2927';
+const BORDER = '#e8e4de';
+const GREEN = '#0b7a4b';
+const AMBER = '#c2500e';
 
 // Options posables depuis la page finance.
 //
@@ -86,7 +86,7 @@ function DateField({ label, value, onCommit }) {
   const committed = value ? String(value).slice(0, 10) : '';
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-      <div style={{ fontSize: 12, fontWeight: 600, color: TEXT, whiteSpace: 'nowrap' }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 500, color: TEXT, whiteSpace: 'nowrap' }}>{label}</div>
       <input
         key={committed}
         type="date"
@@ -147,7 +147,7 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
 
   // Client absent du board (pas de numero_client résolu) : rien à piloter.
   if (!boardRow) {
-    return <span style={{ color: '#c8cdd7', fontSize: 13 }}>—</span>;
+    return <span style={{ color: '#c9c4bc', fontSize: 13 }}>—</span>;
   }
 
   const etat = displayEtat(boardRow);
@@ -254,7 +254,7 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
       {pending && boardRow.etat_date && (
         <div
           style={{
-            fontSize: 10.5, fontWeight: 700, color: AMBER, lineHeight: 1.25,
+            fontSize: 10.5, fontWeight: 600, color: AMBER, lineHeight: 1.25,
             whiteSpace: 'nowrap', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis',
           }}
           title={`${posedEtat} prévue le ${formatDateFR(boardRow.etat_date)} — pas encore effective, le client reste actif jusqu'à cette date`}
@@ -263,7 +263,7 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
         </div>
       )}
       {pending && !boardRow.etat_date && (
-        <div style={{ fontSize: 10.5, fontWeight: 600, color: '#a3a9b6', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
+        <div style={{ fontSize: 10.5, fontWeight: 500, color: '#a3a9b6', lineHeight: 1.25, whiteSpace: 'nowrap' }}>
           date à renseigner
         </div>
       )}
@@ -297,8 +297,8 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
                   onClick={() => { if (sel) { setOpen(false); return; } pick(opt); }}
                   style={{
                     display: 'flex', alignItems: 'center', gap: 8, width: '100%', textAlign: 'left',
-                    border: 'none', background: sel ? '#f3f4f6' : 'transparent', borderRadius: 7,
-                    padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, fontWeight: 600,
+                    border: 'none', background: sel ? '#f4f2ee' : 'transparent', borderRadius: 7,
+                    padding: '8px 10px', cursor: 'pointer', fontSize: 12.5, fontWeight: 500,
                     color: opt ? TEXT : MUTED, fontFamily: 'inherit', whiteSpace: 'nowrap',
                   }}
                   onMouseEnter={(e) => { if (!sel) e.currentTarget.style.background = '#f7f8fa'; }}
@@ -337,7 +337,7 @@ export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false
                     borderTop: `1px solid ${BORDER}`, marginTop: 5, padding: '9px 6px 5px',
                     display: 'flex', flexDirection: 'column', gap: 8,
                   }}>
-                    <div style={{ fontSize: 10.5, fontWeight: 700, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 600, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                       {posedEtat} — date(s) d'effet
                     </div>
                     {dateCfg.pause ? (
