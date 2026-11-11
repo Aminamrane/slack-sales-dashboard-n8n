@@ -44,21 +44,21 @@ const CARD = "#ffffff";
 const GREEN = "#15794a";
 
 export const ETAT_STYLE = {
-  "Signé":            { bg: "#e9f9f0", fg: "#15794a", dot: "#22c55e" },
-  "Résiliation":      { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
-  "Rétractation":     { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
-  "Self-Résiliation": { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
-  "Pause":            { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
-  "Liquidation":      { bg: "#f6e9e9", fg: "#7a271a", dot: "#991b1b" },
-  "En cours de liquidation": { bg: "#fef3e2", fg: "#92400e", dot: "#d97706" },
-  "Renouvellement client":   { bg: "#eef2ff", fg: "#3730a3", dot: "#6366f1" },
-  "Attente Opti'Lex": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
-  "En cours":         { bg: "#eaf1fd", fg: "#1e40af", dot: "#2563eb" },
-  "En cours de résiliation":  { bg: "#fdecec", fg: "#b42318", dot: "#ef4444" },
-  "En cours de rétractation": { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
-  "En attente":       { bg: "#eef1f6", fg: "#5b6472", dot: "#94a3b8" },
-  "Sans suite":       { bg: "#eef1f6", fg: "#5b6472", dot: "#cbd2e0" },
-  "Inactifs":         { bg: "#fff3e3", fg: "#b45309", dot: "#f59e0b" },
+  "Signé":            { bg: "#e2f6ea", fg: "#0b7a4b", dot: "#34a36e", bd: "#c3ebd3" },
+  "Résiliation":      { bg: "#fde6e6", fg: "#c5221f", dot: "#e0504c", bd: "#f8cccc" },
+  "Rétractation":     { bg: "#fde9da", fg: "#c2500e", dot: "#e08a2e", bd: "#f8d4ba" },
+  "Self-Résiliation": { bg: "#fde6e6", fg: "#c5221f", dot: "#e0504c", bd: "#f8cccc" },
+  "Pause":            { bg: "#f1eee9", fg: "#4a4540", dot: "#a8a39b", bd: "#e3ded6" },
+  "Liquidation":      { bg: "#f6e4e1", fg: "#7a271a", dot: "#a3382a", bd: "#ecd0cb" },
+  "En cours de liquidation": { bg: "#fbf1c2", fg: "#7a5a05", dot: "#c79a1a", bd: "#f0e09a" },
+  "Renouvellement client":   { bg: "#eae9fb", fg: "#4a3fc4", dot: "#6c62d8", bd: "#d6d4f6" },
+  "Attente Opti'Lex": { bg: "#fbf1c2", fg: "#7a5a05", dot: "#c79a1a", bd: "#f0e09a" },
+  "En cours":         { bg: "#e4f0fd", fg: "#1b6fd0", dot: "#3b82d6", bd: "#c9e0fa" },
+  "En cours de résiliation":  { bg: "#fde6e6", fg: "#c5221f", dot: "#e0504c", bd: "#f8cccc" },
+  "En cours de rétractation": { bg: "#fde9da", fg: "#c2500e", dot: "#e08a2e", bd: "#f8d4ba" },
+  "En attente":       { bg: "#f1eee9", fg: "#4a4540", dot: "#a8a39b", bd: "#e3ded6" },
+  "Sans suite":       { bg: "#f1eee9", fg: "#4a4540", dot: "#c9c4bc", bd: "#e3ded6" },
+  "Inactifs":         { bg: "#fde9da", fg: "#c2500e", dot: "#e08a2e", bd: "#f8d4ba" },
 };
 // Onglets PRIMAIRES = les plus actionnables (toujours visibles). Le reste vit dans un
 // filtre multi-sélection "Filtre" pour désencombrer la barre.
@@ -671,24 +671,24 @@ export function StatusGlyph({ kind, color, size = 14 }) {
 export function EtatIcon({ etat, size = 14 }) {
   const s = ETAT_STYLE[etat];
   const kind = ETAT_ICON[etat] || "dashed";
-  const color = !s ? "#b6bdc9" : FILLED_GLYPHS.has(kind) ? s.fg : s.dot;
+  const color = !s ? "#c9c4bc" : FILLED_GLYPHS.has(kind) ? s.fg : s.dot;
   return <StatusGlyph kind={kind} color={color} size={size} />;
 }
 
 // `withIcon` : pastille à icône SVG du board (Signé, en cours, sorti…) ; sans, l'ancien point de couleur,
 // que la page Finance réutilise telle quelle. `pop` change à chaque nouvel état : l'icône rebondit une fois.
 export function EtatBadge({ etat, withIcon = false, pop = 0 }) {
-  const s = ETAT_STYLE[etat] || { bg: "#eef1f6", fg: MUTED, dot: "#cbd2e0" };
+  const s = ETAT_STYLE[etat] || { bg: "#f1eee9", fg: "#4a4540", dot: "#c9c4bc", bd: "#e3ded6" };
   if (withIcon) {
     return (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "4px 10px 4px 7px", borderRadius: 8, background: s.bg, color: s.fg, fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap" }}>
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 9px 3px 6px", borderRadius: 7, background: s.bg, border: `1px solid ${s.bd || "transparent"}`, color: s.fg, fontSize: 12.5, fontWeight: 500, whiteSpace: "nowrap" }}>
         <span key={pop} className={`ob-etat-ic${pop ? " is-pop" : ""}`}><EtatIcon etat={etat} /></span>
         {etat || "—"}
       </span>
     );
   }
   return (
-    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 20, background: s.bg, color: s.fg, fontSize: 12, fontWeight: 600, whiteSpace: "nowrap" }}>
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "2px 9px", borderRadius: 7, background: s.bg, border: `1px solid ${s.bd || "transparent"}`, color: s.fg, fontSize: 12, fontWeight: 500, whiteSpace: "nowrap" }}>
       <span style={{ width: 7, height: 7, borderRadius: "50%", background: s.dot }} />{etat || "—"}
     </span>
   );

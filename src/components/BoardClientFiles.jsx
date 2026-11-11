@@ -1,14 +1,16 @@
 // Documents et appels du client dans la fiche du board (dev 29/10/2026 : réf. de fiche de tâche, pièces jointes
-// en cartes, joindre un e-mail, onglet « Appels » avec toutes les communications). Mêmes routes que l'historique
-// partagé de la page Finance (ClientHistoryAttachments, page sacrée, laissé tel quel) :
+// en cartes, joindre un e-mail, onglet « Appels » avec toutes les communications). La fiche client de la page
+// Finance montre les mêmes blocs (onglets Documents et Contrats), pour que le dossier soit le même des deux côtés :
 //   /client-history     pièces jointes et appels partagés au dossier (CSM, finance, direction) ;
 //   /finance-calls      lire n'importe quel appel Allo du client (liste nominative des personnes autorisées) ;
 //   /contracts/{id}/download/{owner|optilex}   PDF des conventions, montrées en dossiers (ContractFolders, onglet Intégration).
+//                       La page Finance donne sa propre route de lecture (option `source`) et n'appelle jamais celle-ci.
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 // eslint-disable-next-line no-unused-vars -- motion utilisé via JSX (faux positif)
 import { AnimatePresence, LayoutGroup, motion } from "framer-motion";
 import apiClient from "../services/apiClient.js";
+import { isReadOnlyViewer, READ_ONLY_PROPS } from "../utils/readOnlyRoles.js";
 import "./BoardClientFiles.css";
 
 const HISTORY_ROLES = ["admin", "ceo", "finance_director", "finance_team", "customer_success_manager"];
@@ -46,24 +48,28 @@ function useObjectUrls() {
 }
 
 // Dossier du client : une seule lecture partagée par les onglets Documents et Appels.
-export function useClientFiles(numero) {
-  const allowed = HISTORY_ROLES.includes(apiClient.getUser()?.role);
-  const [clientId, setClientId] = useState(null);
+// Options (page Finance) : `clientId` déjà connu, la recherche par numéro est sautée ; `viewers` ouvre le dossier
+// aux rôles en lecture seule, qui consultent et téléchargent sans rien ajouter (`readOnly`).
+export function useClientFiles(numero, { clientId: knownId = null, viewers = false } = {}) {
+  const role = apiClient.getUser()?.role;
+  const readOnly = viewers && isReadOnlyViewer(role);
+  const allowed = HISTORY_ROLES.includes(role) || readOnly;
+  const [clientId, setClientId] = useState(knownId);
   const [items, setItems] = useState([]);
-  const [loading, setLoading] = useState(allowed && !!numero);
+  const [loading, setLoading] = useState(allowed && !!(numero || knownId));
   const [error, setError] = useState("");
   const [version, setVersion] = useState(0);
   const [canBrowseCalls, setCanBrowseCalls] = useState(false);
   useEffect(() => {
-    if (!allowed || !numero) { setLoading(false); return undefined; }
+    if (!allowed || !(numero || knownId)) { setLoading(false); return undefined; }
     let live = true;
-    setClientId(null); setError("");
-    apiClient.get(`/api/v1/client-history/resolve?numero_client=${encodeURIComponent(numero)}`)
+    setClientId(knownId); setError("");
+    if (!knownId) apiClient.get(`/api/v1/client-history/resolve?numero_client=${encodeURIComponent(numero)}`)
       .then((r) => { if (live) setClientId(r.client_id); })
       .catch(() => { if (live) { setLoading(false); setError("Dossier indisponible : le client doit être rattaché."); } });
     apiClient.get("/api/v1/finance-calls/access").then((r) => { if (live) setCanBrowseCalls(!!r.allowed); }).catch(() => {});
     return () => { live = false; };
-  }, [allowed, numero]);
+  }, [allowed, numero, knownId]);
   const base = clientId ? `/api/v1/client-history/${clientId}` : null;
   useEffect(() => {
     if (!base) return undefined;
@@ -75,7 +81,7 @@ export function useClientFiles(numero) {
     return () => { live = false; };
   }, [base, version]);
   const reload = useCallback(() => setVersion((v) => v + 1), []);
-  return { allowed, base, items, loading, error, setError, reload, canBrowseCalls };
+  return { allowed, readOnly, base, items, loading, error, setError, reload, canBrowseCalls };
 }
 
 // ── Icônes ─────────────────────────────────────────────────────────────────────────────────────────────
@@ -84,7 +90,7 @@ const FILE_TYPES = {
   email: { badge: "MAIL", color: "#2f6fde", label: "E-mail" },
   image: { badge: "IMG", color: "#1f9d6b", label: "Image" },
   audio: { badge: "AUDIO", color: "#7c4ddb", label: "Audio" },
-  file: { badge: "FICHIER", color: "#6b7385", label: "Fichier" },
+  file: { badge: "FICHIER", color: "#8b867e", label: "Fichier" },
 };
 const typeOf = (item) => {
   if (item.kind === "email") return "email";
@@ -114,9 +120,9 @@ const I = {
 // Icône de type de fichier (dev 29/10/2026, réf. de pièces jointes) : une page à coin plié et une étiquette de
 // couleur avec l'extension (« pdf », « png », « eml »…). La couleur suit la famille du fichier.
 const EXT_COLORS = { pdf: "#e5484d", doc: "#2f6fde", docx: "#2f6fde", xls: "#1f9d55", xlsx: "#1f9d55", csv: "#1f9d55",
-  ppt: "#e5591c", pptx: "#e5591c", eml: "#3e63dd", msg: "#3e63dd", zip: "#6b7385" };
+  ppt: "#e5591c", pptx: "#e5591c", eml: "#3e63dd", msg: "#3e63dd", zip: "#8b867e" };
 const familyColor = (mime, ext) => EXT_COLORS[ext] || (mime.startsWith("image/") ? "#12a594" : mime.startsWith("audio/") ? "#8e4ec6"
-  : mime === "message/rfc822" ? "#3e63dd" : "#7c8597");
+  : mime === "message/rfc822" ? "#3e63dd" : "#8b867e");
 // Logo Gmail (dev 06/11/2026) : un e-mail joint se reconnaît d'un coup d'œil. Même boîte que l'icône de fichier,
 // pour que puces et listes ne bougent pas.
 function GmailMark({ size }) {
@@ -139,11 +145,11 @@ export function FileTypeIcon({ name = "", mime = "", size = 28 }) {
   const color = familyColor(mime || "", ext);
   return (
     <svg className="bcf-ft" width={size} height={Math.round(size * 32 / 28)} viewBox="0 0 28 32" aria-hidden="true">
-      <path d="M7 1.5h10.2l6.8 6.8v20.2a2.5 2.5 0 0 1-2.5 2.5H7a2.5 2.5 0 0 1-2.5-2.5V4A2.5 2.5 0 0 1 7 1.5Z" fill="#fff" stroke="#d5dae3" strokeWidth="1.1" />
-      <path d="M17.2 1.5v4.6a2.2 2.2 0 0 0 2.2 2.2H24" fill="#f1f3f6" stroke="#d5dae3" strokeWidth="1.1" strokeLinejoin="round" />
-      <path d="M8.5 7.5h5M8.5 11h10" stroke="#e3e7ee" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M7 1.5h10.2l6.8 6.8v20.2a2.5 2.5 0 0 1-2.5 2.5H7a2.5 2.5 0 0 1-2.5-2.5V4A2.5 2.5 0 0 1 7 1.5Z" fill="#fff" stroke="#e3ded6" strokeWidth="1.1" />
+      <path d="M17.2 1.5v4.6a2.2 2.2 0 0 0 2.2 2.2H24" fill="#f4f2ee" stroke="#e3ded6" strokeWidth="1.1" strokeLinejoin="round" />
+      <path d="M8.5 7.5h5M8.5 11h10" stroke="#e8e4de" strokeWidth="1.6" strokeLinecap="round" />
       <rect x="1" y="16.5" width={label.length > 3 ? 19 : 16.5} height="9" rx="2.6" fill={color} />
-      <text x={label.length > 3 ? 10.5 : 9.25} y="23.1" textAnchor="middle" fontSize="6.4" fontWeight="700" fill="#fff"
+      <text x={label.length > 3 ? 10.5 : 9.25} y="23.1" textAnchor="middle" fontSize="6.4" fontWeight="500" fill="#fff"
         fontFamily="Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif" letterSpacing=".1">{label}</text>
     </svg>
   );
@@ -344,7 +350,7 @@ function DocThumb({ type }) {
   if (type === "image") {
     return (
       <span className="bcf-th is-photo" aria-hidden="true">
-        <svg viewBox="0 0 40 30"><rect width="40" height="30" fill="#9fb7d8" /><path d="M0 30 13 14l9 10 6-6 12 12Z" fill="#5f7fa8" /><circle cx="30" cy="8" r="4" fill="#f3d27a" /></svg>
+        <svg viewBox="0 0 40 30"><rect width="40" height="30" fill="#9fb7d8" /><path d="M0 30 13 14l9 10 6-6 12 12Z" fill="#8b867e" /><circle cx="30" cy="8" r="4" fill="#f3d27a" /></svg>
       </span>
     );
   }
@@ -353,15 +359,18 @@ function DocThumb({ type }) {
       <svg viewBox="0 0 28 36">
         {type === "email" && <><rect x="5" y="5" width="18" height="7" rx="1.2" fill="#e8eefb" /><path d="m5.6 5.6 8.4 4.6 8.4-4.6" fill="none" stroke="#5b8def" strokeWidth=".9" /></>}
         {type === "audio" && <path d="M6 18v2M9 15v8M12 12v14M15 16v6M18 13v12M21 17v4" stroke="#7c4ddb" strokeWidth="1.4" strokeLinecap="round" />}
-        {type !== "audio" && [16, 19.5, 23, 26.5].map((y, i) => <rect key={y} x="5" y={type === "email" ? y : y - 7} width={i === 3 ? 11 : 18} height="1.6" rx=".8" fill="#d5dae3" />)}
-        {type === "pdf" && <><rect x="5" y="25" width="18" height="1.6" rx=".8" fill="#d5dae3" /><rect x="5" y="29" width="9" height="3.4" rx="1" fill="#d64545" /></>}
+        {type !== "audio" && [16, 19.5, 23, 26.5].map((y, i) => <rect key={y} x="5" y={type === "email" ? y : y - 7} width={i === 3 ? 11 : 18} height="1.6" rx=".8" fill="#e3ded6" />)}
+        {type === "pdf" && <><rect x="5" y="25" width="18" height="1.6" rx=".8" fill="#e3ded6" /><rect x="5" y="29" width="9" height="3.4" rx="1" fill="#d64545" /></>}
       </svg>
     </span>
   );
 }
 
-export function BoardDocuments({ files }) {
-  const { allowed, base, items, loading, error, setError, reload } = files;
+// `sharedWith` : avec qui le dossier est partagé, vu de la page qui l'affiche (« la finance » depuis le board).
+export function BoardDocuments({ files, sharedWith = "la finance" }) {
+  const { allowed, readOnly, base, items, loading, error, setError, reload } = files;
+  const ro = readOnly ? READ_ONLY_PROPS : {};
+  const writable = allowed && !!base && !readOnly;
   const objectUrl = useObjectUrls();
   const [pending, setPending] = useState([]);        // fichiers choisis, en pastilles, pas encore joints
   const [note, setNote] = useState("");
@@ -404,10 +413,10 @@ export function BoardDocuments({ files }) {
   });
   const remove = (id) => run(async () => { await apiClient.delete(`${base}/${id}`); setRemoveId(null); reload(); });
   const drop = {
-    onDragEnter: (e) => { if (!allowed || !base) return; e.preventDefault(); dragDepth.current += 1; setDrag(true); },
-    onDragOver: (e) => { if (allowed && base) e.preventDefault(); },
+    onDragEnter: (e) => { if (!writable) return; e.preventDefault(); dragDepth.current += 1; setDrag(true); },
+    onDragOver: (e) => { if (writable) e.preventDefault(); },
     onDragLeave: () => { dragDepth.current = Math.max(0, dragDepth.current - 1); if (!dragDepth.current) setDrag(false); },
-    onDrop: (e) => { if (!allowed || !base) return; e.preventDefault(); dragDepth.current = 0; setDrag(false); add(e.dataTransfer.files); },
+    onDrop: (e) => { if (!writable) return; e.preventDefault(); dragDepth.current = 0; setDrag(false); add(e.dataTransfer.files); },
   };
   const previewTitle = preview ? (preview.type === "email" ? (preview.item.metadata?.subject || preview.item.file_name) : preview.item.file_name) : "";
   if (!allowed) return null;
@@ -438,13 +447,13 @@ export function BoardDocuments({ files }) {
         </AnimatePresence>
         <div className="bcf-compose-row">
           <button type="button" className="bcf-plus" disabled={busy || !base || loading} onClick={() => input.current?.click()}
-            aria-label="Choisir des documents ou des e-mails" title="Documents, images, e-mails (.eml : dans Mail, glissez le message sur le bureau ; dans Gmail, ⋮ puis Télécharger le message), audio">
+            aria-label="Choisir des documents ou des e-mails" title="Documents, images, e-mails (.eml : dans Mail, glissez le message sur le bureau ; dans Gmail, ⋮ puis Télécharger le message), audio" {...ro}>
             <Ico d={I.plus} size={19} sw={1.9} />
           </button>
           <input className="bcf-compose-input" value={note} onChange={(e) => setNote(e.target.value)} maxLength={2000} disabled={busy}
             placeholder={pending.length ? "Un mot de contexte pour l'équipe (facultatif)" : "Joindre un document ou un e-mail…"}
             onKeyDown={(e) => { if (e.key === "Enter" && pending.length) { e.preventDefault(); attach(); } }}
-            onFocus={() => { if (!pending.length && !note) input.current?.click(); }} readOnly={!pending.length} />
+            onFocus={() => { if (!pending.length && !note) input.current?.click(); }} readOnly={!pending.length} {...ro} />
           <AnimatePresence>
             {pending.length > 0 && (
               <motion.button key="go" type="button" className="bcf-go" disabled={busy} onClick={attach}
@@ -460,7 +469,7 @@ export function BoardDocuments({ files }) {
 
       {/* Derniers documents : l'action, l'auteur, l'ancienneté, et la miniature à droite. */}
       <section className="bcf-latest">
-        <header><Ico d={<path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12 3.5 3.5 0 0 0 6 19Z" />} size={20} sw={1.7} /><span>Dossier partagé avec la finance</span></header>
+        <header><Ico d={<path d="M17.5 19a4.5 4.5 0 1 0-1.4-8.8A6 6 0 0 0 4.5 12 3.5 3.5 0 0 0 6 19Z" />} size={20} sw={1.7} /><span>Dossier partagé avec {sharedWith}</span></header>
         <div className="bcf-latest-in">
           <div className="bcf-latest-title">Derniers</div>
           {loading ? [0, 1].map((i) => <div key={i} className="bcf-doc is-skeleton" />)
@@ -483,7 +492,7 @@ export function BoardDocuments({ files }) {
                       </button>
                       <span className="bcf-doc-tools">
                         <button type="button" className="bcf-icon-btn" disabled={busy} onClick={() => download(item)} aria-label={`Télécharger ${title}`} title="Télécharger"><Ico d={I.download} /></button>
-                        {item.can_remove && <button type="button" className="bcf-icon-btn is-danger" disabled={busy} onClick={() => setRemoveId(item.id)} aria-label={`Retirer ${title}`} title="Retirer"><Ico d={I.trash} /></button>}
+                        {(item.can_remove || readOnly) && <button type="button" className="bcf-icon-btn is-danger" disabled={busy} onClick={() => setRemoveId(item.id)} aria-label={`Retirer ${title}`} title="Retirer" {...ro}><Ico d={I.trash} /></button>}
                       </span>
                       <AnimatePresence>
                         {removeId === item.id && (
@@ -527,6 +536,7 @@ export function BoardDocuments({ files }) {
 // avec son enregistrement, son résumé et sa transcription.
 export function BoardCalls({ files, active }) {
   const { base, items, canBrowseCalls, reload } = files;
+  const ro = files.readOnly ? READ_ONLY_PROPS : {};
   const objectUrl = useObjectUrls();
   const shared = items.filter((i) => i.kind === "call");
   const [allo, setAllo] = useState(null);
@@ -596,7 +606,7 @@ export function BoardCalls({ files, active }) {
                     </button>
                     {entry.shared
                       ? <span className="bcf-tag" title="Partagé au dossier : écoute et transcription visibles par le Client Success et la finance">Au dossier</span>
-                      : canBrowseCalls && <button type="button" className="bcf-btn" disabled={busy} onClick={() => share(c)} title="Le partager au dossier rend son écoute et sa transcription visibles par le Client Success et la finance"><Ico d={I.share} size={13} />Partager</button>}
+                      : canBrowseCalls && <button type="button" className="bcf-btn" disabled={busy} onClick={() => share(c)} title="Le partager au dossier rend son écoute et sa transcription visibles par le Client Success et la finance" {...ro}><Ico d={I.share} size={13} />Partager</button>}
                   </li>
                 );
               })}
@@ -650,19 +660,19 @@ const FOLDER_TONES = {
 const SHEET_SPRING = { type: "tween", duration: 0.42, ease: [0.22, 1, 0.36, 1] };
 // La feuille dessinée : titre, lignes de texte, et la signature avec son sceau quand le contrat est signé.
 // `ink` et `line` : teintes du titre et des lignes (les feuilles d'un dossier prennent la teinte du dossier).
-function SheetLines({ signed, ink = "#1e2330", line = "#e3e7ee" }) {
+function SheetLines({ signed, ink = "#1c1b19", line = "#e8e4de" }) {
   return (
     <>
       <rect x="18" y="20" width="82" height="9" rx="4" fill={ink} opacity=".78" />
-      <rect x="18" y="36" width="54" height="5" rx="2.5" fill="#c9d0db" />
+      <rect x="18" y="36" width="54" height="5" rx="2.5" fill="#d8d3cb" />
       {[56, 66, 76, 86, 104, 114, 124, 134, 152, 162, 172].map((y, i) => (
         <rect key={y} x="18" y={y} width={i % 4 === 3 ? 110 : 164} height="4" rx="2" fill={line} />
       ))}
       {signed && <>
-        <path d="M112 214c6-12 12-16 13-6s-4 14 3 9 7-15 12-9 3 11 9 4 6-3 13 1" fill="none" stroke="#1e2330" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-        <path d="M110 226h72" stroke="#c9d0db" strokeWidth="1.5" />
-        <circle cx="44" cy="214" r="15" fill="#e9f9f0" stroke="#15794a" strokeWidth="2" />
-        <path d="M37.5 214.5l4.5 4.5 8.5-9" fill="none" stroke="#15794a" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M112 214c6-12 12-16 13-6s-4 14 3 9 7-15 12-9 3 11 9 4 6-3 13 1" fill="none" stroke="#2b2927" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+        <path d="M110 226h72" stroke="#d8d3cb" strokeWidth="1.5" />
+        <circle cx="44" cy="214" r="15" fill="#e2f6ea" stroke="#0b7a4b" strokeWidth="2" />
+        <path d="M37.5 214.5l4.5 4.5 8.5-9" fill="none" stroke="#0b7a4b" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
       </>}
     </>
   );
@@ -690,9 +700,9 @@ const F_FRONT = (() => {
 })();
 // Teintes : dos (haut, bas), fond de la façade là où elle dépasse du dos, ombre portée, givre de la façade (haut, milieu, bas), lignes des feuilles.
 const GLASS_TONES = {
-  night: { back: ["#4a4853", "#25242b"], base: "#3b3943", shadow: "rgba(30,27,40,.42)", frost: [["#ebe6f7", 0.52], ["#d8d3e8", 0.3], ["#2c2a33", 0.34]], ink: "#8f8da3", line: "#d6d4e0" },
+  night: { back: ["#55514b", "#2b2927"], base: "#4a4540", shadow: "rgba(28,27,25,.22)", frost: [["#ebe6f7", 0.52], ["#e3ded6", 0.3], ["#2b2927", 0.34]], ink: "#9d9890", line: "#e3ded6" },
   rose: { back: ["#f8b2d0", "#ea7fae"], base: "#f09cc1", shadow: "rgba(232,108,160,.4)", frost: [["#fff4f9", 0.62], ["#ffd6e8", 0.36], ["#f08fba", 0.42]], ink: "#e3a6c1", line: "#f3d6e3" },
-  empty: { back: ["#e6e9ee", "#d2d7df"], base: "#dde1e8", shadow: "rgba(18,27,53,.14)", frost: [["#ffffff", 0.7], ["#f4f6f9", 0.5], ["#e3e7ed", 0.5]], ink: "#c3c9d3", line: "#e3e7ee" },
+  empty: { back: ["#ece9e4", "#d8d3cb"], base: "#e3ded6", shadow: "rgba(43,41,39,.098)", frost: [["#ffffff", 0.7], ["#f7f5f2", 0.5], ["#e8e4de", 0.5]], ink: "#cfc9c0", line: "#e8e4de" },
 };
 const leafStyle = (l) => ({ "--r": `${l.rot}deg`, "--hx": `${l.hx}px`, "--hy": `${l.hy}px`, "--hr": `${l.hr}deg` });
 
@@ -736,7 +746,7 @@ function FolderFront({ tone, uid, leaves, out, signed }) {
           {leaves && F_LEAVES.map((l) => (
             <g key={l.key} className={`cf-leaf${l.key === "a" && out ? " is-out" : ""}`} style={{ ...leafStyle(l), transformOrigin: `${l.x + l.w / 2}px ${l.y + l.h / 2}px` }}>
               <g transform={`translate(${l.x} ${l.y}) scale(${l.w / 200})`}>
-                <rect width="200" height={l.h * 200 / l.w} rx="12" fill="#fbfbfd" />
+                <rect width="200" height={l.h * 200 / l.w} rx="12" fill="#faf9f7" />
                 <SheetLines signed={l.key === "a" && signed} ink={t.ink} line={t.line} />
               </g>
             </g>
@@ -769,7 +779,7 @@ function ContractViewer({ it, url, error, onClose }) {
     <motion.div className="cf-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.18 } }}
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <motion.div layoutId={`cf-sheet-${it.key}`} className="cf-paper" role="dialog" aria-modal="true" aria-label={it.title}
-        transition={SHEET_SPRING} style={{ borderRadius: 28 }} onLayoutAnimationComplete={() => setLanded(true)}>
+        transition={SHEET_SPRING} style={{ borderRadius: 22 }} onLayoutAnimationComplete={() => setLanded(true)}>
         <motion.header className="cf-paper-head" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0, transition: { delay: 0.12, duration: 0.2 } }}
           exit={{ opacity: 0, transition: { duration: 0.08 } }}>
           <span className="cf-paper-tab" style={{ background: tone.soft, color: tone.ink }}>{it.label}</span>
@@ -791,8 +801,9 @@ function ContractViewer({ it, url, error, onClose }) {
   );
 }
 
-// items : [{ key: "owner" | "optilex", label, title, status (nœud), statusText, sub, signed, available, empty }]
-export function ContractFolders({ contractId, items, group }) {
+// items : [{ key: "owner" | "optilex", label, title, status (nœud), statusText, sub, signed, available, empty, openLabel? }]
+// `source(key)` : chemin du PDF quand la page a sa propre route de lecture (fiche Finance) ; sans elle, la route des contrats.
+export function ContractFolders({ contractId, items, group, source = null }) {
   const objectUrl = useObjectUrls();
   const [open, setOpen] = useState(null);
   const [urls, setUrls] = useState({});
@@ -803,7 +814,7 @@ export function ContractFolders({ contractId, items, group }) {
     loading.current.add(key);
     setErrors((x) => ({ ...x, [key]: "" }));
     try {
-      const url = objectUrl(await (await binary(`/api/v1/contracts/${contractId}/download/${key}`)).blob());
+      const url = objectUrl(await (await binary(source ? source(key) : `/api/v1/contracts/${contractId}/download/${key}`)).blob());
       setUrls((u) => ({ ...u, [key]: url }));
     } catch (e) { setErrors((x) => ({ ...x, [key]: e.message || "PDF introuvable." })); }
     finally { loading.current.delete(key); }
@@ -814,12 +825,12 @@ export function ContractFolders({ contractId, items, group }) {
     <LayoutGroup id={`contracts-${group}`}>
       <div className="cf-row">
         {items.map((it) => {
-          const clickable = !!contractId && it.available;
+          const clickable = (!!contractId || !!source) && it.available;
           const tone = it.empty ? "empty" : (FOLDER_TONES[it.key] || FOLDER_TONES.owner).glass;
           const t = GLASS_TONES[tone];
           return (
             <button key={it.key} type="button" className={`cf${clickable ? " is-clickable" : ""}${it.empty ? " is-empty" : ""}`} disabled={!clickable}
-              onClick={() => { setOpen(it.key); load(it.key); }} aria-label={clickable ? `Ouvrir la ${it.title}` : it.title}
+              onClick={() => { setOpen(it.key); load(it.key); }} aria-label={clickable ? (it.openLabel || `Ouvrir la ${it.title}`) : it.title}
               onPointerEnter={() => { if (clickable) load(it.key); }} onFocus={() => { if (clickable) load(it.key); }}>
               <span className="cf-ic">
                 <FolderBack tone={tone} uid={`${uid}${it.key}`} />

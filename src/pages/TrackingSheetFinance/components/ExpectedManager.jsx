@@ -58,23 +58,23 @@ import { EXPLAIN_OPS_LIMIT, expectedOpsByMonth, explainExpectedMonth } from '../
 import { buildStatement } from '../statement.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  sideHover: '#efeeec',
-  red: '#b42318',
-  redBg: '#fdecec',
-  amber: '#b45309',
-  amberBg: '#fff8ed',
-  green: '#15794a',
-  greenBg: '#e9f9f0',
-  blue: '#1e40af',
-  blueBg: '#e7f0fb',
-  slate: '#5b6472',
-  slateBg: '#eef1f6',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  sideHover: '#efece7',
+  red: '#c5221f',
+  redBg: '#fde6e6',
+  amber: '#c2500e',
+  amberBg: '#fdf1e6',
+  green: '#0b7a4b',
+  greenBg: '#e2f6ea',
+  blue: '#1b6fd0',
+  blueBg: '#e4f0fd',
+  slate: '#6f6a63',
+  slateBg: '#f1eee9',
 };
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -98,9 +98,9 @@ const MODES = [
 
 const STATUS = {
   paid:     { label: 'Encaissée', bg: N.greenBg, fg: N.green },
-  partial:  { label: 'Partielle', bg: '#fff3e3', fg: N.amber },
+  partial:  { label: 'Partielle', bg: '#fde9da', fg: N.amber },
   late:     { label: 'En retard', bg: N.redBg,   fg: N.red },
-  upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
+  upcoming: { label: 'À venir',   bg: '#fbf5d9', fg: '#7a5a05' },
   paused:   { label: 'En pause',  bg: N.slateBg, fg: N.slate },
   deferred: { label: 'Reportée',  bg: N.blueBg,  fg: N.blue },
   none:     { label: '—',         bg: 'transparent', fg: N.textFaint },
@@ -128,7 +128,7 @@ const btn = (kind = 'solid') => ({
   borderRadius: 7,
   padding: kind === 'ghost' ? '7px 9px' : '8px 14px',
   fontSize: 12.5,
-  fontWeight: 600,
+  fontWeight: 500,
   fontFamily: 'inherit',
   cursor: 'pointer',
   display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -731,7 +731,7 @@ export default function ExpectedManager({
             padding: '16px 20px 12px', borderBottom: `1px solid ${N.borderSft}`,
           }}>
             <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: N.text }}>Attendus</div>
+              <div style={{ fontSize: 15, fontWeight: 600, color: N.text }}>Attendus</div>
               <div style={{
                 fontSize: 12, color: N.textMuted, marginTop: 2,
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -793,7 +793,7 @@ export default function ExpectedManager({
                 display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
                 padding: '8px 12px', marginBottom: 12, borderRadius: 9, background: N.sideBg,
               }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: N.text }}>Plan</span>
+                <span style={{ fontSize: 12, fontWeight: 500, color: N.text }}>Plan</span>
                 <span style={{ fontSize: 12, color: N.textMuted }}>attendu de</span>
                 <AmountInput value={plan.amount} onChange={(v) => setPlan((p) => ({ ...p, amount: v }))} placeholder="0,00" />
                 <span style={{ fontSize: 12, color: N.textMuted }}>à partir de</span>
@@ -905,7 +905,7 @@ export default function ExpectedManager({
                           transition: 'background 0.12s, border-color 0.12s',
                         }}
                       >
-                        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 700, color: on && o.key === 'never' ? N.red : N.text }}>
+                        <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: on && o.key === 'never' ? N.red : N.text }}>
                           {o.label}
                         </span>
                         <span style={{ display: 'block', fontSize: 11, color: N.textMuted, marginTop: 2 }}>{o.hint}</span>
@@ -978,7 +978,7 @@ export default function ExpectedManager({
                 <div style={{
                   display: 'grid', gridTemplateColumns: gridCols, gap: 10,
                   padding: '8px 20px', background: N.sideBg, position: 'sticky', top: 0, zIndex: 1,
-                  fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em',
+                  fontSize: 10.5, fontWeight: 500, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em',
                 }}>
                   {showCheck && <span />}
                   <span>Mois</span>
@@ -1043,7 +1043,7 @@ export default function ExpectedManager({
                         <span style={{ fontWeight: r.courant ? 700 : 500, color: N.text }}>{r.label}</span>
                         {isTarget && (
                           <span style={{
-                            marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.green, background: '#fff',
+                            marginLeft: 6, fontSize: 10, fontWeight: 600, color: N.green, background: '#fff',
                             border: `1px solid ${N.green}`, borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
                             whiteSpace: 'nowrap',
                           }} title="Ce mois reçoit l’attendu des mois cochés, en plus du sien">
@@ -1053,7 +1053,7 @@ export default function ExpectedManager({
                         {/* Un report fixe aussi le montant, mais il se dit lui-même (d'où, vers où). */}
                         {r.manual && !r.reportedTo.length && !r.reportedFrom.length && (
                           <span title="Montant fixé à la main : la grille ne le réécrit plus" style={{
-                            marginLeft: 6, fontSize: 10, fontWeight: 700, color: N.blue, background: N.blueBg,
+                            marginLeft: 6, fontSize: 10, fontWeight: 600, color: N.blue, background: N.blueBg,
                             borderRadius: 3, padding: '1px 5px', verticalAlign: 'middle',
                           }}>
                             manuel
@@ -1061,14 +1061,14 @@ export default function ExpectedManager({
                         )}
                         {r.pendingRequest && (
                           <span title="Une demande de modification attend la validation de la direction sur ce mois" style={{
-                            display: 'inline-block', marginTop: 3, fontSize: 10, fontWeight: 700, color: N.amber, background: N.amberBg,
+                            display: 'inline-block', marginTop: 3, fontSize: 10, fontWeight: 600, color: N.amber, background: N.amberBg,
                             borderRadius: 3, padding: '1px 5px', whiteSpace: 'nowrap',
                           }}>
                             demande en attente
                           </span>
                         )}
                       </span>
-                      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.text, fontWeight: 600 }}>
+                      <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.text, fontWeight: 500 }}>
                         {formatEUR(r.attendu)}
                       </span>
                       <span style={{ textAlign: 'right', fontVariantNumeric: 'tabular-nums', color: N.textMuted }}>
@@ -1093,7 +1093,7 @@ export default function ExpectedManager({
                       <span>
                         <span title={ex.quiet && ex.text ? ex.text : undefined} style={{
                           display: 'inline-block', padding: '2px 8px', borderRadius: 999,
-                          background: pill.bg, color: pill.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+                          background: pill.bg, color: pill.fg, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
                         }}>
                           {pill.label}
                         </span>
@@ -1161,7 +1161,7 @@ export default function ExpectedManager({
                       ) : (
                         <span style={{ textAlign: 'right' }} onClick={(e) => e.stopPropagation()}>
                           {mode === 'discount' && isPicked && discount && (
-                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
+                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: N.green }}>
                               {formatEUR(reduced(r))}
                             </span>
                           )}
@@ -1174,13 +1174,13 @@ export default function ExpectedManager({
                           )}
                           {/* Le mois de destination : son nouvel attendu, le sien plus ce qu'il reçoit. */}
                           {isTarget && after !== undefined && (
-                            <span title={`${formatEUR(r.attendu)} + ${formatEUR(reportPlan.total)} reportés`} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.green }}>
+                            <span title={`${formatEUR(r.attendu)} + ${formatEUR(reportPlan.total)} reportés`} style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: N.green }}>
                               {formatEUR(after)}
                             </span>
                           )}
                           {/* Reports de créance d'avant le 28/09 : sortant en moins, entrant en plus. */}
                           {mode === 'defer' && !isPicked && !isTarget && (r.deferredOut > 0 || r.deferredIn > 0) && (
-                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 700, color: N.blue }}>
+                            <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600, color: N.blue }}>
                               {r.deferredOut > 0 && <span style={{ display: 'block' }}>−{formatEUR(r.deferredOut)}</span>}
                               {r.deferredIn > 0 && (
                                 <span style={{ display: 'block' }} title={r.effectiveIn < r.deferredIn ? `${formatEUR(r.deferredIn)} reportés à l’origine` : undefined}>
@@ -1238,7 +1238,7 @@ export default function ExpectedManager({
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 padding: '6px 10px', borderRadius: 8, background: N.amberBg, color: N.amber,
-                fontSize: 12, fontWeight: 600,
+                fontSize: 12, fontWeight: 500,
               }}>
                 <Check size={13} /> Envoyé à la direction · en attente de validation
               </span>
@@ -1247,7 +1247,7 @@ export default function ExpectedManager({
               <span style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
                 padding: '6px 10px', borderRadius: 8, background: N.greenBg, color: N.green,
-                fontSize: 12, fontWeight: 600,
+                fontSize: 12, fontWeight: 500,
               }}>
                 <Check size={13} /> Enregistré
                 <button
@@ -1306,7 +1306,7 @@ const ACCOUNT_TONES = {
   short:  { fg: N.red,       bg: N.redBg,   rail: N.red },
   over:   { fg: N.green,     bg: N.greenBg, rail: N.green },
   even:   { fg: N.textMuted, bg: N.sideBg,  rail: N.border },
-  wait:   { fg: '#9f6b00',   bg: '#faf3dd', rail: '#e9c46a' },
+  wait:   { fg: '#7a5a05',   bg: '#fbf5d9', rail: '#e9c46a' },
   paused: { fg: N.slate,     bg: N.slateBg, rail: N.slate },
   muted:  { fg: N.textMuted, bg: N.sideBg,  rail: N.borderSft },
   loss:   { fg: N.amber,     bg: N.amberBg, rail: N.amber },
@@ -1319,7 +1319,7 @@ function Pill({ tone, children, title }) {
   return (
     <span title={title} style={{
       display: 'inline-flex', alignItems: 'center', padding: '2px 9px', borderRadius: 999,
-      background: t.bg, color: t.fg, fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap',
+      background: t.bg, color: t.fg, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
     }}>
       {children}
     </span>
@@ -1334,7 +1334,7 @@ function Sum({ label, value, tone, sign }) {
       <span style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
         <span style={{ fontSize: 10.5, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3, whiteSpace: 'nowrap' }}>{label}</span>
         <span style={{
-          fontSize: 14, fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
+          fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap',
           color: tone ? ACCOUNT_TONES[tone].fg : N.text,
         }}>{value}</span>
       </span>
@@ -1369,7 +1369,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
           <div style={{ fontSize: 10.5, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>
             Aujourd’hui · {entityLabel}
           </div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: head.tone === 'even' ? N.text : headTone.fg, marginTop: 2 }}>
+          <div style={{ fontSize: 19, fontWeight: 600, color: head.tone === 'even' ? N.text : headTone.fg, marginTop: 2 }}>
             {head.title}
           </div>
           {head.why && <div style={{ fontSize: 12.5, color: N.textMuted, marginTop: 3, lineHeight: 1.45 }}>{head.why}</div>}
@@ -1391,7 +1391,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
       <div style={{
         display: 'grid', gridTemplateColumns: ACCOUNT_COLS, columnGap: 12,
         padding: '8px 20px 8px 23px', background: N.sideBg, position: 'sticky', top: 0, zIndex: 1,
-        fontSize: 11, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3,
+        fontSize: 11, fontWeight: 500, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3,
       }}>
         <span>Mois</span>
         <span style={{ textAlign: 'right' }}>Attendu</span>
@@ -1425,7 +1425,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
               padding: '11px 20px', borderTop: `1px solid ${N.borderSft}`, borderLeft: `3px solid ${rail}`,
               opacity: m.quiet ? 0.72 : 1,
             }}>
-              <span style={{ fontSize: 13, fontWeight: 600, color: N.text, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: N.text, display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
                 {m.label}
                 {m.period === nowKey && <Tag title="Mois en cours">ce mois-ci</Tag>}
               </span>
@@ -1438,7 +1438,7 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
                 {formatEUR(m.paid)}
               </span>
               <span><Pill tone={pill.tone} title={m.quiet ? ex.text || undefined : undefined}>{pill.label}</Pill></span>
-              <span style={{ fontSize: 13, fontWeight: 600, color: m.balance.tone === 'even' ? N.textMuted : balance.fg }}>
+              <span style={{ fontSize: 13, fontWeight: 500, color: m.balance.tone === 'even' ? N.textMuted : balance.fg }}>
                 {m.balance.label}
                 {m.balance.note && (
                   <span style={{ display: 'block', fontSize: 11, fontWeight: 500, color: ACCOUNT_TONES.wait.fg }}>+ {m.balance.note}</span>
@@ -1462,13 +1462,13 @@ function StatementView({ account, entityLabel, nowKey, explainedByMonth, upcomin
           display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
           padding: '12px 20px 16px', borderTop: `1px solid ${N.border}`,
         }}>
-          <span style={{ fontSize: 11, fontWeight: 600, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>À venir</span>
+          <span style={{ fontSize: 11, fontWeight: 500, color: N.textFaint, textTransform: 'uppercase', letterSpacing: 0.3 }}>À venir</span>
           {shownUpcoming.map((r) => (
             <span key={r.id} style={{
               fontSize: 12, color: N.textMuted, padding: '3px 9px', borderRadius: 999, border: `1px solid ${N.borderSft}`,
               whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
             }}>
-              {r.label} · <strong style={{ color: N.text, fontWeight: 600 }}>{formatEUR(r.attendu)}</strong>
+              {r.label} · <strong style={{ color: N.text, fontWeight: 500 }}>{formatEUR(r.attendu)}</strong>
               {r.pauseActive ? ' · en pause' : ''}
             </span>
           ))}
@@ -1578,7 +1578,7 @@ function RequestsList({ requests, currentUserId, canApply, onWithdraw }) {
   const ordered = [...requests].sort((a, b) => (a.status === 'pending' ? 0 : 1) - (b.status === 'pending' ? 0 : 1));
   return (
     <div style={{ padding: '10px 20px 0' }}>
-      <div style={{ fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
+      <div style={{ fontSize: 10.5, fontWeight: 500, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 6 }}>
         Demandes de modification
       </div>
       {ordered.map((r) => {
@@ -1599,7 +1599,7 @@ function RequestsList({ requests, currentUserId, canApply, onWithdraw }) {
               </div>
             </div>
             <div style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 999, background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+              <span style={{ display: 'inline-block', padding: '3px 8px', borderRadius: 999, background: st.bg, color: st.fg, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
                 {st.label}
               </span>
               {r.status === 'pending' && (mine || canApply) && (
@@ -1620,7 +1620,7 @@ function Tag({ children, title }) {
   return (
     <span title={title} style={{
       display: 'inline-block', padding: '3px 8px', borderRadius: 999,
-      background: N.sideBg, color: N.textMuted, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+      background: N.sideBg, color: N.textMuted, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
     }}>
       {children}
     </span>
@@ -1630,7 +1630,7 @@ function Tag({ children, title }) {
 function Segmented({ value, onChange, options }) {
   return (
     <div style={{
-      display: 'inline-flex', alignItems: 'center', background: '#f1f1ef',
+      display: 'inline-flex', alignItems: 'center', background: '#f1eee9',
       border: `1px solid ${N.border}`, borderRadius: 8, padding: 2, gap: 2,
     }}>
       {options.map((o) => {
@@ -1685,7 +1685,7 @@ function AmountInput({ value, onChange, max, placeholder, width = 96 }) {
         }}
         style={{
           ...input, width, padding: '5px 8px', textAlign: 'right',
-          fontWeight: 600, fontVariantNumeric: 'tabular-nums',
+          fontWeight: 500, fontVariantNumeric: 'tabular-nums',
         }}
       />
       <span style={{ color: N.textFaint, fontSize: 12 }}>€</span>

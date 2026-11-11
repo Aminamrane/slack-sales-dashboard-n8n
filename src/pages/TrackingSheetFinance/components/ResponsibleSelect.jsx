@@ -19,11 +19,11 @@ import apiClient from '../../../services/apiClient.js';
 import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e9e9e7',
-  sideBg: '#f7f7f5',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e8e4de',
+  sideBg: '#f7f5f2',
 };
 
 // La liste ne change pas en cours de session : un seul chargement, partagé
@@ -83,7 +83,7 @@ export default function ResponsibleSelect({ clientId, value, canEdit, onChanged,
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 24, flexWrap: 'wrap' }}>
       {label && (
         <span style={{
-          fontSize: 11, fontWeight: 600, color: N.textFaint,
+          fontSize: 11, fontWeight: 500, color: N.textFaint,
           textTransform: 'uppercase', letterSpacing: '0.04em',
         }}>
           Responsable
@@ -128,7 +128,7 @@ export default function ResponsibleSelect({ clientId, value, canEdit, onChanged,
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 5,
             border: `1px solid ${N.border}`, background: '#fff', borderRadius: 6,
-            padding: '3px 9px', fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+            padding: '3px 9px', fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
             color: N.textMuted, cursor: saving ? 'wait' : 'pointer',
             transition: 'background 0.12s',
           }}

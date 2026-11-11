@@ -1,30 +1,43 @@
 // ValidationsView.jsx — la file des demandes de l'équipe finance, pour la direction.
 //
-// Dev (2026-09-23) : « Lény et Aurélie ont la même flexibilité, mais tout
-// changement chez eux est en attente de validation d'Ismahane. Elle a un
-// onglet avec ses demandes. Il faut qu'elles soient claires : ce que la
-// personne a voulu modifier, ce qu'elle a modifié, ce qu'elle propose. Dès
-// qu'elle valide, c'est pris en compte. »
+// Dev (2026-09-23) : l'équipe finance a la même flexibilité que la direction,
+// mais tout changement chez elle est en attente de validation de la direction
+// financière, qui a un onglet avec ces demandes. « Il faut qu'elles soient
+// claires : ce que la personne a voulu modifier, ce qu'elle a modifié, ce
+// qu'elle propose. Dès qu'elle valide, c'est pris en compte. »
 //
 // Une carte par demande : qui, quand, quel client ; la phrase du geste ;
 // le tableau mois par mois avant → proposé ; le motif ; Valider / Refuser
 // (avec motif). Si un mois a bougé depuis la demande, la carte le dit et le
 // serveur refuse la validation : on relit avec l'auteur, on n'écrase pas.
+//
+// Refonte dev 10/11/2026 : la file parle le langage des Statistiques (chiffres
+// clés, répartition par auteur et par geste qui filtrent la file, cartes de
+// cas). Le chargement, le rafraîchissement et les deux gestes sont ceux d'origine.
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Check, X, RefreshCw, TriangleAlert, ExternalLink } from 'lucide-react';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
+import {
+  ArrowRight, Banknote, CalendarClock, CalendarDays, Check, CircleCheck, CirclePause, CircleX, Clock3, Hourglass, Inbox, PenLine, PieChart, Scale,
+  Search, Target, TriangleAlert, Undo2, Users, X,
+} from 'lucide-react';
 
 import apiClient from '../../../services/apiClient.js';
 import { READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
+import { ITEM, useDrawn } from '../../../components/perfSales/motion.jsx';
 import { formatEUR, formatMonthLabel } from '../constants.js';
+import { count, pct, plural } from '../statistics/model.js';
+import { ProgressRing } from '../statistics/parts.jsx';
+import { Avatar, Card, Empty, Num, Page, Pill, RefreshButton, Reveal, Segmented, Stat, Stats, TableBox, Tag, Th, Who } from './PageKit.jsx';
+import './FollowupTabs.css';
 
-const N = {
-  text: '#37352f', textMuted: '#787774', textFaint: '#9b9a97',
-  border: '#e3e2e0', borderSft: '#ededec', sideBg: '#f7f7f5',
-  red: '#b42318', redBg: '#fdecec', amber: '#b45309', amberBg: '#fff8ed',
-  green: '#15794a', greenBg: '#e9f9f0', blue: '#1e40af', blueBg: '#e7f0fb',
-};
+const GREEN = '#6cc493';
+const RED = '#ee8f8a';
+const AMBER = '#f1b76a';
+const BEIGE = '#cfc8bd';
+const GHOST = '#dedad3';
+const PAGE = 10;
+const NONE = { author: null, action: null, status: null, drift: false };
 
 const fmtWhen = (iso) => {
   if (!iso) return '';
@@ -34,14 +47,36 @@ const fmtWhen = (iso) => {
 };
 
 const STATUS = {
-  pending:   { label: 'En attente', bg: N.amberBg, fg: N.amber },
-  approved:  { label: 'Validée',    bg: N.greenBg, fg: N.green },
-  rejected:  { label: 'Refusée',    bg: N.redBg,   fg: N.red },
-  withdrawn: { label: 'Retirée',    bg: N.sideBg,  fg: N.textMuted },
+  pending:   { label: 'En attente', many: 'En attente', tone: 'amber', color: AMBER },
+  approved:  { label: 'Validée',    many: 'Validées',   tone: 'green', color: GREEN },
+  rejected:  { label: 'Refusée',    many: 'Refusées',   tone: 'red',   color: RED },
+  withdrawn: { label: 'Retirée',    many: 'Retirées',   tone: 'ghost', color: GHOST },
 };
 
 const ENTITY = { owner: 'Owner', optilex: "Opti'lex" };
 const num = (v) => (v === null || v === undefined || v === '' ? null : Number(v));
+const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+// Le geste demandé, reconnu à son libellé : une teinte et une icône par famille.
+const GESTURES = [
+  [/pause/, 'lilac', CirclePause],
+  [/report/, 'cyan', CalendarClock],
+  [/attendu/, 'blue', Target],
+  [/recu|encaiss/, 'green', Banknote],
+  [/reste|creance/, 'peach', Scale],
+];
+const gesture = (label) => {
+  const text = fold(label);
+  const hit = GESTURES.find(([pattern]) => pattern.test(text));
+  return { tone: hit?.[1], Icon: hit?.[2] || PenLine };
+};
+
+const since = (iso) => {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  return days <= 0 ? 'depuis aujourd’hui' : `depuis ${days} j`;
+};
 
 // Ce que la demande change, mois par mois, dans les mots de l'écran :
 // attendu, reçu, reste dû, pause, report. On part des valeurs proposées ;
@@ -89,6 +124,9 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast, re
   const [acting, setActing] = useState(null);           // id en cours
   const [confirm, setConfirm] = useState(null);         // { id, kind: 'approve' | 'reject' }
   const [notes, setNotes] = useState({});               // id -> motif de refus
+  const [filter, setFilter] = useState(NONE);           // lecture de la file : auteur, geste, issue, à relire
+  const [query, setQuery] = useState('');
+  const [page, setPage] = useState({ signature: '', shown: PAGE });
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setReloading(true);
@@ -155,190 +193,375 @@ export default function ValidationsView({ onOpenClient, onChanged, showToast, re
 
   const pendingCount = useMemo(() => (items || []).filter((r) => r.status === 'pending').length, [items]);
 
+  // Les chiffres de la file : ce qui attend, ce qui est à relire, qui demande, quel geste, quelle issue.
+  const facts = useMemo(() => {
+    const list = items || [];
+    const byStatus = { pending: 0, approved: 0, rejected: 0, withdrawn: 0 };
+    const authors = new Map();
+    const actions = new Map();
+    let drift = 0;
+    let oldest = null;
+    for (const r of list) {
+      if (byStatus[r.status] !== undefined) byStatus[r.status] += 1;
+      const flagged = r.status === 'pending' && !!r.drift;
+      if (flagged) drift += 1;
+      if (r.status === 'pending' && r.requested_at && (!oldest || r.requested_at < oldest)) oldest = r.requested_at;
+      const name = r.requested_by_name || 'Quelqu’un';
+      const a = authors.get(name) || { key: name, name, total: 0, parts: {} };
+      a.total += 1;
+      const part = flagged ? 'drift' : r.status;
+      a.parts[part] = (a.parts[part] || 0) + 1;
+      authors.set(name, a);
+      const label = r.action_label || 'Autre geste';
+      const g = actions.get(label) || { key: label, name: label, total: 0, parts: {}, Icon: gesture(label).Icon };
+      g.total += 1;
+      g.parts[part] = (g.parts[part] || 0) + 1;
+      actions.set(label, g);
+    }
+    const rank = (map) => [...map.values()].sort((x, y) => y.total - x.total || x.name.localeCompare(y.name, 'fr'))
+      .map((row) => ({ ...row, segments: PART_ORDER.filter((key) => row.parts[key]).map((key) => ({ color: PART_COLOR[key], n: row.parts[key] })) }));
+    return { byStatus, drift, oldest, authors: rank(authors), actions: rank(actions) };
+  }, [items]);
+
+  const visible = useMemo(() => {
+    const q = fold(query.trim());
+    return (items || []).filter((r) => (!filter.author || (r.requested_by_name || 'Quelqu’un') === filter.author)
+      && (!filter.action || (r.action_label || 'Autre geste') === filter.action)
+      && (!filter.status || r.status === filter.status)
+      && (!filter.drift || (r.status === 'pending' && !!r.drift))
+      && (!q || fold([r.client?.societe, r.client?.numero_client, r.label, r.reason, r.requested_by_name, r.action_label].join(' ')).includes(q)));
+  }, [items, filter, query]);
+
+  const signature = `${tab}|${filter.author}|${filter.action}|${filter.status}|${filter.drift}|${query}`;
+  const shown = page.signature === signature ? page.shown : PAGE;
+  const rest = Math.max(visible.length - shown, 0);
+
+  const changeTab = (key) => { setTab(key); setFilter(NONE); setQuery(''); setConfirm(null); };
+  const toggle = (key, value) => setFilter((f) => ({ ...f, [key]: f[key] === value ? NONE[key] : value }));
+  const chips = [
+    filter.author && { key: 'author', label: filter.author },
+    filter.action && { key: 'action', label: filter.action },
+    filter.status && { key: 'status', label: STATUS[filter.status]?.many },
+    filter.drift && { key: 'drift', label: 'À relire' },
+  ].filter(Boolean);
+  const done = tab === 'done';
+  const treated = facts.byStatus.approved + facts.byStatus.rejected + facts.byStatus.withdrawn;
+
   return (
-    <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 2px 40px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-        <div style={{ display: 'inline-flex', background: '#f1f1ef', border: `1px solid ${N.border}`, borderRadius: 8, padding: 2, gap: 2 }}>
-          {[{ key: 'pending', label: tab === 'pending' && items ? `À valider (${pendingCount})` : 'À valider' }, { key: 'done', label: 'Traitées' }].map((o) => {
-            const active = tab === o.key;
-            return (
-              <button key={o.key} type="button" onClick={() => setTab(o.key)} style={{
-                position: 'relative', height: 26, padding: '0 12px', border: 'none', borderRadius: 6,
-                background: active ? '#fff' : 'transparent', boxShadow: active ? '0 1px 3px rgba(15,15,15,0.12)' : 'none',
-                cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: active ? 600 : 500, color: active ? N.text : N.textMuted,
-              }}>
-                {o.label}
-              </button>
-            );
-          })}
-        </div>
-        <span style={{ fontSize: 12, color: N.textMuted }}>
-          Chaque demande dit qui, quoi et pourquoi. Valider rejoue le geste sous votre nom, avec la trace de l’auteur ; refuser demande un mot pour lui.
-        </span>
-        <button type="button" onClick={() => load(false)} title="Actualiser" style={{
-          marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${N.border}`,
-          background: '#fff', borderRadius: 7, padding: '6px 10px', fontSize: 12, fontFamily: 'inherit', cursor: 'pointer', color: N.text,
-        }}>
-          <RefreshCw size={12} style={{ animation: reloading ? 'spin 0.8s linear infinite' : 'none' }} /> Actualiser
-        </button>
-      </div>
+    <Page title="Validations"
+      sub="Les changements proposés par l’équipe finance : rien ne s’applique tant que la direction n’a pas validé."
+      actions={(
+        <>
+          <Segmented label="Demandes" value={tab} onChange={changeTab} options={[
+            { key: 'pending', label: tab === 'pending' && items ? `À valider (${pendingCount})` : 'À valider' },
+            { key: 'done', label: 'Traitées' },
+          ]} />
+          <RefreshButton onClick={() => load(false)} busy={reloading} />
+        </>
+      )}>
+      {error && items !== null && <div className="fst-error" role="alert">{error}<button type="button" onClick={() => load(false)}>Réessayer</button></div>}
+      {items === null && <Empty boxed>Chargement…</Empty>}
 
-      {error && items !== null && (
-        <div style={{ marginBottom: 12, padding: '10px 12px', borderRadius: 8, background: N.redBg, color: N.red, fontSize: 12.5 }}>{error}</div>
+      {items !== null && (
+        <Stats key={`stats-${tab}`}>
+          {done ? (
+            <>
+              <Stat label="Traitées" Icon={Inbox} value={treated} note="sur les 200 dernières demandes" />
+              <Stat label="Validées" Icon={CircleCheck} value={facts.byStatus.approved} tone={facts.byStatus.approved ? 'green' : undefined}
+                note={treated ? `${pct(facts.byStatus.approved / treated, 0)} des demandes traitées` : 'aucune pour l’instant'}
+                onClick={() => toggle('status', 'approved')} pressed={filter.status === 'approved'} title="Ne voir que les demandes validées" />
+              <Stat label="Refusées" Icon={CircleX} value={facts.byStatus.rejected} tone={facts.byStatus.rejected ? 'red' : undefined}
+                note="chacune avec son motif" onClick={() => toggle('status', 'rejected')} pressed={filter.status === 'rejected'}
+                title="Ne voir que les demandes refusées" />
+              <Stat label="Retirées" Icon={Undo2} value={facts.byStatus.withdrawn} note="par leur auteur"
+                onClick={() => toggle('status', 'withdrawn')} pressed={filter.status === 'withdrawn'} title="Ne voir que les demandes retirées" />
+            </>
+          ) : (
+            <>
+              <Stat label="En attente" Icon={Hourglass} value={pendingCount} tone={pendingCount ? 'amber' : undefined}
+                note={pendingCount ? 'à valider ou à refuser' : 'rien à valider'} />
+              <Stat label="À relire" Icon={TriangleAlert} value={facts.drift} tone={facts.drift ? 'red' : undefined}
+                note={facts.drift ? 'les chiffres ont bougé depuis la demande' : 'aucun chiffre n’a bougé depuis'}
+                onClick={() => toggle('drift', true)} pressed={filter.drift} title="Ne voir que les demandes à relire avec leur auteur" />
+              <Stat label="Auteurs" Icon={Users} value={facts.authors.length} note={plural(facts.actions.length, 'geste différent', 'gestes différents')} />
+              <Stat label="Plus ancienne" Icon={Clock3} text={facts.oldest ? fmtWhen(facts.oldest).slice(0, 10) : '—'}
+                note={facts.oldest ? `en attente ${since(facts.oldest)}` : 'aucune demande en attente'} />
+            </>
+          )}
+        </Stats>
       )}
-      {items === null && <div style={{ padding: 30, textAlign: 'center', color: N.textMuted, fontSize: 13 }}>Chargement…</div>}
+
+      {items !== null && items.length > 0 && (
+        <Reveal key={`split-${tab}`} className="fst-grid is-even">
+          <Card title="Par auteur" Icon={Users}
+            hint={done ? 'Qui a demandé, et ce que la direction en a fait. Un clic filtre la file.' : 'Qui attend une réponse ; en ambre, ce qui est à relire. Un clic filtre la file.'}>
+            <Breakdown rows={facts.authors} active={filter.author} onPick={(key) => toggle('author', key)} />
+          </Card>
+          {done ? (
+            <Card title="Issue des demandes" Icon={PieChart} hint="Ce que sont devenues les demandes traitées. Un clic filtre la file.">
+              <Outcome counts={facts.byStatus} status={filter.status} onStatus={(key) => toggle('status', key)} />
+            </Card>
+          ) : (
+            <Card title="Par geste" Icon={PenLine} hint="Ce que l’équipe demande de changer. Un clic filtre la file.">
+              <Breakdown rows={facts.actions} active={filter.action} onPick={(key) => toggle('action', key)} wide />
+            </Card>
+          )}
+        </Reveal>
+      )}
+
       {items !== null && items.length === 0 && (
-        <div style={{ padding: 40, textAlign: 'center', color: N.textMuted, fontSize: 13, background: '#fff', border: `1px dashed ${N.border}`, borderRadius: 12 }}>
-          {tab === 'pending' ? 'Aucune demande en attente.' : 'Aucune demande traitée.'}
-        </div>
+        <Empty boxed>{tab === 'pending' ? 'Aucune demande en attente.' : 'Aucune demande traitée.'}</Empty>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {(items || []).map((req, i) => (
-          <RequestCard
-            key={req.id}
-            req={req}
-            index={i}
-            busy={acting === req.id}
-            confirm={confirm?.id === req.id ? confirm.kind : null}
-            onConfirm={(kind) => setConfirm(kind ? { id: req.id, kind } : null)}
-            note={notes[req.id] || ''}
-            onNote={(v) => setNotes((n) => ({ ...n, [req.id]: v }))}
-            onAct={(kind) => act(req, kind)}
-            onOpenClient={onOpenClient}
-            readOnly={readOnly}
-          />
-        ))}
-      </div>
-    </div>
+      {items !== null && items.length > 0 && (
+        <>
+          <div className="fup-list-head">
+            <h3 className="fst-section-title">{done ? 'Demandes traitées' : 'Demandes à valider'}</h3>
+            <span className="fst-cell-muted fst-num">{count(visible.length)}</span>
+            <AnimatePresence initial={false}>
+              {chips.map((chip) => (
+                <Motion.button key={chip.key} type="button" className="fst-chip" layout initial={{ opacity: 0, scale: 0.8 }} animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }} transition={{ duration: 0.2 }} title="Retirer ce filtre"
+                  onClick={() => setFilter((f) => ({ ...f, [chip.key]: NONE[chip.key] }))}>
+                  {chip.label}<X size={13} />
+                </Motion.button>
+              ))}
+            </AnimatePresence>
+            <label className="fst-search" style={{ marginLeft: 'auto' }}>
+              <Search size={14} />
+              <input type="search" placeholder="Client, auteur, geste, motif…" value={query} onChange={(e) => setQuery(e.target.value)}
+                aria-label="Chercher une demande" />
+            </label>
+            <p>Chaque demande dit qui, quoi et pourquoi. Valider rejoue le geste sous votre nom, avec la trace de l’auteur ; refuser demande un mot pour lui.</p>
+          </div>
+
+          {visible.length === 0 && <Empty boxed>Aucune demande ne correspond à ces filtres.</Empty>}
+
+          <Reveal key={`list-${tab}`} className="fup-stack" amount={0.01}>
+            <AnimatePresence initial={false}>
+              {visible.slice(0, shown).map((req) => (
+                <RequestCard
+                  key={req.id}
+                  req={req}
+                  busy={acting === req.id}
+                  confirm={confirm?.id === req.id ? confirm.kind : null}
+                  onConfirm={(kind) => setConfirm(kind ? { id: req.id, kind } : null)}
+                  note={notes[req.id] || ''}
+                  onNote={(v) => setNotes((n) => ({ ...n, [req.id]: v }))}
+                  onAct={(kind) => act(req, kind)}
+                  onOpenClient={onOpenClient}
+                  readOnly={readOnly}
+                />
+              ))}
+            </AnimatePresence>
+          </Reveal>
+
+          {rest > 0 && (
+            <div className="fup-more">
+              <button type="button" className="fst-btn" onClick={() => setPage({ signature, shown: shown + PAGE })}>
+                Afficher les {Math.min(rest, PAGE)} suivantes
+              </button>
+            </div>
+          )}
+        </>
+      )}
+    </Page>
   );
 }
 
-function RequestCard({ req, index, busy, confirm, onConfirm, note, onNote, onAct, onOpenClient, readOnly = false }) {
+// Les états d'une demande dans une barre de répartition : en attente, à relire, validée, refusée, retirée.
+const PART_COLOR = { pending: BEIGE, drift: AMBER, approved: GREEN, rejected: RED, withdrawn: GHOST };
+const PART_ORDER = ['pending', 'drift', 'approved', 'rejected', 'withdrawn'];
+
+// Une répartition en barres, comme « Par sales » des Statistiques : une ligne par personne (pastille) ou par
+// catégorie (icône), découpée en segments { color, n }, qui filtre la liste au clic. Sert aussi aux états à traiter.
+export function Breakdown({ rows, active, onPick, wide = false }) {
+  const drawn = useDrawn();
+  const largest = Math.max(...rows.map((row) => row.total), 1);
+  return (
+    <>
+      {rows.map((row) => (
+        <button key={row.key} type="button" className={`fst-hbar${wide ? ' fup-wide' : ''}`} data-on={active === row.key || undefined}
+          aria-pressed={active === row.key} onClick={() => onPick(row.key)} title={row.name}>
+          {row.Icon ? <span className="fup-ico"><row.Icon size={14} strokeWidth={1.9} /></span> : <Avatar name={row.name} />}
+          <span className="fst-hbar-name">{row.name}</span>
+          <span className="fst-hbar-track" style={{ width: `${(row.total / largest) * 100}%` }}>
+            {row.segments.map((segment) => (
+              <i key={segment.color} style={{ width: `${drawn ? (segment.n / row.total) * 100 : 0}%`, background: segment.color }} />
+            ))}
+          </span>
+          <span className="fst-hbar-num fst-num">{count(row.total)}</span>
+        </button>
+      ))}
+    </>
+  );
+}
+
+// Ce que sont devenues les demandes traitées : la part validée en anneau, puis le détail qui filtre la file.
+function Outcome({ counts, status, onStatus }) {
+  const drawn = useDrawn();
+  const decided = counts.approved + counts.rejected;
+  const total = decided + counts.withdrawn;
+  const rate = decided ? counts.approved / decided : null;
+  const present = ['approved', 'rejected', 'withdrawn'].filter((key) => counts[key] > 0);
+  return (
+    <>
+      <div className="fst-goal fup-goal">
+        <ProgressRing value={rate || 0} size={116} stroke={10} color={GREEN} label={rate == null ? 'Aucune décision' : `${pct(rate, 0)} de demandes validées`}>
+          {rate == null
+            ? <div className="fst-ring-sub" style={{ marginTop: 0 }}>aucune décision</div>
+            : <><Num className="fst-ring-num" value={rate} format={(v) => pct(v, 0)} /><div className="fst-ring-sub">validées</div></>}
+        </ProgressRing>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div className="fst-rate-note" style={{ marginTop: 0 }}>
+            {decided
+              ? `${plural(counts.approved, 'demande validée', 'demandes validées')} sur ${count(decided)} décidées par la direction.`
+              : 'Aucune demande n’a encore été décidée par la direction.'}
+          </div>
+          <div className="fst-split" aria-hidden="true" style={{ marginTop: 14 }}>
+            {present.map((key) => (
+              <i key={key} style={{ flexGrow: drawn ? counts[key] : 0, flexBasis: 0, background: STATUS[key].color, opacity: !status || status === key ? 1 : 0.25 }} />
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="fst-legend">
+        {present.map((key) => (
+          <button key={key} type="button" className="fst-legend-row" aria-pressed={status === key} onClick={() => onStatus(key)}
+            title="Voir ces demandes dans la file">
+            <span className="fst-dot" style={{ background: STATUS[key].color }} />
+            {STATUS[key].many}
+            <b className="fst-num">{count(counts[key])}</b>
+            <small className="fst-num">{pct(total ? counts[key] / total : 0, 0)}</small>
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function RequestCard({ req, busy, confirm, onConfirm, note, onNote, onAct, onOpenClient, readOnly = false }) {
   const st = STATUS[req.status] || STATUS.pending;
   const months = useMemo(() => monthChanges(req), [req]);
   const pending = req.status === 'pending';
   const client = req.client || {};
-  const title = [client.societe, client.numero_client].filter(Boolean).join(' · ') || `Client ${req.client_id}`;
+  const kind = gesture(req.action_label);
+  const step = confirm || 'idle';
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, delay: Math.min(index, 8) * 0.03 }}
-      style={{ background: '#fff', border: `1px solid ${req.drift && pending ? '#f5dcb5' : N.border}`, borderRadius: 12, padding: '14px 16px' }}
-    >
+    <Motion.article layout="position" variants={ITEM} exit={{ opacity: 0, scale: 0.97, transition: { duration: 0.22 } }}
+      className="fst-case fup-req" data-drift={(pending && !!req.drift) || undefined}>
       {/* Qui, quand, quel client */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap' }}>
-        <div style={{ flex: '1 1 320px', minWidth: 0 }}>
-          <button
-            type="button"
-            onClick={() => client.id && onOpenClient?.(client.id)}
-            title="Ouvrir la fiche du client"
-            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, color: N.text }}
-          >
-            {title} <ExternalLink size={12} style={{ color: N.textFaint }} />
-          </button>
-          <div style={{ fontSize: 12, color: N.textMuted, marginTop: 2 }}>
-            <strong style={{ color: N.text }}>{req.requested_by_name || 'Quelqu’un'}</strong> · {fmtWhen(req.requested_at)} · {req.action_label}
-          </div>
+      <div className="fst-case-head">
+        <button type="button" className="fst-case-name" onClick={() => client.id && onOpenClient?.(client.id)} title="Ouvrir la fiche du client">
+          {client.societe || `Client ${req.client_id}`}
+        </button>
+        {client.numero_client && <span className="fst-case-num">n° {client.numero_client}</span>}
+        <Pill tone={st.tone}>{st.label}</Pill>
+      </div>
+      <div className="fup-facts">
+        <div>
+          <span className="fup-k">Demandé par</span>
+          {req.requested_by_name ? <Who name={req.requested_by_name} /> : <span>Quelqu’un</span>}
         </div>
-        <span style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 999, background: st.bg, color: st.fg, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-          {st.label}
-        </span>
+        <div className="fst-num"><Clock3 size={13} strokeWidth={1.9} style={{ color: 'var(--faint)' }} />{fmtWhen(req.requested_at)}</div>
+        {req.action_label && <div><Tag tone={kind.tone}>{req.action_label}</Tag></div>}
       </div>
 
       {/* Ce qu'elle a voulu faire */}
-      <div style={{ marginTop: 10, fontSize: 13.5, color: N.text, lineHeight: 1.5 }}>
-        Demande de <strong>{req.label}</strong>.
-      </div>
-      {req.reason && (
-        <div style={{ marginTop: 4, fontSize: 12.5, color: N.textMuted, fontStyle: 'italic' }}>« {req.reason} »</div>
-      )}
+      <p className="fup-ask">Demande de <strong>{req.label}</strong>.</p>
+      {req.reason && <p className="fup-quote">« {req.reason} »</p>}
 
       {/* Ce qu'elle a modifié, mois par mois : avant → proposé */}
       {months.some((m) => m.changes.length) && (
-        <div style={{ marginTop: 12, border: `1px solid ${N.borderSft}`, borderRadius: 9, overflow: 'hidden' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(160px, 1.2fr) 120px 24px 120px', gap: 10, padding: '7px 12px', background: N.sideBg, fontSize: 10.5, fontWeight: 600, color: N.textMuted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            <span>Mois</span><span>Ce qui change</span><span style={{ textAlign: 'right' }}>Avant</span><span /><span style={{ textAlign: 'right' }}>Proposé</span>
-          </div>
-          {months.flatMap((m) => m.changes.map((c, j) => (
-            <div key={`${m.iso}-${j}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) minmax(160px, 1.2fr) 120px 24px 120px', gap: 10, padding: '7px 12px', borderTop: `1px solid ${N.borderSft}`, fontSize: 12.5, alignItems: 'center' }}>
-              <span style={{ fontWeight: 600, color: N.text }}>{j === 0 ? m.label : ''}</span>
-              <span style={{ color: N.text }}>{c.what}{c.note ? <span style={{ color: N.textFaint }}> · {c.note}</span> : null}</span>
-              <span style={{ textAlign: 'right', color: N.textMuted, fontVariantNumeric: 'tabular-nums' }}>{c.text ? c.before : (c.before === null ? '—' : formatEUR(c.before))}</span>
-              <span style={{ textAlign: 'center', color: N.textFaint }}>→</span>
-              <span style={{ textAlign: 'right', fontWeight: 700, color: N.text, fontVariantNumeric: 'tabular-nums' }}>{c.text ? c.after : (c.after === null ? '—' : formatEUR(c.after))}</span>
-            </div>
-          )))}
+        <div className="fup-changes">
+          <TableBox minWidth={620}>
+            <thead>
+              <tr>
+                <Th Icon={CalendarDays}>Mois</Th>
+                <Th Icon={PenLine}>Ce qui change</Th>
+                <Th num>Avant</Th>
+                <th className="fup-arrow" aria-hidden="true" />
+                <Th num>Proposé</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {months.flatMap((m) => m.changes.map((c, j) => (
+                <tr key={`${m.iso}-${j}`}>
+                  <td className="is-nowrap" style={{ fontWeight: 500 }}>{j === 0 ? m.label : ''}</td>
+                  <td>{c.what}{c.note ? <span className="fst-cell-muted"> · {c.note}</span> : null}</td>
+                  <td className="is-num fst-num" style={{ color: 'var(--muted)' }}>{c.text ? c.before : (c.before === null ? '—' : formatEUR(c.before))}</td>
+                  <td className="fup-arrow" aria-hidden="true"><ArrowRight size={14} /></td>
+                  <td className="is-num fst-num fup-after">{c.text ? c.after : (c.after === null ? '—' : formatEUR(c.after))}</td>
+                </tr>
+              )))}
+            </tbody>
+          </TableBox>
         </div>
       )}
 
       {/* Ce qui a bougé depuis : on n'écrase pas en silence */}
       {pending && req.drift && (
-        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 11px', borderRadius: 8, background: N.amberBg, color: N.amber, fontSize: 12.5 }}>
-          <TriangleAlert size={14} /> {req.drift.charAt(0).toUpperCase() + req.drift.slice(1)} : à revoir avec {req.requested_by_name || 'l’auteur'} avant de valider.
+        <div className="fup-warn" role="status">
+          <TriangleAlert size={15} />
+          <span>{req.drift.charAt(0).toUpperCase() + req.drift.slice(1)} : à revoir avec {req.requested_by_name || 'l’auteur'} avant de valider.</span>
         </div>
       )}
 
       {/* Traitée : par qui, quand, pourquoi */}
       {!pending && (
-        <div style={{ marginTop: 10, fontSize: 12, color: N.textMuted }}>
+        <p className="fup-decided">
           {req.status === 'approved' && <>Validée par {req.decided_by_name || 'la direction'} le {fmtWhen(req.decided_at)}{req.decision_note ? ` — « ${req.decision_note} »` : ''}.</>}
           {req.status === 'rejected' && <>Refusée par {req.decided_by_name || 'la direction'} le {fmtWhen(req.decided_at)}{req.decision_note ? ` — « ${req.decision_note} »` : ''}.</>}
           {req.status === 'withdrawn' && <>Retirée par {req.decided_by_name || 'son auteur'} le {fmtWhen(req.decided_at)}.</>}
-        </div>
+        </p>
       )}
 
       {/* Valider / Refuser, en deux temps, au même endroit */}
       {pending && (
-        <div style={{ marginTop: 12, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          {confirm === 'reject' ? (
-            <>
-              <input
-                value={note}
-                onChange={(e) => onNote(e.target.value)}
-                placeholder="Pourquoi (visible par l’auteur et dans le fil du client)"
-                autoFocus
-                style={{ flex: '1 1 260px', border: `1px solid ${N.border}`, borderRadius: 7, padding: '7px 9px', fontSize: 12.5, fontFamily: 'inherit', outline: 'none' }}
-              />
-              <button type="button" disabled={busy || !note.trim()} onClick={() => onAct('reject')} style={btnStyle('danger', busy || !note.trim())}>
-                <X size={13} /> {busy ? 'Refus…' : 'Confirmer le refus'}
-              </button>
-              <button type="button" disabled={busy} onClick={() => onConfirm(null)} style={btnStyle('ghost')}>Garder</button>
-            </>
-          ) : confirm === 'approve' ? (
-            <>
-              <span style={{ fontSize: 12.5, color: N.text }}>Appliquer ce geste maintenant, sous votre nom ?</span>
-              <button type="button" disabled={busy} onClick={() => onAct('approve')} style={btnStyle('primary', busy)}>
-                <Check size={13} /> {busy ? 'Validation…' : 'Confirmer la validation'}
-              </button>
-              <button type="button" disabled={busy} onClick={() => onConfirm(null)} style={btnStyle('ghost')}>Pas maintenant</button>
-            </>
-          ) : (
-            <>
-              <button type="button" disabled={busy || !!req.drift} onClick={() => onConfirm('approve')} title={req.drift ? 'Les chiffres ont bougé : à revoir avec l’auteur' : 'Rejouer le geste, tracé « demande de …, validée »'} style={btnStyle('primary', busy || !!req.drift)} {...(readOnly ? READ_ONLY_PROPS : {})}>
-                <Check size={13} /> Valider
-              </button>
-              <button type="button" disabled={busy} onClick={() => onConfirm('reject')} style={btnStyle('solid')} {...(readOnly ? READ_ONLY_PROPS : {})}>
-                <X size={13} /> Refuser
-              </button>
-            </>
-          )}
+        <div className="fup-actions">
+          <AnimatePresence mode="wait" initial={false}>
+            <Motion.div key={step} className="fup-actions-row" initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.16 }}>
+              {confirm === 'reject' ? (
+                <>
+                  <input
+                    className="fup-input"
+                    value={note}
+                    onChange={(e) => onNote(e.target.value)}
+                    placeholder="Pourquoi (visible par l’auteur et dans le fil du client)"
+                    aria-label="Motif du refus"
+                    autoFocus
+                  />
+                  <button type="button" className="fst-btn fup-danger" disabled={busy || !note.trim()} data-busy={busy || undefined} onClick={() => onAct('reject')}>
+                    <X size={14} /> {busy ? 'Refus…' : 'Confirmer le refus'}
+                  </button>
+                  <button type="button" className="fst-btn fup-quiet" disabled={busy} onClick={() => onConfirm(null)}>Garder</button>
+                </>
+              ) : confirm === 'approve' ? (
+                <>
+                  <span>Appliquer ce geste maintenant, sous votre nom ?</span>
+                  <button type="button" className="fst-btn is-dark" disabled={busy} data-busy={busy || undefined} onClick={() => onAct('approve')}>
+                    <Check size={14} /> {busy ? 'Validation…' : 'Confirmer la validation'}
+                  </button>
+                  <button type="button" className="fst-btn fup-quiet" disabled={busy} onClick={() => onConfirm(null)}>Pas maintenant</button>
+                </>
+              ) : (
+                <>
+                  <button type="button" className="fst-btn is-dark" disabled={busy || !!req.drift} onClick={() => onConfirm('approve')}
+                    title={req.drift ? 'Les chiffres ont bougé : à revoir avec l’auteur' : 'Rejouer le geste, tracé « demande de …, validée »'}
+                    {...(readOnly ? READ_ONLY_PROPS : {})}>
+                    <Check size={14} /> Valider
+                  </button>
+                  <button type="button" className="fst-btn" disabled={busy} onClick={() => onConfirm('reject')} {...(readOnly ? READ_ONLY_PROPS : {})}>
+                    <X size={14} /> Refuser
+                  </button>
+                </>
+              )}
+            </Motion.div>
+          </AnimatePresence>
         </div>
       )}
-    </motion.div>
+    </Motion.article>
   );
-}
-
-function btnStyle(kind, disabled = false) {
-  const base = {
-    display: 'inline-flex', alignItems: 'center', gap: 6, borderRadius: 7, padding: '7px 12px',
-    fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.55 : 1, whiteSpace: 'nowrap', transition: 'opacity 0.12s',
-  };
-  if (kind === 'primary') return { ...base, border: 'none', background: N.text, color: '#fff' };
-  if (kind === 'danger') return { ...base, border: 'none', background: N.red, color: '#fff' };
-  if (kind === 'ghost') return { ...base, border: 'none', background: 'transparent', color: N.textMuted };
-  return { ...base, border: `1px solid ${N.border}`, background: '#fff', color: N.text };
 }

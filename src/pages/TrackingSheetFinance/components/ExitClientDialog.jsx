@@ -32,16 +32,16 @@ import { formatEUR, formatDateFR, formatMonthLabel, shiftMonth, ACTED_EXIT_ETATS
 import { lossPreview } from '../lossPreview.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  red: '#b42318',
-  redBg: '#fdecec',
-  amber: '#b45309',
-  amberBg: '#fff8ed',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  red: '#c5221f',
+  redBg: '#fde6e6',
+  amber: '#c2500e',
+  amberBg: '#fdf1e6',
 };
 
 // États actés depuis la finance. Les « En cours de … » ne sont pas ici :
@@ -59,7 +59,7 @@ const btn = (kind) => ({
   borderRadius: 7,
   padding: kind === 'ghost' ? '8px 10px' : '8px 14px',
   fontSize: 12.5,
-  fontWeight: 600,
+  fontWeight: 500,
   fontFamily: 'inherit',
   cursor: 'pointer',
 });
@@ -108,9 +108,9 @@ function ScopeRow({
           <span style={{
             display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10,
           }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>{label}</span>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: N.text }}>{label}</span>
             <span style={{
-              fontSize: 12.5, fontWeight: 700, fontVariantNumeric: 'tabular-nums',
+              fontSize: 12.5, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
               color: checked && !disabled && abandoned > 0 ? N.red : N.textMuted,
             }}>
               {formatEUR(amount)}
@@ -165,7 +165,7 @@ function AmountField({ label, value, max, onChange, danger = false }) {
         style={{
           width: 92, border: `1px solid ${N.border}`, borderRadius: 6,
           padding: '4px 6px', fontSize: 12, fontFamily: 'inherit',
-          fontWeight: 600, textAlign: 'right', outline: 'none',
+          fontWeight: 500, textAlign: 'right', outline: 'none',
           color: danger ? N.red : N.text,
         }}
       />
@@ -310,7 +310,7 @@ export default function ExitClientDialog({
             gap: 12, padding: '18px 20px 14px', borderBottom: `1px solid ${N.borderSft}`,
           }}>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: N.text }}>
+              <div style={{ fontSize: 15, fontWeight: 600, color: N.text }}>
                 Sortie client
               </div>
               <div style={{
@@ -328,7 +328,7 @@ export default function ExitClientDialog({
 
           {/* ── 1. Acter un état ─────────────────────────────────────── */}
           <section style={{ padding: '16px 20px', borderBottom: `1px solid ${N.borderSft}` }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 4 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 4 }}>
               Acter un état
             </div>
             <div style={{ fontSize: 11.5, color: N.textMuted, lineHeight: 1.5, marginBottom: 10 }}>
@@ -344,7 +344,7 @@ export default function ExitClientDialog({
                 style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8, marginBottom: 10,
                   padding: '9px 11px', borderRadius: 8,
-                  background: '#eaf7f0', color: '#15794a', fontSize: 12, lineHeight: 1.45,
+                  background: '#eaf7f0', color: '#0b7a4b', fontSize: 12, lineHeight: 1.45,
                 }}
               >
                 <Check size={14} style={{ flexShrink: 0, marginTop: 1 }} />
@@ -362,7 +362,7 @@ export default function ExitClientDialog({
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 7, marginBottom: 10,
                 padding: '7px 10px', borderRadius: 8,
-                background: N.amberBg, color: N.amber, fontSize: 11.5, fontWeight: 600,
+                background: N.amberBg, color: N.amber, fontSize: 11.5, fontWeight: 500,
               }}>
                 <CalendarDays size={13} />
                 État posé : {posedEtat}
@@ -409,11 +409,11 @@ export default function ExitClientDialog({
               const radio = (actif, onPick, titre, detail, extra) => (
                 <label style={{
                   display: 'flex', alignItems: 'flex-start', gap: 8, cursor: 'pointer', padding: '8px 10px',
-                  borderRadius: 8, border: `1px solid ${actif ? N.text : N.border}`, background: actif ? '#fafaf9' : '#fff',
+                  borderRadius: 8, border: `1px solid ${actif ? N.text : N.border}`, background: actif ? '#faf9f7' : '#fff',
                 }}>
                   <input type="radio" checked={actif} onChange={onPick} style={{ marginTop: 2, accentColor: N.text }} />
                   <span style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 600, color: N.text }}>{titre}</span>
+                    <span style={{ display: 'block', fontSize: 12.5, fontWeight: 500, color: N.text }}>{titre}</span>
                     <span style={{ display: 'block', fontSize: 11.5, color: N.textMuted, marginTop: 1 }}>{detail}</span>
                     {actif && extra}
                   </span>
@@ -421,7 +421,7 @@ export default function ExitClientDialog({
               );
               return (
                 <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: N.text }}>Fin de facturation</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: N.text }}>Fin de facturation</div>
                   {radio(!garder, () => setLastBilled(defaultLastBilled), 'Arrêter à la date d’effet',
                     defaultLastBilled
                       ? `Dernier mois facturé : ${formatMonthLabel(defaultLastBilled).toLowerCase()}.`
@@ -447,7 +447,7 @@ export default function ExitClientDialog({
               );
             })()}
             {billingDone && (
-              <div style={{ marginTop: 8, fontSize: 12, color: '#15794a' }}>
+              <div style={{ marginTop: 8, fontSize: 12, color: '#0b7a4b' }}>
                 Facturation maintenue jusqu’à {billingDone.slice(5, 7)}/{billingDone.slice(0, 4)} inclus.
               </div>
             )}
@@ -464,7 +464,7 @@ export default function ExitClientDialog({
 
           {/* ── 2. Perte ─────────────────────────────────────────────── */}
           {(loss || (!withdrawing && etatDone?.etat !== 'Rétractation' && posedEtat !== 'Rétractation')) && <section style={{ padding: '16px 20px 20px' }}>
-            <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text, marginBottom: 4 }}>
+            <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 4 }}>
               Déclarer une perte
             </div>
 

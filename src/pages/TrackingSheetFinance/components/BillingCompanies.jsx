@@ -34,7 +34,7 @@ export default function BillingCompanies({ clientId, canEdit, reloadKey = 0, rea
       return <label key={entity} style={{ display: 'grid', gap: 5 }}><strong>{entity === 'owner' ? 'Contrat Owner' : 'Contrat Opti’Lex'}</strong>
         <select aria-label={`Société de facturation ${entity}`} disabled={!canEdit || busy}
           value={link?.structure_id || ''} onChange={e => save(entity, e.target.value)}
-          style={{ padding: 9, border: '1px solid #e3e2e0', borderRadius: 7, background: '#fff', width: '100%' }}
+          style={{ padding: 9, border: '1px solid #e3ded6', borderRadius: 7, background: '#fff', width: '100%' }}
           {...(readOnly ? READ_ONLY_PROPS : {})}>
           <option value="">Société principale du dossier</option>
           {link?.unavailable && <option value={link.structure_id}>Société retirée — choisissez un nouveau rattachement</option>}

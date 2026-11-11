@@ -39,11 +39,11 @@ import {
 
 // Palette locale (sync charte board Owner/Opti'Lex — EtatBadge sobre).
 const CHIP_STYLES = {
-  spec:      { bg: '#dbeafe', fg: '#1e40af' }, // « N× » — Notion blue (ex-PAYMENT_SPECIFICITY_COLORS)
+  spec:      { bg: '#e4f0fd', fg: '#1b6fd0' }, // « N× » — Notion blue (ex-PAYMENT_SPECIFICITY_COLORS)
   monthly:   { bg: '#E9F3F7', fg: '#337EA9' }, // « M » — badge historique conservé
   yearly:    { bg: '#EEF3ED', fg: '#448361' }, // « A » — badge historique conservé
-  quarterly: { bg: '#f3e8ff', fg: '#6940a5' }, // « T » — Trimestriel (client.payment_mode)
-  mixed:     { bg: '#f1f1ef', fg: '#37352f' }, // « M·A » — rythmes différents Owner / Opti'lex
+  quarterly: { bg: '#eee9fa', fg: '#6a45b8' }, // « T » — Trimestriel (client.payment_mode)
+  mixed:     { bg: '#f1eee9', fg: '#1c1b19' }, // « M·A » — rythmes différents Owner / Opti'lex
 };
 const MODE_SHORT = { MONTHLY: 'M', YEARLY: 'A', QUARTERLY: 'T' };
 const MODE_LABEL = { MONTHLY: 'Mensuel', YEARLY: 'Annuel', QUARTERLY: 'Trimestriel' };
@@ -52,22 +52,22 @@ const MODE_LABEL = { MONTHLY: 'Mensuel', YEARLY: 'Annuel', QUARTERLY: 'Trimestri
 // board (Signé vert / Résiliation rouge / Pause grise) pour une finition
 // homogène avec EtatBadge.
 const PILL_STATE_STYLES = {
-  green: { bg: '#e9f9f0', fg: '#15794a', border: '1px solid transparent' },
-  red:   { bg: '#fdecec', fg: '#b42318', border: '1px solid transparent' },
-  wait:  { bg: '#eef1f6', fg: '#5b6472', border: '1px solid transparent' },
-  none:  { bg: 'transparent', fg: '#9b9a97', border: '1px dashed #c7c7c2' },
+  green: { bg: '#e2f6ea', fg: '#0b7a4b', border: '1px solid transparent' },
+  red:   { bg: '#fde6e6', fg: '#c5221f', border: '1px solid transparent' },
+  wait:  { bg: '#f1eee9', fg: '#6f6a63', border: '1px solid transparent' },
+  none:  { bg: 'transparent', fg: '#a8a39b', border: '1px dashed #c9c4bc' },
 };
 
 const pickerItemStyle = (active) => ({
   border: 'none',
   outline: 'none',
-  background: active ? '#eef2ff' : 'transparent',
+  background: active ? '#eae9fb' : 'transparent',
   cursor: 'pointer',
   textAlign: 'left',
   padding: '6px 10px',
   fontSize: 13,
   fontFamily: 'inherit',
-  color: '#111827',
+  color: '#1c1b19',
   borderRadius: 4,
   width: '100%',
   display: 'flex',
@@ -127,7 +127,7 @@ function EntityPill({ label, state, size = 'normal' }) {
       color: s.fg,
       border: s.border,
       fontSize: compact ? 8.5 : 9,
-      fontWeight: 700,
+      fontWeight: 600,
       letterSpacing: '0.04em',
       fontFamily: 'inherit',
       flexShrink: 0,
@@ -269,7 +269,7 @@ export default function ModalitesCell({
               height: 19, padding: '0 7px',
               borderRadius: 5,
               background: chipStyle.bg, color: chipStyle.fg,
-              fontSize: 11, fontWeight: 700,
+              fontSize: 11, fontWeight: 600,
               fontVariantNumeric: 'tabular-nums',
               whiteSpace: 'nowrap',
               lineHeight: 1,
@@ -279,8 +279,8 @@ export default function ModalitesCell({
               display: 'inline-flex', alignItems: 'center', gap: 4,
               height: 19, padding: '0 7px',
               borderRadius: 5,
-              background: chipHover ? '#f1f1ef' : 'transparent',
-              color: chipHover ? '#787774' : '#c8cdd7',
+              background: chipHover ? '#f1eee9' : 'transparent',
+              color: chipHover ? '#8b867e' : '#c9c4bc',
               fontSize: 11, fontWeight: 500,
               lineHeight: 1,
               transition: 'background 0.15s ease, color 0.15s ease',
@@ -349,12 +349,12 @@ export default function ModalitesCell({
             type="button"
             onClick={() => pickSpec(null)}
             style={pickerItemStyle(!paymentSpecificity)}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = !paymentSpecificity ? '#eef2ff' : 'transparent'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = !paymentSpecificity ? '#eae9fb' : 'transparent'; }}
           >
-            <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>— effacer —</span>
+            <span style={{ color: '#a8a39b', fontStyle: 'italic' }}>— effacer —</span>
           </button>
-          <div style={{ height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+          <div style={{ height: 1, background: '#f4f2ee', margin: '4px 0' }} />
           {PAYMENT_SPECIFICITIES.map((opt) => {
             const isActive = opt === paymentSpecificity;
             return (
@@ -363,8 +363,8 @@ export default function ModalitesCell({
                 type="button"
                 onClick={() => pickSpec(opt)}
                 style={pickerItemStyle(isActive)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = isActive ? '#eef2ff' : 'transparent'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = isActive ? '#eae9fb' : 'transparent'; }}
               >
                 <span style={{ color: CHIP_STYLES.spec.fg, display: 'inline-flex' }}>
                   <CardIcon size={13} />
@@ -391,12 +391,12 @@ export default function ModalitesCell({
             type="button"
             onClick={() => pickDebit(null)}
             style={pickerItemStyle(!autoDebit)}
-            onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-            onMouseLeave={(e) => { e.currentTarget.style.background = !autoDebit ? '#eef2ff' : 'transparent'; }}
+            onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.background = !autoDebit ? '#eae9fb' : 'transparent'; }}
           >
-            <span style={{ color: '#9ca3af', fontStyle: 'italic' }}>— effacer —</span>
+            <span style={{ color: '#a8a39b', fontStyle: 'italic' }}>— effacer —</span>
           </button>
-          <div style={{ height: 1, background: '#f3f4f6', margin: '4px 0' }} />
+          <div style={{ height: 1, background: '#f4f2ee', margin: '4px 0' }} />
           {AUTO_DEBIT_OPTIONS.map((opt) => {
             const isActive = opt === autoDebit
               || (autoDebit && opt.toUpperCase() === String(autoDebit).trim().toUpperCase());
@@ -407,8 +407,8 @@ export default function ModalitesCell({
                 type="button"
                 onClick={() => pickDebit(opt)}
                 style={pickerItemStyle(isActive)}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#f3f4f6'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = isActive ? '#eef2ff' : 'transparent'; }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#f4f2ee'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = isActive ? '#eae9fb' : 'transparent'; }}
               >
                 <span style={{ display: 'inline-flex', gap: 3, flexShrink: 0 }}>
                   <EntityPill label="OW" state={preview.owner} size="compact" />

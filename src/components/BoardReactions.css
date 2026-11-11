@@ -1,22 +1,22 @@
 /* Réactions emoji des échanges du board (BoardReactions.jsx, dev 29/10/2026). Pastilles grises ; la sienne en bleu
    pâle cerclé ; le bouton « ajouter » montre sa frimousse et son « + » qui tourne au survol. */
 .br { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin-top:10px; }
-.br-pill { display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px 0 8px; border:1px solid transparent; border-radius:999px; background:#f2f4f7; font:inherit; font-size:12.5px; font-weight:650; color:#3d4556; cursor:pointer; transition:background .15s, border-color .15s; }
-.br-pill:hover { background:#e9ecf1; }
-.br-pill.is-mine { border-color:#9db7e3; background:#eaf1fd; color:#1e4fa8; }
-.br-pill.is-mine:hover { background:#dfe9fb; }
+.br-pill { display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px 0 8px; border:1px solid transparent; border-radius:999px; background:#f7f5f2; font:inherit; font-size:12.5px; font-weight:500; color:#55514b; cursor:pointer; transition:background .15s, border-color .15s; }
+.br-pill:hover { background:#f1eee9; }
+.br-pill.is-mine { border-color:#d8d3cb; background:#e4f0fd; color:#1b6fd0; }
+.br-pill.is-mine:hover { background:#d8e9fc; }
 .br-e { font-size:15px; line-height:1; transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
 .br-pill:hover .br-e { transform:scale(1.2) rotate(-8deg); }
 .br-pill:active .br-e { transform:scale(.9); }
 .br-n { display:inline-block; min-width:7px; font-variant-numeric:tabular-nums; }
 .br-anchor { position:relative; display:inline-flex; }
-.br-add { display:grid; place-items:center; width:28px; height:28px; border:1px dashed #d5dae3; border-radius:999px; background:#fff; padding:0; color:#8a93a4; cursor:pointer; transition:color .15s, border-color .15s; }
-.br-add:hover, .br-add[aria-expanded="true"] { border-color:#9aa3b2; color:#1e2330; }
+.br-add { display:grid; place-items:center; width:28px; height:28px; border:1px dashed #e3ded6; border-radius:999px; background:#fff; padding:0; color:#8b867e; cursor:pointer; transition:color .15s, border-color .15s; }
+.br-add:hover, .br-add[aria-expanded="true"] { border-color:#a8a39b; color:#1c1b19; }
 .br-add svg { overflow:visible; }
 .br-add .br-plus { transform-box:fill-box; transform-origin:center; transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
 .br-add:hover .br-plus { transform:rotate(90deg); }
 /* Palette : une rangée d'emojis au-dessus du bouton. */
-.br-pal { position:absolute; bottom:calc(100% + 8px); left:-6px; z-index:30; display:flex; gap:2px; padding:6px; border:1px solid #e9ebf0; border-radius:18px; background:#fff; box-shadow:0 12px 32px rgba(18,27,53,.16), 0 2px 6px rgba(18,27,53,.06); transform-origin:12px 100%; }
+.br-pal { position:absolute; bottom:calc(100% + 8px); left:-6px; z-index:30; display:flex; gap:2px; padding:6px; border:1px solid #ece9e4; border-radius:18px; background:#fff; box-shadow:0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04); transform-origin:12px 100%; }
 .br-pal-e { display:grid; place-items:center; width:34px; height:34px; border:0; border-radius:9px; background:transparent; font-size:19px; line-height:1; cursor:pointer; transition:background .12s, transform .25s cubic-bezier(.34,1.56,.64,1); }
-.br-pal-e:hover, .br-pal-e:focus-visible { background:#f2f4f7; transform:translateY(-2px) scale(1.18); outline:0; }
+.br-pal-e:hover, .br-pal-e:focus-visible { background:#f7f5f2; transform:translateY(-2px) scale(1.18); outline:0; }
 @media (prefers-reduced-motion:reduce) { .br *, .br-pal * { transition:none!important; } }

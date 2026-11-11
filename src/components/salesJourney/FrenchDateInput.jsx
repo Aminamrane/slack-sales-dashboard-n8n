@@ -25,7 +25,7 @@ export default function FrenchDateInput({value,onChange,onCommit,floating=false,
    const height=Math.min(popup.scrollHeight,window.innerHeight-margin*2);
    const below=anchor.bottom+gap;
    const top=below+height<=window.innerHeight-margin?below:Math.max(margin,anchor.top-gap-height);
-   setPosition({position:'fixed',left:Math.max(margin,Math.min(anchor.right-width,window.innerWidth-width-margin)),top,bottom:'auto',right:'auto',width,maxWidth:'none',maxHeight:window.innerHeight-margin*2,overflowY:'auto',zIndex:10080,animation:'none',fontFamily:getComputedStyle(root.current).fontFamily});
+   setPosition({position:'fixed',left:Math.max(margin,Math.min(anchor.right-width,window.innerWidth-width-margin)),top,bottom:'auto',right:'auto',width,maxWidth:'none',maxHeight:window.innerHeight-margin*2,overflowY:'auto',zIndex:12100,animation:'none',fontFamily:getComputedStyle(root.current).fontFamily});
   };
   const onScroll=e=>{if(!calendar.current?.contains(e.target))setOpen(false);};
   place();window.addEventListener('resize',place);window.addEventListener('scroll',onScroll,true);

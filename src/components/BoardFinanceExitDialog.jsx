@@ -5,7 +5,7 @@ import apiClient from '../services/apiClient.js';
 import { exitAmounts } from '../utils/boardFinanceExit.js';
 
 const money = value => Number(value || 0).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
-const input = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #dce0e6', borderRadius: 8, font: 'inherit' };
+const input = { width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #e3ded6', borderRadius: 8, font: 'inherit' };
 const button = { ...input, width: 'auto', cursor: 'pointer', background: '#fff' };
 const labels = { past: 'Créances antérieures', current: 'Mois en cours', future: 'Reste du contrat' };
 
@@ -48,33 +48,33 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
     }
   };
-  return <div style={{ position: 'fixed', inset: 0, zIndex: 10100, background: '#17212b66', display: 'grid', placeItems: 'center', padding: 16 }}>
+  return <div style={{ position: 'fixed', inset: 0, zIndex: 10100, background: '#2b292766', display: 'grid', placeItems: 'center', padding: 16 }}>
     <section role="dialog" aria-modal="true" aria-labelledby="finance-exit-title" ref={dialog} tabIndex={-1} onKeyDown={keyDown}
-      style={{ background: '#fff', color: '#252a34', borderRadius: 16, width: 'min(560px,100%)', maxHeight: '90vh', overflow: 'auto', padding: 24, boxSizing: 'border-box', font: '14px/1.5 Inter, system-ui, sans-serif', boxShadow: '0 20px 80px #17212b33' }}>
+      style={{ background: '#fff', color: '#2b2927', borderRadius: 22, width: 'min(560px,100%)', maxHeight: '90vh', overflow: 'auto', padding: 24, boxSizing: 'border-box', font: '14px/1.5 Inter, system-ui, sans-serif', boxShadow: '0 20px 80px rgba(28,27,25,.14)' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: 16 }}>
-        <div><h2 id="finance-exit-title" style={{ margin: 0, fontSize: 20 }}>{payload.etat} · {numero}</h2><div style={{ color: '#647084', display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>Board <ArrowRight size={14}/> Finance</div></div>
+        <div><h2 id="finance-exit-title" style={{ margin: 0, fontSize: 20 }}>{payload.etat} · {numero}</h2><div style={{ color: '#8b867e', display: 'flex', alignItems: 'center', gap: 7, marginTop: 4 }}>Board <ArrowRight size={14}/> Finance</div></div>
         <button style={{ ...button, padding: 6, border: 0 }} aria-label="Fermer" onClick={() => onResolve(null)}><X size={20}/></button>
       </div>
       <label style={{ display: 'block', marginTop: 20 }}>Date d’effet<input required aria-label="Date d’effet" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...input, marginTop: 6 }}/></label>
       {!preview && !error && <p role="status">Chargement des montants financiers…</p>}
-      {error && <div role="alert"><p style={{ color: '#b42318' }}>{error}</p><button style={button} onClick={() => setVersion(v => v + 1)}><RefreshCw size={14}/> Réessayer</button></div>}
+      {error && <div role="alert"><p style={{ color: '#c5221f' }}>{error}</p><button style={button} onClick={() => setVersion(v => v + 1)}><RefreshCw size={14}/> Réessayer</button></div>}
       {preview && <>
         {withdrawal ? <p style={{ padding: 14, background: '#fff7e9', borderRadius: 10 }}>Les attendus Owner et Opti’Lex seront automatiquement annulés depuis la signature. Les encaissements et remboursements restent dans l’historique.</p> : <>
           <p>Choisissez les montants à passer en perte. <strong>Le reste demeure à recouvrer.</strong></p>
           {Object.entries(labels).map(([key, label]) => <label key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', marginTop: 12 }}>
-            <span>{label}<small style={{ display: 'block', color: '#647084' }}>Disponible : {money(preview.amounts[key])}</small>{amounts && <small style={{ display: 'block', color: '#24735a' }}>Restant : {money(Number(preview.amounts[key]) - amounts[`amount_${key}`])}</small>}</span>
+            <span>{label}<small style={{ display: 'block', color: '#8b867e' }}>Disponible : {money(preview.amounts[key])}</small>{amounts && <small style={{ display: 'block', color: '#24735a' }}>Restant : {money(Number(preview.amounts[key]) - amounts[`amount_${key}`])}</small>}</span>
             <span><input aria-label={`Perte · ${label}`} inputMode="decimal" value={values[key]} disabled={Boolean(loss)} placeholder="0,00" style={{ ...input, textAlign: 'right' }} onChange={e => { setAllRemaining(false); setValues(v => ({ ...v, [key]: e.target.value })); }}/></span>
           </label>)}
           {!loss && <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
             <button style={{ ...button, fontSize: 12, borderColor: '#efc8c3', color: '#a32b22' }} onClick={() => { setAllRemaining(true); setValues(Object.fromEntries(Object.entries(preview.amounts).map(([k, v]) => [k, Number(v).toFixed(2)]))); }}>Tout passer en perte</button>
             <button style={{ ...button, fontSize: 12 }} onClick={() => { setAllRemaining(false); setValues({ past: '0', current: '0', future: '0' }); }}>Conserver les montants · 0 € de perte</button>
           </div>}
-          <p style={{ fontSize: 12, color: '#647084' }}>La répartition Owner / Opti’Lex est conservée. La fin de facturation configurée reste inchangée ; elle est ajustable dans la fiche Finance.</p>
+          <p style={{ fontSize: 12, color: '#8b867e' }}>La répartition Owner / Opti’Lex est conservée. La fin de facturation configurée reste inchangée ; elle est ajustable dans la fiche Finance.</p>
           <label>Motif (facultatif)<textarea maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} style={{ ...input, marginTop: 6 }} rows={2}/></label>
-          <div style={{ background: '#f5f7fa', padding: 14, borderRadius: 10, marginTop: 12, display: 'flex', justifyContent: 'space-between' }}><strong>Nouvelle perte</strong><strong>{total === null ? 'À renseigner' : money(total)}</strong></div>
-          {!amounts && <p style={{ fontSize: 12, color: '#647084' }}>Renseignez chaque montant, même 0 €, sans dépasser le disponible.</p>}
+          <div style={{ background: '#f7f5f2', padding: 14, borderRadius: 10, marginTop: 12, display: 'flex', justifyContent: 'space-between' }}><strong>Nouvelle perte</strong><strong>{total === null ? 'À renseigner' : money(total)}</strong></div>
+          {!amounts && <p style={{ fontSize: 12, color: '#8b867e' }}>Renseignez chaque montant, même 0 €, sans dépasser le disponible.</p>}
         </>}
-        {loss && <div style={{ padding: 14, background: '#f5f7fa', borderRadius: 10, marginTop: 12 }}>
+        {loss && <div style={{ padding: 14, background: '#f7f5f2', borderRadius: 10, marginTop: 12 }}>
           <strong>Perte existante n°{loss.id} conservée</strong><div>{loss.declared_by_name} · {loss.reason || 'Motif non renseigné'}</div>
           <div>Créances : {money(Number(loss.amount_owner) + Number(loss.amount_optilex_ttc))} · Futur : {money(Number(loss.future_owner) + Number(loss.future_optilex_ttc))}</div>
           {loss.snapshot?.periods?.length > 0 && <details><summary>Voir les échéances</summary>{loss.snapshot.periods.map(p => <div key={p.period}>{p.period} · Owner {money(p.expected_owner)} → {money(p.new_expected_owner)} · Opti’Lex {money(p.expected_optilex_ttc)} → {money(p.new_expected_optilex_ttc)}</div>)}</details>}
@@ -83,7 +83,7 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       </>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
         <button style={button} onClick={() => onResolve(null)}>Annuler</button>
-        <button disabled={!canConfirm} style={{ ...button, background: '#1e293b', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : { ...amounts, all_remaining: allRemaining }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
+        <button disabled={!canConfirm} style={{ ...button, background: '#2b2927', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : { ...amounts, all_remaining: allRemaining }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
       </div>
     </section>
   </div>;

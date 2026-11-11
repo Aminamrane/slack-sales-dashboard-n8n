@@ -14,13 +14,13 @@ import { Plus, X, Save } from 'lucide-react';
 import { FILTER_FIELDS, FIELD_BY_KEY, OPERATORS } from '../savedFilters.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  sideHover: '#efeeec',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  sideHover: '#efece7',
 };
 
 const inputStyle = {
@@ -88,7 +88,7 @@ export default function FilterBuilder({ onCancel, onSave, etatValues = [] }) {
         value={name}
         onChange={(e) => setName(e.target.value)}
         placeholder="Nom du filtre (ex. « Gros retards Owner »)"
-        style={{ ...inputStyle, fontWeight: 600 }}
+        style={{ ...inputStyle, fontWeight: 500 }}
       />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: N.textMuted }}>
@@ -177,7 +177,7 @@ export default function FilterBuilder({ onCancel, onSave, etatValues = [] }) {
         style={{
           alignSelf: 'flex-start', border: 'none', background: 'transparent',
           cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
-          color: N.textMuted, fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+          color: N.textMuted, fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
           padding: '2px 0',
         }}
       >
@@ -202,7 +202,7 @@ export default function FilterBuilder({ onCancel, onSave, etatValues = [] }) {
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             border: 'none', borderRadius: 6, padding: '6px 12px',
-            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+            fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
             cursor: nameOk && !saving ? 'pointer' : 'default',
             background: nameOk && !saving ? N.text : N.sideBg,
             color: nameOk && !saving ? '#fff' : N.textFaint,

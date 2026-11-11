@@ -6,8 +6,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eye, EyeOff } from 'lucide-react';
 
 // Gris de la page (mêmes valeurs que la palette N d'index.jsx, non exportée).
-const TEXT_MUTED = '#787774';
-const TEXT_FAINT = '#9b9a97';
+const TEXT_MUTED = '#8b867e';
+const TEXT_FAINT = '#a8a39b';
 
 export default function CreancesExitBanner({ count, hidden, onToggle }) {
   // Ligne discrète, pas un bandeau : le suivi des créances est l'objet de
@@ -43,7 +43,7 @@ export default function CreancesExitBanner({ count, hidden, onToggle }) {
               title="Liquidations en cours incluses. Les créances restent enregistrées."
               style={{
                 border: 'none', background: 'transparent', padding: 0,
-                color: TEXT_MUTED, fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit',
+                color: TEXT_MUTED, fontSize: 11.5, fontWeight: 500, fontFamily: 'inherit',
                 cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2,
               }}
             >

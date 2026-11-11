@@ -1,7 +1,6 @@
 import DetailDisclosure from './components/DetailDisclosure.jsx';
 import './components/DetailSummary.css';
 import './components/DetailLayout.css';
-import ClientHistoryAttachments from '../../components/ClientHistoryAttachments.jsx';
 import BillingCompanies from './components/BillingCompanies.jsx';
 import {formatDateLongFR} from './constants.js';
 import {installmentSubline} from './installmentLabel.js';
@@ -45,17 +44,16 @@ import {installmentSubline} from './installmentLabel.js';
 //   GET    /api/v1/finance-periods/client/{id}/audit
 //   GET    /api/v1/optilex/client-agenda?numero_client=…
 //   POST   /api/v1/finance-periods/client/{id}/contract(/cancel)  (formule, modalité datées)
-//   GET/POST/PATCH/DELETE  /api/v1/finance-periods/client/{id}/comments
-//     (fil interne Owner — cf. ClientComments, 2026-08-25 ; remplace la
-//      section « Timeline mensuelle » supprimée le même jour)
+//   Échanges (espace commun du board, météos, notes internes finance) : components/ExchangeThread.jsx
 
 import React, { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useCountUp } from '../../components/perfSales/motion.jsx';
 import {
-  X, ChevronRight, Maximize2, Minimize2, MoreHorizontal, ChevronsRight,
+  X, Maximize2, Minimize2,
+  Activity, UserRound, ReceiptText, IdCard, MessagesSquare, Paperclip,
   Calendar, History, Lock, Landmark, FileSignature,
   Pencil, Download,
-  Pin, Trash2, MessageSquarePlus,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
   SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
 } from 'lucide-react';
@@ -110,7 +108,8 @@ import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StateReview from './components/StateReview.jsx';
 import { reviewedInstallment } from './installmentFollowup.js';
 import InstallmentFollowup from './components/InstallmentFollowup.jsx';
-import LatestClientCall from './components/LatestClientCall.jsx';
+// Documents, e-mails et appels : le dossier du board, le même des deux côtés.
+import ClientFiles from './components/ClientFiles.jsx';
 import DoNotCallControl from './components/DoNotCallControl.jsx';
 import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
@@ -119,8 +118,8 @@ import ExpectedManager from './components/ExpectedManager.jsx';
 import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation, { OnboardingRescheduleButton } from './components/OnboardingFacturation.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
-// Espace commun Owner / Opti'Lex / finance : le fil du board, pour répondre depuis la page finance.
-import CommonSpaceThread from '../../components/CommonSpaceThread.jsx';
+// Tous les échanges du client au même endroit : espace commun du board, météos et notes internes finance.
+import ExchangeThread, { LastExchange } from './components/ExchangeThread.jsx';
 import {
   NumeroIcon, CompanyIcon, ClientIcon, PeopleIcon, SignatureIcon, PersonIcon,
   CalendarCheckIcon, ClockIcon, FormulaIcon, CycleIcon,
@@ -129,20 +128,21 @@ import {
 // Notion palette (sync with index.jsx N).
 const N = {
   pageBg:    '#ffffff',
-  sideBg:    '#f7f7f5',
-  sideHover: '#efeeec',
-  border:    '#e9e9e7',
-  borderSft: '#f1f1ef',
-  text:      '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  green:     '#0f7b6c',
-  greenBg:   '#cfe9e3',
-  red:       '#b74133',
-  redBg:     '#ffe2dd',
+  sideBg:    '#f7f5f2',
+  sideHover: '#efece7',
+  border:    '#e8e4de',
+  borderSft: '#f1eee9',
+  text:      '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  green:     '#0b7a4b',
+  greenBg:   '#d5f0df',
+  red:       '#c5221f',
+  redBg:     '#fde6e6',
 };
 
 const PANEL_MIN_WIDTH = 520;
+const PANEL_INSET = 10;
 
 export default function DetailPanel({
   open,
@@ -170,6 +170,12 @@ export default function DetailPanel({
   // l'accordéon. Une requête de moins par changement de row.
   const [error, setError] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
+  // Rubrique ouverte, gardée d'un client à l'autre : on relit souvent la même rubrique sur plusieurs fiches.
+  const [tab, setTab] = useState('payments');
+  // Résumé du fil d'échanges (nombre, derniers messages), remonté par ExchangeThread : pastille de l'onglet et
+  // rappel dans « Paiements ». `null` tant que le fil charge.
+  const [exchangeSummary, setExchangeSummary] = useState(null);
+  const scrollRef = useRef(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsAnchor = useRef(null);
   useEffect(() => setActionsOpen(false), [clientId, open]);
@@ -735,24 +741,73 @@ export default function DetailPanel({
     onShowToast?.('Copié dans le presse-papiers', 'info');
   }, [onShowToast]);
 
+  // Rubriques de la fiche. Le nombre d'échéances en retard et celui des sociétés facturées se lisent sur l'onglet,
+  // sans l'ouvrir ; le point signale une revue d'état en attente ou une erreur de chargement.
+  const lateCount = useMemo(() => installments.filter((inst) => inst.status === 'late').length, [installments]);
+  const companyCount = String(profile?.client_id) === String(clientId) ? (profile?.companies?.length || 0) : 0;
+  const tabs = [
+    { key: 'payments', label: 'Paiements', count: lateCount, tone: 'red',
+      dot: stateReview?.status === 'pending' || !!error,
+      title: lateCount ? `${lateCount} échéance${lateCount > 1 ? 's' : ''} en retard` : undefined },
+    { key: 'details', label: 'Détails' },
+    { key: 'billing', label: 'Contrats', count: companyCount,
+      title: companyCount ? `${companyCount} société${companyCount > 1 ? 's' : ''} de facturation` : undefined },
+    { key: 'exchanges', label: 'Échanges', count: exchangeSummary?.count || 0,
+      title: exchangeSummary?.count ? `${exchangeSummary.count} échange${exchangeSummary.count > 1 ? 's' : ''}` : undefined },
+    { key: 'files', label: 'Documents' },
+    { key: 'history', label: 'Historique' },
+  ];
+  const changeTab = useCallback((key) => {
+    setTab(key);
+    // La barre d'onglets reste collée en haut de la fiche : en changeant de rubrique on repart de son début,
+    // sans remonter si la fiche était moins descendue que la barre.
+    const scroller = scrollRef.current;
+    const anchor = scroller?.querySelector('.fd-tabs-anchor');
+    if (!scroller || !anchor) return;
+    const top = anchor.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop;
+    if (scroller.scrollTop > top) scroller.scrollTop = top;
+  }, []);
+
   return (
     <AnimatePresence>
+      {/* Croix ronde posée hors de la fiche, à sa gauche, comme sur le board : elle arrive avec un léger rebond
+          et reste au même endroit quelle que soit la rubrique ou la position de défilement. */}
+      {open && !fullscreen && (
+        <motion.button
+          key="detail-close"
+          type="button"
+          className="fd-close"
+          onClick={onClose}
+          title="Fermer (Esc)"
+          aria-label="Fermer la fiche"
+          initial={{ opacity: 0, scale: 0.7, x: 12 }}
+          animate={{ opacity: 1, scale: 1, x: 0 }}
+          exit={{ opacity: 0, scale: 0.7, x: 12, transition: { duration: 0.14, ease: [0.4, 0, 1, 1] } }}
+          transition={{ type: 'spring', stiffness: 520, damping: 30, delay: 0.1 }}
+          style={{ right: `calc(clamp(${PANEL_MIN_WIDTH}px, 40vw, 720px) + ${PANEL_INSET + 12}px)` }}
+        >
+          <X size={17} strokeWidth={2} />
+        </motion.button>
+      )}
       {open && (
         <motion.aside
           key="detail-panel"
-          initial={{ x: '100%' }}
-          animate={{ x: 0 }}
-          exit={{ x: '100%' }}
-          transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
+          initial={{ x: 36, opacity: 0 }}
+          animate={{ x: 0, opacity: 1 }}
+          exit={{ x: 56, opacity: 0, transition: { duration: 0.18, ease: [0.4, 0, 1, 1] } }}
+          transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
           style={{
             position: 'fixed',
-            top: 0,
-            right: 0,
-            height: '100vh',
+            // Panneau posé sur le fond, détaché des bords ; plein écran : bord à bord.
+            top: fullscreen ? 0 : PANEL_INSET,
+            right: fullscreen ? 0 : PANEL_INSET,
+            height: fullscreen ? '100vh' : `calc(100vh - ${PANEL_INSET * 2}px)`,
             width: fullscreen ? '100vw' : `clamp(${PANEL_MIN_WIDTH}px, 40vw, 720px)`,
             background: N.pageBg,
-            borderLeft: `1px solid ${N.border}`,
-            boxShadow: '-12px 0 24px rgba(15,15,15,0.06)',
+            border: fullscreen ? 'none' : `1px solid ${N.borderSft}`,
+            borderRadius: fullscreen ? 0 : 22,
+            boxShadow: fullscreen ? 'none'
+              : '0 0 0 5px rgba(255,255,255,0.5), -24px 0 60px rgba(43,41,39,0.13), 0 10px 30px rgba(43,41,39,0.08)',
             zIndex: 50,
             display: 'flex',
             flexDirection: 'column',
@@ -760,23 +815,26 @@ export default function DetailPanel({
             fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif',
           }}
         >
-          {/* HEADER */}
-          <PanelHeader
-            client={client}
-            onClose={onClose}
-            fullscreen={fullscreen}
-            onToggleFullscreen={() => setFullscreen((v) => !v)}
-          />
-
-          {/* SCROLLABLE BODY */}
-          <div className="tsf-scroll" style={{
-            flex: 1, overflowY: 'auto',
-            padding: '24px 32px 64px',
-          }}>
+          {/* Pas de barre d'en-tête, comme la fiche du board : la croix flotte hors du panneau et le nom du client
+              ouvre directement la fiche. Dessous : les chiffres, le suivi, puis les rubriques en onglets. */}
+          <div ref={scrollRef} className="tsf-scroll fd-scroll" data-wide={fullscreen ? 'true' : undefined}>
+            <div className="fd-wrap">
             {/* Nom du client et actions. */}
-            <div style={{display:'flex',alignItems:'flex-start',justifyContent:'space-between',gap:12}}>
-              <ClientHeader client={client} />
-              {(canEdit || canEditMoney || canProposeMoney || readOnly) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} style={{display:'flex',alignItems:'center',gap:6,border:'1px solid #e3e2e0',borderRadius:7,padding:'7px 10px',background:'#fff',font:'inherit',fontSize:12,cursor:'pointer'}} {...ro}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
+            <div className="fd-top">
+              <ClientHeader key={clientId || 'client'} client={client} />
+              <div className="fd-top-actions">
+                {(canEdit || canEditMoney || canProposeMoney || readOnly) && <button type="button" ref={actionsAnchor} aria-expanded={actionsOpen} onClick={() => setActionsOpen(v => !v)} className="fd-pill-btn" {...ro}><SlidersHorizontal size={14}/> Actions <ChevronDown size={12}/></button>}
+                <button type="button" onClick={() => setFullscreen((v) => !v)} className="fd-icon-btn fd-icon-btn--ring"
+                  title={fullscreen ? 'Réduire la fiche' : 'Étendre en plein écran'} aria-label={fullscreen ? 'Réduire la fiche' : 'Étendre en plein écran'}>
+                  {fullscreen ? <Minimize2 size={15} strokeWidth={1.8} /> : <Maximize2 size={15} strokeWidth={1.8} />}
+                </button>
+                {/* En plein écran il n'y a plus de bord où poser la croix flottante : elle rentre dans la fiche. */}
+                {fullscreen && (
+                  <button type="button" onClick={onClose} title="Fermer (Esc)" aria-label="Fermer la fiche" className="fd-icon-btn fd-icon-btn--close">
+                    <X size={15} strokeWidth={1.9} />
+                  </button>
+                )}
+              </div>
             </div>
             <PortalDropdown open={actionsOpen} anchorRef={actionsAnchor} onClose={() => setActionsOpen(false)} align="right" minWidth={260}>
               <div style={{padding:10}}>
@@ -799,51 +857,16 @@ export default function DetailPanel({
               }}/>
               </div>
             </PortalDropdown>
-            {profile?.do_not_call && <p style={{fontSize:12,color:'#92400e',margin:'10px 0 0'}}>Client à ne pas rappeler</p>}
 
-            <div style={{display:'flex',flexWrap:'wrap',gap:'5px 14px',marginTop:10,fontSize:12,color:N.textMuted,overflowWrap:'anywhere'}}>
-              {client?.numero_client && <span>Client n°{client.numero_client}</span>}
+            <div className="fd-meta">
+              {client?.numero_client && <span className="fd-meta-chip">Client n°{client.numero_client}</span>}
               {client?.email && <span>{client.email}</span>}
               {client?.phone && <span>{client.phone}</span>}
+              {profile?.do_not_call && <span className="fd-meta-chip" data-tone="warn">Client à ne pas rappeler</span>}
             </div>
-
-            {/* État du client et responsable, juste sous l’identité et les coordonnées. */}
-            <StatusStrip
-              boardRow={boardRow}
-              client={client}
-              inheritedEtat={inheritedEtat}
-              // L'état du client (Signé, résiliation…) est une décision
-              // engageante : direction financière et direction seulement.
-              canEditEtat={canEditMoney}
-              onBoardEtatChange={async (...args) => {
-                const result = await onBoardEtatChange?.(...args);
-                if (result && !result.error && !result.cancelled) reloadAfterExit();
-                return result;
-              }}
-              onActedEtat={openExit}
-              clientId={clientId}
-              profile={profile}
-              // Le responsable, lui, est une organisation de travail : toute
-              // l'équipe finance peut se désigner ou reprendre un dossier.
-              canEditTeam={canEdit}
-              readOnly={readOnly}
-              onResponsibleChanged={onResponsibleChanged}
-              onShowToast={onShowToast}
-            />
 
             {/* Synthèse financière toujours visible dès l’ouverture de la fiche. */}
             <section className="finance-detail-summary" aria-label="Synthèse financière">
-              <FactsRow
-                stateReview={stateReview}
-                profile={profile}
-                boardRow={boardRow}
-                loss={profile?.loss || null}
-                promise={!!focusedRow?.client?.payment_promise}
-                billingLastMonth={profile?.billing_last_month || null}
-                onEditBilling={(canEditMoney || readOnly) ? () => setBillingOpen(true) : null}
-                readOnly={readOnly}
-              />
-
               {/* 4 tuiles KPI contrat (scope-aware, dérivées de la timeline).
                   « Restant dû » = tout ce que le contrat doit encore
                   rapporter (mois à venir inclus) ; « Retard à date » = ce qui
@@ -869,36 +892,124 @@ export default function DetailPanel({
                   onSubmit={submitRefund}
                 />
               )}
-
             </section>
 
-            {/* ── Sous la synthèse : quatre chapitres (refonte de présentation, 2026-10-16) ──
-                Même contenu, mêmes composants, mêmes clés et mêmes chargements qu'avant : seul
-                le regroupement change. Rien ici ne dépend de l'ouverture d'un chapitre ; les
-                sections repliables sont des <details> natifs dont le contenu reste monté même
-                fermé. Colonnes en plein écran : components/DetailLayout.css. */}
+            {/* Suivi : l'état du client et son responsable en lignes de propriétés, comme « Situation » et « Météo »
+                sur la fiche du board ; dessous, les faits datés du dossier (sortie, fin de facturation, promesse…). */}
+            <StatusStrip
+              boardRow={boardRow}
+              client={client}
+              inheritedEtat={inheritedEtat}
+              // L'état du client (Signé, résiliation…) est une décision
+              // engageante : direction financière et direction seulement.
+              canEditEtat={canEditMoney}
+              onBoardEtatChange={async (...args) => {
+                const result = await onBoardEtatChange?.(...args);
+                if (result && !result.error && !result.cancelled) reloadAfterExit();
+                return result;
+              }}
+              onActedEtat={openExit}
+              clientId={clientId}
+              profile={profile}
+              // Le responsable, lui, est une organisation de travail : toute
+              // l'équipe finance peut se désigner ou reprendre un dossier.
+              canEditTeam={canEdit}
+              readOnly={readOnly}
+              onResponsibleChanged={onResponsibleChanged}
+              onShowToast={onShowToast}
+            >
+              <FactsRow
+                stateReview={stateReview}
+                profile={profile}
+                boardRow={boardRow}
+                loss={profile?.loss || null}
+                promise={!!focusedRow?.client?.payment_promise}
+                billingLastMonth={profile?.billing_last_month || null}
+                onEditBilling={(canEditMoney || readOnly) ? () => setBillingOpen(true) : null}
+                readOnly={readOnly}
+              />
+            </StatusStrip>
+
+            {/* ── Rubriques en onglets (refonte 10/11/2026, sur le modèle de la fiche du board) ──
+                Même contenu, mêmes composants, mêmes clés et mêmes chargements qu'avant : seul le regroupement
+                change. Un onglet masqué garde son contenu monté (attribut `hidden`) : aucun chargement ne dépend
+                de l'onglet ouvert, aucun brouillon n'est perdu en changeant d'onglet, et l'onglet choisi reste
+                le même d'un client à l'autre. */}
+            <DetailTabs tabs={tabs} value={tab} onChange={changeTab} />
             <div className="fd-body">
 
-              {/* 1 · Identité, contacts et contrat — titre, position et contenu d'origine */}
-              <div className="fd-chapter fd-chapter--identity">
+              {/* 1 · Paiements : ce que la Finance vient lire en ouvrant une fiche */}
+              <TabPanel id="payments" active={tab} className="fd-pay">
+                <div className="fd-stack">
+                  <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} readOnly={readOnly} onReview={setStateReview} onChanged={reloadAfterExit}/>
+                  {/* Error state */}
+                  {error && (
+                    <div style={{
+                      padding: 12, background: N.redBg,
+                      color: N.red, borderRadius: 12, fontSize: 13,
+                    }}>
+                      {error}
+                    </div>
+                  )}
+                  <Section
+                    variant="block"
+                    Icon={ReceiptText}
+                    title="État de compte"
+                    delay={0.04}
+                    action={(
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+                      <StatementMenu
+                        scope={scope}
+                        structures={structures}
+                        busy={pdfGenerating}
+                        onDownload={downloadStatement}
+                      />
+                      {statementDownload?.clientId === clientId && (
+                        <a href={statementDownload.url} download={statementDownload.filename} style={{ fontSize: 12, color: N.text }}>
+                          PDF prêt · Télécharger à nouveau
+                        </a>
+                      )}
+                      </div>
+                    )}
+                  >
+                    <InstallmentsList
+                      installments={installments}
+                      loading={loadingTimeline}
+                      focusedRowId={rowId}
+                      onSelectRow={onSelectRow}
+                      visible={tab === 'payments'}
+                    />
+                    {(canEdit || readOnly) && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
+                      <div className="fd-followup">
+                        <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
+                          scope={scope} readOnly={readOnly} reviews={profile.installment_followups || []} onChanged={reviews => {
+                            setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
+                          }}/>
+                      </div>
+                    }
+                  </Section>
+                </div>
+                <div className="fd-stack">
+                  <LastExchange summary={exchangeSummary} onOpen={() => changeTab('exchanges')} />
+                </div>
+              </TabPanel>
+
+              {/* 2 · Détails : identité, contacts et contrat, puis les rendez-vous et interlocuteurs */}
+              <TabPanel id="details" active={tab}>
+                <div className="fd-stack">
                 <Section
+                  variant="block"
+                  Icon={IdCard}
                   title="Identité, contacts et contrat"
-                  delay={0.08}
+                  delay={0.04}
                   action={(canEdit || readOnly) ? (
                     <button
                       type="button"
                       onClick={() => setContractEditing((v) => !v)}
                       title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
+                      className="fd-link-btn"
+                      data-on={contractEditing ? 'true' : undefined}
                       {...ro}
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 5,
-                        border: 'none', cursor: 'pointer',
-                        background: contractEditing ? N.sideHover : 'transparent',
-                        color: contractEditing ? N.text : N.textMuted,
-                        borderRadius: 5, padding: '3px 7px',
-                        fontSize: 11, fontWeight: 600,
-                        transition: 'background 0.12s, color 0.12s',
-                      }}
                     >
                       <Pencil size={12} />
                       {contractEditing ? 'Terminer' : 'Modifier'}
@@ -926,71 +1037,30 @@ export default function DetailPanel({
                     wide={fullscreen}
                   />
                 </Section>
-              </div>
+                <Section key={`appointments-${clientId}`} variant="block" Icon={CalendarClock} title="Rendez-vous et interlocuteurs"
+                  hint="Onboarding, cabinet et juriste référent" delay={0.08}>
+                  {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
+                    || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
+                    || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) ? (
+                    <>
+                      <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
+                      {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
+                          Statut propre à la finance, indépendant de celui de Vincent ;
+                          le recalage, lui, déplace le RDV partagé (agendas liés). */}
+                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} readOnly={readOnly} />
+                    </>
+                  ) : <p className="fd-empty">Aucun rendez-vous renseigné pour ce dossier.</p>}
+                </Section>
+                </div>
+              </TabPanel>
 
-              {/* Chapitres 2 à 4 : en plein écran seulement, deux colonnes (DetailLayout.css). L'identité reste
-                  pleine largeur au-dessus, comme avant : la zone du haut ne change pas de forme. */}
-              <div className="fd-cols" data-wide={fullscreen ? 'true' : undefined}>
-                {/* 2 · Paiements et suivi */}
-                <Chapter title="Paiements et suivi" className="fd-chapter--payments">
-                  <StateReview clientId={clientId} version={profile} canProcess={canEditMoney} readOnly={readOnly} onReview={setStateReview} onChanged={reloadAfterExit}/>
-                  {/* Error state */}
-                  {error && (
-                    <div style={{
-                      marginTop: 20, padding: 12, background: N.redBg,
-                      color: N.red, borderRadius: 6, fontSize: 13,
-                    }}>
-                      {error}
-                    </div>
-                  )}
-                  <Section
-                    variant="block"
-                    title="État de compte"
-                    delay={0.11}
-                    action={(
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
-                      <StatementMenu
-                        scope={scope}
-                        structures={structures}
-                        busy={pdfGenerating}
-                        onDownload={downloadStatement}
-                      />
-                      {statementDownload?.clientId === clientId && (
-                        <a href={statementDownload.url} download={statementDownload.filename} style={{ fontSize: 12, color: N.text }}>
-                          PDF prêt · Télécharger à nouveau
-                        </a>
-                      )}
-                      </div>
-                    )}
-                  >
-                    <InstallmentsList
-                      installments={installments}
-                      loading={loadingTimeline}
-                      focusedRowId={rowId}
-                      onSelectRow={onSelectRow}
-                    />
-                    {(canEdit || readOnly) && focusedRow?.id && String(profile?.client_id) === String(clientId) &&
-                      <div className="fd-followup">
-                        <InstallmentFollowup key={`${clientId}-${focusedRow.id}-${scope}`} clientId={clientId} period={focusedRow}
-                          scope={scope} readOnly={readOnly} reviews={profile.installment_followups || []} onChanged={reviews => {
-                            setProfile(previous => ({ ...previous, installment_followups: reviews })); reloadAfterExit();
-                          }}/>
-                      </div>
-                    }
+              {/* 3 · Contrats et facturation */}
+              <TabPanel id="billing" active={tab}>
+                <div className="fd-stack">
+                  <Section variant="block" Icon={FileSignature} title="Contrats signés" hint="Un clic ouvre le contrat signé sur Yousign" delay={0.04}>
+                    <SignedContracts clientId={clientId} />
                   </Section>
-                  <ClientComments key={`comments-${clientId}`} clientId={clientId} onShowToast={onShowToast} variant="block" role={role} readOnly={readOnly} />
-                </Chapter>
-
-                {/* 3 · Contrats et facturation */}
-                <Chapter title="Contrats et facturation" className="fd-chapter--billing">
-                  <Section variant="block" title="Contrats signés" delay={0.105}>
-                    <SignedContracts
-                      clientId={clientId}
-                      societe={client?.company_name || client?.societe}
-                      numeroClient={client?.numero_client}
-                    />
-                  </Section>
-                  <Section variant="block" title="Sociétés de facturation" delay={0.1}>
+                  <Section variant="block" Icon={Landmark} title="Sociétés de facturation" delay={0.08}>
                     <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} readOnly={readOnly} reloadKey={profile?.companies?.length || 0} />
                   </Section>
                   <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
@@ -1009,32 +1079,31 @@ export default function DetailPanel({
                     />
                   </Section>
                   </DetailDisclosure>
-                </Chapter>
+                </div>
+              </TabPanel>
 
-                {/* 4 · Échanges, documents et historique */}
-                <Chapter title="Échanges, documents et historique" className="fd-chapter--exchanges">
-                  <DetailDisclosure key={`shared-${clientId}`} title="Échanges avec Owner et Opti’Lex" description="Commentaires partagés avec le cabinet et la Finance">
-                    <CommonSpaceThread numero={client?.numero_client} onShowToast={onShowToast} />
-                  </DetailDisclosure>
-                  <DetailDisclosure key={`files-${clientId}`} title="Documents, emails et appels" description="Pièces jointes et appels choisis, consultables par l’équipe CSM">
-                  {canViewCalls && <LatestClientCall key={`call-${clientId}`} clientId={clientId}/>}
-                    <ClientHistoryAttachments clientId={clientId}/>
-                  </DetailDisclosure>
-                  <DetailDisclosure key={`appointments-${clientId}`} title="Rendez-vous et interlocuteurs" description="Onboarding, cabinet et juriste référent">
-                  {boardRow && (clientAgenda?.reference_jurist || (clientAgenda?.rdv?.length || 0) > 0
-                    || boardRow.rdv_onboarding_date || boardRow.rdv_lancement_date
-                    || boardRow.rdv_fiscal_date || boardRow.rdv_social_date) ? (
-                    <Section title="Rendez-vous & juriste référent" delay={0.16}>
-                      <RdvJuristeSection boardRow={boardRow} agenda={clientAgenda} onCopied={onCopied} />
-                      {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
-                          Statut propre à la finance, indépendant de celui de Vincent ;
-                          le recalage, lui, déplace le RDV partagé (agendas liés). */}
-                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} readOnly={readOnly} />
-                    </Section>
-                  ) : <p style={{fontSize:12,color:N.textMuted}}>Aucun rendez-vous renseigné pour ce dossier.</p>}
+              {/* 4 · Échanges avec Owner et Opti'Lex */}
+              <TabPanel id="exchanges" active={tab}>
+                <Section key={`shared-${clientId}`} variant="block" Icon={MessagesSquare} title="Échanges"
+                  hint="Toute la communication du client au même endroit : Owner, le cabinet Opti’Lex et la finance" delay={0.04}>
+                  <ExchangeThread numero={client?.numero_client} onShowToast={onShowToast} onSummary={setExchangeSummary}
+                    internal={clientId ? { clientId, canPin: ['admin', 'ceo', 'finance_director'].includes(role) } : null} />
+                </Section>
+              </TabPanel>
 
-                  </DetailDisclosure>
-                  <DetailDisclosure key={`audit-${clientId}`} title="Historique des actions" description="Modifications de la fiche et opérations financières datées">
+              {/* 5 · Documents, emails et appels */}
+              <TabPanel id="files" active={tab}>
+                <Section key={`files-${clientId}`} variant="block" Icon={Paperclip} title="Documents, e-mails et appels"
+                  hint="Le dossier du client, le même que dans le board : ce qui est joint ici s’y retrouve" delay={0.04}>
+                  <ClientFiles key={`dossier-${clientId}`} clientId={clientId} numero={client?.numero_client}
+                    active={tab === 'files'} canViewCalls={canViewCalls} />
+                </Section>
+              </TabPanel>
+
+              {/* 6 · Historique des actions */}
+              <TabPanel id="history" active={tab}>
+                <Section key={`audit-${clientId}`} variant="block" Icon={History} title="Historique des actions"
+                  hint="Modifications de la fiche et opérations financières datées" delay={0.04}>
                   <ActionsTimeline
                     hideTitle
                     audit={clientAudit}
@@ -1042,9 +1111,9 @@ export default function DetailPanel({
                     changes={profile?.changes}
                     etatHistory={etatHistory}
                   />
-                  </DetailDisclosure>
-                </Chapter>
-              </div>
+                </Section>
+              </TabPanel>
+            </div>
             </div>
           </div>
 
@@ -1130,82 +1199,54 @@ export default function DetailPanel({
   );
 }
 
-// ── Header ──────────────────────────────────────────────────────────────────
-function PanelHeader({ client, onClose, fullscreen, onToggleFullscreen }) {
-  const { societeName } = splitClientIdentity(client);
+// ── Onglets de la fiche ─────────────────────────────────────────────────────
+// Même lecture que la fiche du board : libellés soulignés, compteur en pastille, trait qui glisse d'un onglet à
+// l'autre. Flèches gauche/droite au clavier.
+function DetailTabs({ tabs, value, onChange }) {
+  const onKeyDown = (event) => {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const index = tabs.findIndex((t) => t.key === value);
+    const next = tabs[(index + (event.key === 'ArrowRight' ? 1 : tabs.length - 1)) % tabs.length];
+    onChange(next.key);
+    event.currentTarget.querySelector(`#fd-tab-${next.key}`)?.focus();
+  };
   return (
-    <div style={{
-      height: 44,
-      flexShrink: 0,
-      display: 'flex', alignItems: 'center',
-      gap: 6, padding: '0 12px',
-      borderBottom: `1px solid ${N.border}`,
-      background: N.pageBg,
-    }}>
-      {/* Breadcrumb */}
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 6,
-        fontSize: 13, color: N.textMuted, minWidth: 0, flex: 1,
-      }}>
-        <span>Tracking Finance</span>
-        <ChevronRight size={12} style={{ color: N.textFaint, flexShrink: 0 }} />
-        <span style={{
-          color: N.text, fontWeight: 500,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}
-          title={societeName || ''}
-        >
-          {societeName || 'Client'}
-        </span>
+    <>
+      <div className="fd-tabs-anchor" aria-hidden="true" />
+      <div className="fd-tabs" role="tablist" aria-label="Rubriques de la fiche" onKeyDown={onKeyDown}>
+        {tabs.map((t) => {
+          const active = t.key === value;
+          return (
+            <button key={t.key} type="button" role="tab" id={`fd-tab-${t.key}`} aria-selected={active}
+              aria-controls={`fd-panel-${t.key}`} tabIndex={active ? 0 : -1} title={t.title}
+              className={`fd-tab${active ? ' is-active' : ''}`} onClick={() => onChange(t.key)}>
+              {t.label}
+              {t.count > 0 && <span className="fd-tab-n" data-tone={t.tone}>{t.count}</span>}
+              {t.dot && <span className="fd-tab-dot" aria-label="à traiter" />}
+              {active && (
+                <motion.span layoutId="fdDetailTab" className="fd-tab-line"
+                  transition={{ type: 'spring', stiffness: 520, damping: 40 }} />
+              )}
+            </button>
+          );
+        })}
       </div>
+    </>
+  );
+}
 
-      {/* Action icons */}
-      <button
-        onClick={onToggleFullscreen}
-        title={fullscreen ? 'Réduire' : 'Étendre en plein écran'}
-        style={iconBtnStyle}
-        onMouseEnter={(e) => e.currentTarget.style.background = N.sideHover}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-      >
-        {fullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-      </button>
-      <button
-        onClick={onClose}
-        title="Réduire le panneau"
-        style={iconBtnStyle}
-        onMouseEnter={(e) => e.currentTarget.style.background = N.sideHover}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-      >
-        <ChevronsRight size={14} />
-      </button>
-      <button
-        title="Plus d'actions"
-        style={iconBtnStyle}
-        onMouseEnter={(e) => e.currentTarget.style.background = N.sideHover}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-      >
-        <MoreHorizontal size={14} />
-      </button>
-      <button
-        onClick={onClose}
-        title="Fermer (Esc)"
-        style={iconBtnStyle}
-        onMouseEnter={(e) => e.currentTarget.style.background = N.sideHover}
-        onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
-      >
-        <X size={15} />
-      </button>
+// Une rubrique : masquée par l'attribut `hidden`, donc toujours montée (chargements et brouillons conservés).
+function TabPanel({ id, active, className = '', children }) {
+  return (
+    <div role="tabpanel" id={`fd-panel-${id}`} aria-labelledby={`fd-tab-${id}`} hidden={active !== id}
+      className={`fd-tabpanel ${className}`.trim()}>
+      {children}
     </div>
   );
 }
 
-const iconBtnStyle = {
-  width: 28, height: 28,
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  border: 'none', background: 'transparent', cursor: 'pointer',
-  borderRadius: 4, color: N.textMuted,
-  transition: 'background 0.12s',
-};
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // PHASE 3 — vue synthétique (maquette 2026-08-19)
@@ -1214,11 +1255,11 @@ const iconBtnStyle = {
 // Avatar initiales : pastel déterministe dérivé du nom (mêmes familles de
 // couleurs que ETAT_STYLE du board — finition homogène avec EtatBadge).
 const AVATAR_PASTELS = [
-  { bg: '#e9f9f0', fg: '#15794a' },
-  { bg: '#eaf1fd', fg: '#1e40af' },
-  { bg: '#fff3e3', fg: '#b45309' },
-  { bg: '#f3e8ff', fg: '#6940a5' },
-  { bg: '#e0f2fe', fg: '#0e7490' },
+  { bg: '#e2f6ea', fg: '#0b7a4b' },
+  { bg: '#eaf1fd', fg: '#1b6fd0' },
+  { bg: '#fde9da', fg: '#c2500e' },
+  { bg: '#eee9fa', fg: '#6a45b8' },
+  { bg: '#e0f2fe', fg: '#0f7286' },
   { bg: '#fdf2f8', fg: '#ad1a72' },
 ];
 
@@ -1255,17 +1296,17 @@ function ClientHeader({ client }) {
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.34, ease: [0.16, 1, 0.3, 1] }}
       style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}
     >
       {/* Avatar initiales */}
       <div style={{
-        width: 52, height: 52,
+        width: 48, height: 48,
         borderRadius: '50%',
         background: av.bg, color: av.fg,
         flexShrink: 0,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 18, fontWeight: 700, letterSpacing: '0.02em',
+        fontSize: 15.5, fontWeight: 500, letterSpacing: '0.03em',
         userSelect: 'none',
       }}>
         {av.initials}
@@ -1274,7 +1315,7 @@ function ClientHeader({ client }) {
       {/* Nom du client (personne) + société */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <h1 style={{
-          fontSize: 22, fontWeight: 700, color: N.text,
+          fontSize: 22, fontWeight: 500, color: N.text,
           margin: 0, letterSpacing: '-0.02em', lineHeight: 1.25,
           overflow: 'hidden', textOverflow: 'ellipsis',
           display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
@@ -1285,7 +1326,7 @@ function ClientHeader({ client }) {
         </h1>
         {personne && societeName && (
           <div style={{
-            marginTop: 2, fontSize: 13.5, fontWeight: 500, color: N.textMuted,
+            marginTop: 3, fontSize: 13.5, fontWeight: 400, color: N.textMuted,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}
             title={societeName}
@@ -1304,7 +1345,7 @@ function ClientHeader({ client }) {
 // client. Le retard à date a sa tuile plus bas, il n'est pas répété ici.
 function StatusStrip({
   boardRow, client, inheritedEtat, canEditEtat, onBoardEtatChange, onActedEtat,
-  clientId, profile, canEditTeam, onResponsibleChanged, onShowToast, readOnly = false,
+  clientId, profile, canEditTeam, onResponsibleChanged, onShowToast, readOnly = false, children = null,
 }) {
   const etatFallback = inheritedEtat || client?.etat || null;
   const etatMeta = etatFallback ? (ETAT_COLORS[etatFallback] || ETAT_FALLBACK) : null;
@@ -1312,73 +1353,52 @@ function StatusStrip({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay: 0.04, ease: [0.4, 0, 0.2, 1] }}
-      style={{
-        marginTop: 16,
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
-        gap: 8,
-        background: 'transparent',
-        border: 'none',
-        borderRadius: 10,
-        overflow: 'hidden',
-      }}
+      transition={{ duration: 0.34, delay: 0.12, ease: [0.16, 1, 0.3, 1] }}
+      className="fd-suivi"
     >
-      <StripCell label="État">
-        {boardRow ? (
-          <BoardEtatCell
-            boardRow={boardRow}
-            disabled={!canEditEtat}
-            canActe={canEditEtat}
-            onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
-            onActedEtat={onActedEtat}
+      <div className="fd-group-title">Suivi</div>
+      <div className="fd-prop">
+        <span className="fd-prop-k"><Activity className="fd-prop-ic" size={15} strokeWidth={1.7} /><span>État</span></span>
+        <span className="fd-prop-v">
+          {boardRow ? (
+            <BoardEtatCell
+              boardRow={boardRow}
+              disabled={!canEditEtat}
+              canActe={canEditEtat}
+              onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
+              onActedEtat={onActedEtat}
+            />
+          ) : etatMeta ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '3px 10px', borderRadius: 7,
+              background: etatMeta.bg, color: etatMeta.fg,
+              fontSize: 12.5, fontWeight: 500,
+            }}>
+              {inheritedEtat && <Lock size={11} />}
+              {etatMeta.label || etatFallback}
+            </span>
+          ) : (
+            <span style={{ color: '#c9c4bc', fontSize: 13 }}>—</span>
+          )}
+        </span>
+      </div>
+      <div className="fd-prop">
+        <span className="fd-prop-k"><UserRound className="fd-prop-ic" size={15} strokeWidth={1.7} /><span>Responsable</span></span>
+        <span className="fd-prop-v">
+          <ResponsibleSelect
+            clientId={clientId}
+            value={profile}
+            canEdit={canEditTeam}
+            readOnly={readOnly}
+            onChanged={onResponsibleChanged}
+            onShowToast={onShowToast}
+            label={false}
           />
-        ) : etatMeta ? (
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            padding: '2px 10px', borderRadius: 4,
-            background: etatMeta.bg, color: etatMeta.fg,
-            fontSize: 12.5, fontWeight: 600,
-          }}>
-            {inheritedEtat && <Lock size={11} />}
-            {etatMeta.label || etatFallback}
-          </span>
-        ) : (
-          <span style={{ color: '#c8cdd7', fontSize: 13 }}>—</span>
-        )}
-      </StripCell>
-
-      <StripCell label="Responsable">
-        <ResponsibleSelect
-          clientId={clientId}
-          value={profile}
-          canEdit={canEditTeam}
-          readOnly={readOnly}
-          onChanged={onResponsibleChanged}
-          onShowToast={onShowToast}
-          label={false}
-        />
-      </StripCell>
+        </span>
+      </div>
+      <div className="fd-suivi-facts">{children}</div>
     </motion.div>
-  );
-}
-
-function StripCell({ label, children }) {
-  return (
-    <div style={{ background: '#fff', padding: '3px 0', minWidth: 0, display:'flex', alignItems:'center', gap:8 }}>
-      <div style={{
-        fontSize: 10.5, fontWeight: 600, color: N.textFaint,
-        textTransform: 'uppercase', letterSpacing: '0.04em',
-      }}>
-        {label}
-      </div>
-      <div style={{
-        marginTop: 6, minHeight: 26,
-        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
-      }}>
-        {children}
-      </div>
-    </div>
   );
 }
 
@@ -1411,7 +1431,7 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
         height: 26, padding: '0 10px',
         background: '#fff', color: N.text,
         border: `1px solid ${N.border}`, borderRadius: 6,
-        fontSize: 12, fontWeight: 600,
+        fontSize: 12, fontWeight: 500,
         cursor: generating ? 'wait' : 'pointer',
         fontFamily: 'inherit', whiteSpace: 'nowrap',
         boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
@@ -1453,7 +1473,7 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
               onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
               onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
             >
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>{it.label}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 500, color: N.text }}>{it.label}</span>
               {it.hint && <span style={{ fontSize: 11, color: N.textFaint }}>{it.hint}</span>}
             </button>
           ))}
@@ -1461,6 +1481,12 @@ function StatementMenu({ scope, structures = [], busy = null, onDownload }) {
       </PortalDropdown>
     </>
   );
+}
+
+// Montant qui défile jusqu'à sa valeur, puis de l'ancienne à la nouvelle quand on passe d'un client à l'autre.
+function Amount({ value }) {
+  const shown = useCountUp(Number(value) || 0, { duration: 700 });
+  return formatEUR(shown);
 }
 
 // ── 4 tuiles KPI (Total contrat / Encaissé / Restant dû / Retard à date) ────
@@ -1497,7 +1523,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
     {
       label: 'Restant dû',
       value: Math.max(0, kpis.restant), // plancher 0 — le trop-perçu est restitué en sous-note
-      color: kpis.restant > 0 ? '#b42318' : N.green,
+      color: kpis.restant > 0 ? '#c5221f' : N.green,
       notes: [
         surplus > 0 ? { text: `+${formatEUR(surplus)} trop-perçu`, color: N.green } : null,
       ].filter(Boolean),
@@ -1506,7 +1532,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
       label: 'Retard à date',
       value: overdueToDate,
       display: creditOnly ? `Trop-perçu · ${formatEUR(creditShown)}` : null,
-      color: creditOnly ? N.green : (overdueToDate > 0 ? '#b42318' : N.text),
+      color: creditOnly ? N.green : (overdueToDate > 0 ? '#c5221f' : N.text),
       notes: [
         creditOnly
           ? { text: 'à déduire ou à rembourser', color: N.green, action: onRefund }
@@ -1514,7 +1540,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
         // La ventilation des créances antérieures a davantage de sens ici
         // que sous « Restant dû » (déplacée le 2026-08-25).
         !creditOnly && overdueCum > 0
-          ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#b42318' }
+          ? { text: `dont ${formatEUR(overdueCum)} de créances antérieures`, color: '#c5221f' }
           : null,
         // Retard ET crédit coexistent (entités différentes en Globale).
         !creditOnly && creditShown > 0
@@ -1530,28 +1556,29 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
           key={t.label}
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, delay: 0.04 + i * 0.05, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: 0.34, delay: 0.04 + i * 0.05, ease: [0.16, 1, 0.3, 1] }}
+          whileHover={{ y: -2, transition: { duration: 0.18, ease: [0.16, 1, 0.3, 1] } }}
+          className="fd-kpi"
           style={{
             border: `1px solid ${N.borderSft}`,
-            borderRadius: 10,
+            borderRadius: 16,
             // padding resserré depuis la 4e tuile : garde ~130px utiles pour
             // les montants à 6 chiffres sans troncature.
-            padding: '12px 12px',
+            padding: '14px 14px 13px',
             background: '#fff',
-            display: 'flex', flexDirection: 'column', gap: 4,
+            display: 'flex', flexDirection: 'column', gap: 6,
             minWidth: 0,
           }}
         >
           <span style={{
-            fontSize: 10.5, fontWeight: 600, color: N.textMuted,
-            textTransform: 'uppercase', letterSpacing: '0.04em',
+            fontSize: 12.5, fontWeight: 400, color: N.textMuted,
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
             {t.label}
           </span>
           {loading ? (
             <div style={{
-              height: 20, width: '70%', background: '#f3f4f6', borderRadius: 4,
+              height: 20, width: '70%', background: '#f4f2ee', borderRadius: 4,
               animation: 'tsfPulse 1.4s ease-in-out infinite',
             }} />
           ) : (
@@ -1562,14 +1589,14 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
                 // `display` (libellé + montant, ex. trop-perçu) est plus long
                 // qu'un montant seul : légèrement réduit et autorisé à passer
                 // sur 2 lignes plutôt que d'être tronqué.
-                fontSize: t.display ? 13.5 : 17,
-                fontWeight: 700, color: t.color,
-                fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em',
+                fontSize: t.display ? 13.5 : 20,
+                fontWeight: 500, color: t.color,
+                fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.015em',
                 lineHeight: t.display ? 1.25 : undefined,
                 whiteSpace: t.display ? 'normal' : 'nowrap',
                 overflow: 'hidden', textOverflow: 'ellipsis',
               }}>
-                {t.display || formatEUR(t.value)}
+                {t.display || <Amount value={t.value} />}
               </span>
               {(t.notes || []).map((note, j) => (note.action ? (
                 // Le trop-perçu appelle un geste : une fois l'argent rendu, il
@@ -1585,7 +1612,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
                   style={{
                     alignSelf: 'flex-start', border: 'none', background: 'transparent',
                     padding: 0, cursor: 'pointer', fontFamily: 'inherit',
-                    fontSize: 10.5, fontWeight: 600, color: note.color,
+                    fontSize: 10.5, fontWeight: 500, color: note.color,
                     textDecoration: 'underline', textUnderlineOffset: 2,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                     maxWidth: '100%',
@@ -1595,7 +1622,7 @@ function KpiTiles({ kpis, overdueCurrent = 0, overdueCum = 0, credit = 0, loadin
                 </button>
               ) : (
                 <span key={j} style={{
-                  fontSize: 10.5, fontWeight: 600, color: note.color,
+                  fontSize: 10.5, fontWeight: 500, color: note.color,
                   fontVariantNumeric: 'tabular-nums',
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                 }}>
@@ -1630,7 +1657,7 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
         display: 'flex', flexDirection: 'column', gap: 10,
       }}
     >
-      <div style={{ fontSize: 12.5, fontWeight: 700, color: N.text }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>
         Enregistrer un remboursement {label}
       </div>
       <div style={{ fontSize: 11.5, color: N.textMuted, lineHeight: 1.5 }}>
@@ -1647,7 +1674,7 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
           style={{
             width: 110, border: `1px solid ${N.border}`, borderRadius: 6,
             padding: '6px 8px', fontSize: 12.5, fontFamily: 'inherit',
-            fontWeight: 600, textAlign: 'right', outline: 'none', color: N.text,
+            fontWeight: 500, textAlign: 'right', outline: 'none', color: N.text,
           }}
         />
         <span style={{ color: N.textMuted, fontSize: 12 }}>€</span>
@@ -1682,7 +1709,7 @@ function RefundPrompt({ value, onChange, onCancel, onSubmit }) {
           }}
           style={{
             border: 'none', borderRadius: 6, padding: '6px 12px',
-            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+            fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
             cursor: ok && !busy ? 'pointer' : 'default',
             background: ok && !busy ? N.green : N.sideBg,
             color: ok && !busy ? '#fff' : N.textFaint,
@@ -1925,7 +1952,7 @@ function ContractInfoList({
       ) : (
         <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
+            <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
             {platformDiffers && profile?.rdv_onboarding && (
               <span title="Rendez-vous posé à la vente : c’est lui qui fixe le départ de la facturation."
                 style={{ fontSize: 10.5, color: N.textFaint }}>
@@ -1995,7 +2022,7 @@ function ContractInfoList({
               le {profile.payment_day_effective} de chaque mois
             </span>
           ) : (
-            <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour suivra la date du dernier paiement saisi, ou sera fixé à la main.">Dès le 1er, jusqu'au premier paiement</span>
+            <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }} title="Sans jour connu, le mois est dû dès le 1er. Le jour suivra la date du dernier paiement saisi, ou sera fixé à la main.">Dès le 1er, jusqu'au premier paiement</span>
           )}
           {profile?.payment_day_source === 'finance' && (
             <span title={profile.payment_day_by ? `fixé par ${profile.payment_day_by}` : undefined} style={{ fontSize: 10.5, color: N.textFaint }}>
@@ -2111,9 +2138,6 @@ function ContractInfoList({
 
   return (
     <div className="fd-identity-card" data-wide={wide ? 'true' : undefined} style={{
-      border: `1px solid ${N.borderSft}`,
-      borderRadius: 10,
-      overflow: 'hidden',
       position: 'relative',
     }}>
       {pending && (
@@ -2130,41 +2154,26 @@ function ContractInfoList({
         />
       )}
       {GROUPED.map(({ group, items }) => (
-        <div className="fd-group" key={group.key}>
+        <div className="fd-group" data-group={group.key} key={group.key}>
         <div className="fd-group-title">{group.label}</div>
-        {items.map(({ r, i }, n) => (
+        {items.map(({ r, i }) => (
         <motion.div
           key={r.label}
-          initial={{ opacity: 0, x: -6 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
-          className="tsf-copy-wrap"
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 12,
-            padding: '9px 14px',
-            borderTop: n === 0 ? 'none' : `1px solid ${N.borderSft}`,
-            fontSize: 13,
-            minWidth: 0,
-          }}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.06 + i * 0.03, ease: [0.16, 1, 0.3, 1] }}
+          className="fd-prop tsf-copy-wrap"
         >
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            color: N.textMuted, fontSize: 12.5,
-            whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            <r.Icon size={16} strokeWidth={1.9} style={{ color: N.textFaint }} />
-            {r.label}
+          <span className="fd-prop-k" title={r.label}>
+            <r.Icon className="fd-prop-ic" size={15} strokeWidth={1.7} />
+            <span>{r.label}</span>
           </span>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            minWidth: 0, justifyContent: 'flex-end',
-          }}>
+          <span className="fd-prop-v">
             {r.node ? (
               r.node
             ) : r.value ? (
               <span style={{
-                fontSize: 13, fontWeight: 500, color: N.text,
+                fontSize: 13.5, fontWeight: 500, color: N.text,
                 fontFamily: r.mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : 'inherit',
                 fontVariantNumeric: 'tabular-nums',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -2172,7 +2181,7 @@ function ContractInfoList({
                 {r.value}
               </span>
             ) : (
-              <span style={{ color: '#c7c7c2', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
+              <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>
             )}
             {(r.value || r.copyValue) && (
               <CopyButton value={r.copyValue || r.value} onCopied={onCopied} size={12} />
@@ -2191,7 +2200,7 @@ function ContractInfoList({
         <div className="fd-group">
         <div className="fd-group-title">Coordonnées</div>
         <div style={{
-          padding: '4px 14px 8px',
+          padding: '0 10px 4px',
         }}>
           <ContactList
             clientId={clientId}
@@ -2228,13 +2237,13 @@ const PAYMENT_DAY_LABELS = Object.fromEntries(
 
 // ── État de compte (échéancier) ─────────────────────────────────────────────
 const INSTALLMENT_BADGES = {
-  regularized: { label: 'Payée', bg: '#e9f9f0', fg: '#15794a' },
-  paid:     { label: 'Encaissée', bg: '#e9f9f0', fg: '#15794a' },
-  partial:  { label: 'Partielle', bg: '#fff3e3', fg: '#b45309' },
-  late:     { label: 'En retard', bg: '#fdecec', fg: '#b42318' },
-  upcoming: { label: 'À venir',   bg: '#faf3dd', fg: '#9f6b00' },
-  paused:   { label: 'En pause',  bg: '#eef1f6', fg: '#5b6472' },
-  deferred: { label: 'Reportée',  bg: '#e7f0fb', fg: '#1e40af' },
+  regularized: { label: 'Payée', bg: '#e2f6ea', fg: '#0b7a4b' },
+  paid:     { label: 'Encaissée', bg: '#e2f6ea', fg: '#0b7a4b' },
+  partial:  { label: 'Partielle', bg: '#fde9da', fg: '#c2500e' },
+  late:     { label: 'En retard', bg: '#fde6e6', fg: '#c5221f' },
+  upcoming: { label: 'À venir',   bg: '#fbf5d9', fg: '#7a5a05' },
+  paused:   { label: 'En pause',  bg: '#f1eee9', fg: '#6f6a63' },
+  deferred: { label: 'Reportée',  bg: '#e4f0fd', fg: '#1b6fd0' },
 };
 
 // Échéancier : TOUT l'historique visible d'emblée (retour dev 2026-09-03 —
@@ -2250,7 +2259,7 @@ const INSTALLMENT_BADGES = {
 const INSTALLMENTS_VIEWPORT = 268;
 
 
-function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) {
+function InstallmentsList({ installments, loading, focusedRowId, onSelectRow, visible = true }) {
   const scrollRef = React.useRef(null);
   const total = installments.length;
 
@@ -2263,7 +2272,8 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
     if (!el) return;
     const anchor = el.querySelector('[data-anchor="1"]');
     el.scrollTop = anchor ? Math.max(anchor.offsetTop - el.offsetTop, 0) : el.scrollHeight;
-  }, [total]);
+    // `visible` : une liste masquée ne se mesure pas ; elle se recale en revenant sur l'onglet Paiements.
+  }, [total, visible]);
 
   const nowMonth = currentPeriod();
   let anchorIdx = installments.findIndex((inst) => inst.month >= nowMonth);
@@ -2274,7 +2284,7 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {Array.from({ length: 4 }).map((_, i) => (
           <div key={i} style={{
-            height: 40, background: '#f3f4f6', borderRadius: 6,
+            height: 40, background: '#f4f2ee', borderRadius: 6,
             animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.12,
           }} />
         ))}
@@ -2312,7 +2322,7 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
       >
         <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
           <span style={{
-            fontSize: 13, fontWeight: 600, color: N.text,
+            fontSize: 13, fontWeight: 500, color: N.text,
             fontVariantNumeric: 'tabular-nums',
             whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
@@ -2329,7 +2339,7 @@ function InstallmentsList({ installments, loading, focusedRowId, onSelectRow }) 
         <span style={{
           padding: '2px 9px', borderRadius: 999,
           background: badge.bg, color: badge.fg,
-          fontSize: 11.5, fontWeight: 700, whiteSpace: 'nowrap', flexShrink: 0,
+          fontSize: 11.5, fontWeight: 600, whiteSpace: 'nowrap', flexShrink: 0,
         }}>
           {badge.label}
         </span>
@@ -2461,7 +2471,7 @@ function ActionsTimeline({ audit, operations, changes, etatHistory, hideTitle = 
             <History size={14} style={{ color: N.textFaint, flexShrink: 0, marginTop: 2 }} />
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{
-                fontSize: 10.5, fontWeight: 700, color: N.textFaint,
+                fontSize: 10.5, fontWeight: 600, color: N.textFaint,
                 textTransform: 'uppercase', letterSpacing: '0.04em',
               }}>
                 Dernière action · {formatRelativeFR(last.when)}
@@ -2512,7 +2522,7 @@ function ActionsTimeline({ audit, operations, changes, etatHistory, hideTitle = 
               style={{
                 alignSelf: 'flex-start', border: 'none', background: 'transparent',
                 cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit',
-                fontSize: 12, fontWeight: 600, color: N.textMuted,
+                fontSize: 12, fontWeight: 500, color: N.textMuted,
               }}
             >
               {open ? 'Réduire' : `Voir les ${previous.length} action${previous.length > 1 ? 's' : ''} précédente${previous.length > 1 ? 's' : ''}`}
@@ -2534,11 +2544,11 @@ function ActionsTimeline({ audit, operations, changes, etatHistory, hideTitle = 
 // Retouches dev 2026-08-21 : icône balance (Scale) dans la carte juriste,
 // email du juriste cliquable (mailto + copy), icône calendrier teintée
 // passé/à venir sur chaque ligne RDV.
-const AGENDA_GREEN = '#15794a';
-const AGENDA_NAVY = '#1e2330';
-const AGENDA_MUTED = '#8a93a4';
-const AGENDA_BORDER = '#e9ebf0';
-const AGENDA_AMBER = '#b45309';
+const AGENDA_GREEN = '#0b7a4b';
+const AGENDA_NAVY = '#2b2927';
+const AGENDA_MUTED = '#9d9890';
+const AGENDA_BORDER = '#e8e4de';
+const AGENDA_AMBER = '#c2500e';
 
 function RdvJuristeSection({ boardRow, agenda, onCopied }) {
   // Consolidation identique à ClientAgendaModal (board) : 4 RDV standards de
@@ -2630,10 +2640,10 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
           <Scale size={16} strokeWidth={2} />
         </span>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 10.5, color: AGENDA_MUTED, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+          <div style={{ fontSize: 10.5, color: AGENDA_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
             Juriste de référence
           </div>
-          <div style={{ fontSize: 13.5, fontWeight: 700, color: ref ? AGENDA_NAVY : AGENDA_MUTED }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, color: ref ? AGENDA_NAVY : AGENDA_MUTED }}>
             {ref ? `${ref.name}${ref.team ? ' · ' + ref.team : ''}` : "Aucun RDV juriste pour l'instant"}
           </div>
           {refEmail && (
@@ -2680,8 +2690,8 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
                 <span style={{
                   width: 28, height: 28, borderRadius: 8, flexShrink: 0,
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  background: upcoming ? '#fff3e3' : '#eef1f6',
-                  color: upcoming ? AGENDA_AMBER : '#5b6472',
+                  background: upcoming ? '#fde9da' : '#f1eee9',
+                  color: upcoming ? AGENDA_AMBER : '#6f6a63',
                 }}>
                   {upcoming
                     ? <CalendarClock size={14} strokeWidth={2} />
@@ -2689,7 +2699,7 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{
-                    fontSize: 13, fontWeight: 600, color: AGENDA_NAVY,
+                    fontSize: 13, fontWeight: 500, color: AGENDA_NAVY,
                     textDecoration: it.cancelled ? 'line-through' : 'none',
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
@@ -2706,10 +2716,10 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
                 </div>
                 {it.kind === 'standard' && (
                   <span style={{
-                    flexShrink: 0, fontSize: 11, fontWeight: 700,
+                    flexShrink: 0, fontSize: 11, fontWeight: 600,
                     padding: '3px 9px', borderRadius: 20,
                     color: it.done ? AGENDA_GREEN : AGENDA_MUTED,
-                    background: it.done ? '#e7f3ec' : '#eef1f6',
+                    background: it.done ? '#e7f3ec' : '#f1eee9',
                   }}>
                     {it.done ? 'Effectué' : 'À venir'}
                   </span>
@@ -2726,7 +2736,7 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
           style={{
             marginTop: 8, border: 'none', background: 'transparent',
             cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit',
-            fontSize: 12, fontWeight: 600, color: AGENDA_MUTED,
+            fontSize: 12, fontWeight: 500, color: AGENDA_MUTED,
           }}
         >
           {showAllRdv
@@ -2841,7 +2851,7 @@ function CompanyList({
 
   const iconBtn = (disabled) => ({
     border: 'none', background: 'transparent', padding: 2, display: 'inline-flex', borderRadius: 4,
-    color: disabled ? '#d5d5d2' : N.textFaint, cursor: disabled ? 'default' : 'pointer',
+    color: disabled ? '#d8d3cb' : N.textFaint, cursor: disabled ? 'default' : 'pointer',
   });
   const inputStyle = { border: `1px solid ${N.border}`, borderRadius: 6, padding: '5px 8px', fontSize: 12.5, fontFamily: 'inherit', outline: 'none', background: '#fff' };
 
@@ -2868,7 +2878,7 @@ function CompanyList({
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexShrink: 0, color: it.principal ? '#3e7d5a' : N.textMuted }}>
               <span style={{
                 width: 18, height: 18, borderRadius: 999, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 10.5, fontWeight: 700, background: it.principal ? '#3e7d5a' : '#e5e4e0', color: it.principal ? '#fff' : N.textMuted,
+                fontSize: 10.5, fontWeight: 600, background: it.principal ? '#3e7d5a' : '#e5e4e0', color: it.principal ? '#fff' : N.textMuted,
               }}>{index + 1}</span>
               <BuildingIcon size={15} />
             </span>
@@ -2880,13 +2890,13 @@ function CompanyList({
                   <span style={{ fontWeight: 500, color: N.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={it.name}>{it.name}</span>
                 )}
                 {it.principal && (
-                  <span style={{ fontSize: 10, fontWeight: 700, color: '#3e7d5a', background: '#dcebe2', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>
+                  <span style={{ fontSize: 10, fontWeight: 600, color: '#3e7d5a', background: '#dcebe2', borderRadius: 4, padding: '1px 6px', letterSpacing: '0.04em', textTransform: 'uppercase', flexShrink: 0 }}>
                     Principale
                   </span>
                 )}
               </span>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: N.textFaint }}>
-                <span style={{ letterSpacing: '0.04em', fontWeight: 600, fontSize: 10.5 }}>SIREN</span>
+                <span style={{ letterSpacing: '0.04em', fontWeight: 500, fontSize: 10.5 }}>SIREN</span>
                 {(canEditSiren && editing) ? (
                   <EditableText value={it.siren} placeholder="9 chiffres" onCommit={(value) => setSiren(it, value)} width="auto" />
                 ) : (
@@ -2928,7 +2938,7 @@ function CompanyList({
           style={{
             alignSelf: 'flex-start', display: 'inline-flex', alignItems: 'center', gap: 6,
             border: `1px dashed ${N.border}`, background: 'transparent', borderRadius: 8,
-            padding: '6px 10px', fontSize: 12.5, fontWeight: 600, color: N.textMuted, cursor: 'pointer', fontFamily: 'inherit',
+            padding: '6px 10px', fontSize: 12.5, fontWeight: 500, color: N.textMuted, cursor: 'pointer', fontFamily: 'inherit',
           }}
         >
           <span style={{ fontSize: 15, lineHeight: 1 }}>+</span> Ajouter une société
@@ -2939,7 +2949,7 @@ function CompanyList({
           <BuildingIcon size={15} color={N.textFaint} />
           <input autoFocus value={newName} onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }} placeholder="Nom de la société" style={{ ...inputStyle, flex: 1, minWidth: 140 }} />
           <input value={newSiren} onChange={(e) => setNewSiren(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); if (e.key === 'Escape') setAdding(false); }} placeholder="SIREN (9 chiffres)" style={{ ...inputStyle, width: 130 }} />
-          <button type="button" onClick={add} disabled={busy || newName.trim().length < 2} style={{ border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: newName.trim().length < 2 ? 'default' : 'pointer', background: newName.trim().length < 2 ? N.sideBg : N.text, color: newName.trim().length < 2 ? N.textFaint : '#fff' }}>
+          <button type="button" onClick={add} disabled={busy || newName.trim().length < 2} style={{ border: 'none', borderRadius: 6, padding: '6px 10px', fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: newName.trim().length < 2 ? 'default' : 'pointer', background: newName.trim().length < 2 ? N.sideBg : N.text, color: newName.trim().length < 2 ? N.textFaint : '#fff' }}>
             Ajouter
           </button>
           <button type="button" onClick={() => setAdding(false)} style={{ border: 'none', background: 'transparent', color: N.textFaint, cursor: 'pointer', fontSize: 12.5, fontFamily: 'inherit' }}>Annuler</button>
@@ -3042,7 +3052,7 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
             disabled={busy || name.trim().length < 2}
             style={{
               border: 'none', borderRadius: 5, padding: '3px 9px',
-              fontSize: 12.5, fontWeight: 600,
+              fontSize: 12.5, fontWeight: 500,
               cursor: name.trim().length < 2 ? 'default' : 'pointer',
               background: name.trim().length < 2 ? N.sideBg : N.text,
               color: name.trim().length < 2 ? N.textFaint : '#fff',
@@ -3084,8 +3094,8 @@ function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = pay
       {children}
       {notice && (
         <span style={{
-          fontSize: 11.5, lineHeight: 1.4, color: '#92400e', background: '#fffbeb',
-          border: '1px solid #fde68a', borderRadius: 8, padding: '4px 9px',
+          fontSize: 11.5, lineHeight: 1.4, color: '#a8480f', background: '#fffbeb',
+          border: '1px solid #f0e09a', borderRadius: 8, padding: '4px 9px',
           maxWidth: 300, textAlign: 'right',
         }}>
           {notice}
@@ -3179,7 +3189,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
         padding: 20, textAlign: 'center',
       }}
     >
-      <div style={{ fontSize: 13, color: N.text, fontWeight: 600 }}>
+      <div style={{ fontSize: 13, color: N.text, fontWeight: 500 }}>
         Passer à « {label} » à partir de quand ?
       </div>
       <div style={{ fontSize: 12, color: N.textMuted, maxWidth: 320, lineHeight: 1.5 }}>
@@ -3188,8 +3198,8 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
       </div>
       {endOfPaidYear && (
         <div style={{
-          fontSize: 12, color: '#92400e', background: '#fffbeb',
-          border: '1px solid #fde68a', borderRadius: 8,
+          fontSize: 12, color: '#a8480f', background: '#fffbeb',
+          border: '1px solid #f0e09a', borderRadius: 8,
           padding: '8px 12px', maxWidth: 340, lineHeight: 1.5,
         }}>
           L’annuel facturé en {formatMonthLabel(coverage.billed_month.slice(0, 7)).toLowerCase()}
@@ -3204,7 +3214,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
             onClick={() => onPick(endOfPaidYear)}
             style={{
               border: 'none', cursor: 'pointer', borderRadius: 6,
-              padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+              padding: '7px 14px', fontSize: 12.5, fontWeight: 500,
               background: N.text, color: '#fff',
             }}
           >
@@ -3217,7 +3227,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
           style={{
             border: endOfPaidYear ? `1px solid ${N.border}` : 'none',
             cursor: 'pointer', borderRadius: 6,
-            padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+            padding: '7px 14px', fontSize: 12.5, fontWeight: 500,
             background: endOfPaidYear ? '#fff' : N.text,
             color: endOfPaidYear ? N.text : '#fff',
           }}
@@ -3229,7 +3239,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
           onClick={() => onPick('next')}
           style={{
             border: `1px solid ${N.border}`, cursor: 'pointer', borderRadius: 6,
-            padding: '7px 14px', fontSize: 12.5, fontWeight: 600,
+            padding: '7px 14px', fontSize: 12.5, fontWeight: 500,
             background: '#fff', color: N.text,
           }}
         >
@@ -3270,7 +3280,7 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
           onClick={() => onPick(future)}
           style={{
             border: 'none', borderRadius: 6, padding: '7px 12px',
-            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+            fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
             cursor: future ? 'pointer' : 'default',
             background: future ? N.text : N.sideBg,
             color: future ? '#fff' : N.textFaint,
@@ -3314,9 +3324,9 @@ function EffectiveMonthPrompt({ label, onPick, onCancel, periods = [], coverage 
               onClick={() => onPick(retro)}
               style={{
                 border: 'none', borderRadius: 6, padding: '7px 12px',
-                fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+                fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
                 cursor: retro ? 'pointer' : 'default',
-                background: retro ? '#b45309' : N.sideBg,
+                background: retro ? '#c2500e' : N.sideBg,
                 color: retro ? '#fff' : N.textFaint,
               }}
             >
@@ -3392,8 +3402,8 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
       label: 'Renouvellement',
       value: d != null ? `J-${d}` : formatDateLongFR(profile.contract_end),
       title: formatDateLongFR(profile.contract_end),
-      pillBg: urgent ? N.redBg : (proche ? '#fdecc8' : undefined),
-      pillFg: urgent ? N.red : (proche ? '#9f6b00' : undefined),
+      pillBg: urgent ? N.redBg : (proche ? '#fbf1c2' : undefined),
+      pillFg: urgent ? N.red : (proche ? '#7a5a05' : undefined),
     });
   }
   // Perte : le client est là, mais il n'attend plus rien. Visible de TOUS —
@@ -3419,7 +3429,7 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
       icon: <Handshake size={12} />,
       label: 'Promesse',
       value: 'de règlement',
-      pillBg: '#fff3e3', pillFg: '#b45309',
+      pillBg: '#fde9da', pillFg: '#c2500e',
     });
   }
   if (!items.length) return null;
@@ -3450,7 +3460,7 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
           </span>
           <span style={{ color: it.pillFg || N.textMuted }}>{it.label}</span>
           <span style={{
-            color: it.pillFg || N.text, fontWeight: 600,
+            color: it.pillFg || N.text, fontWeight: 500,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             maxWidth: 180,
           }}>
@@ -3511,18 +3521,18 @@ function ActionsBar({
           style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
             height: 30, padding: '0 12px', borderRadius: 7,
-            border: `1px solid ${it.warn ? '#f5dcb5' : N.border}`,
-            background: it.warn ? '#fff8ed' : '#fff',
-            color: it.warn ? '#b45309' : N.text,
+            border: `1px solid ${it.warn ? '#f8d4ba' : N.border}`,
+            background: it.warn ? '#fdf1e6' : '#fff',
+            color: it.warn ? '#c2500e' : N.text,
             fontSize: 12.5, fontWeight: it.warn ? 700 : 600,
             fontFamily: 'inherit', cursor: 'pointer',
             boxShadow: '0 1px 2px rgba(15,15,15,0.04)',
             transition: 'background 0.12s, color 0.14s, border-color 0.14s',
           }}
           onMouseEnter={(e) => { e.currentTarget.style.background = it.warn ? '#fdefd6' : N.sideBg; }}
-          onMouseLeave={(e) => { e.currentTarget.style.background = it.warn ? '#fff8ed' : '#fff'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = it.warn ? '#fdf1e6' : '#fff'; }}
         >
-          <it.Icon size={13} strokeWidth={2} style={{ color: it.warn ? '#b45309' : N.textMuted }} />
+          <it.Icon size={13} strokeWidth={2} style={{ color: it.warn ? '#c2500e' : N.textMuted }} />
           {it.label}
         </button>
       ))}
@@ -3535,17 +3545,17 @@ function ActionsBar({
 // bouton de téléchargement de l'état de compte. Rétro-compatible.
 //
 // `variant` (présentation, 2026-10-16) : « section » = rendu d'origine (titre de
-// 11 px en capitales, marge haute de 28 px) ; « block » = sous-bloc d'un chapitre
-// (titre de 13 px, espacement porté par .fd-chapter dans DetailLayout.css).
+// 11 px en capitales, marge haute de 28 px) ; « block » = bloc d'une rubrique
+// (titre de 14 px avec `Icon` et phrase d'aide `hint`, espacement porté par .fd-stack).
 // `hideTitle` : le titre est déjà celui de la section repliable qui contient ce
 // bloc (doublon exact) ; le nom reste exposé aux lecteurs d'écran.
-function Section({ title, children, delay = 0, action = null, variant = 'section', hideTitle = false }) {
+function Section({ title, children, delay = 0, action = null, variant = 'section', hideTitle = false, Icon = null, hint = null }) {
   const block = variant === 'block';
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.3, delay, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.34, delay, ease: [0.16, 1, 0.3, 1] }}
       className={block ? 'fd-block' : undefined}
       style={block ? undefined : { marginTop: 28 }}
       aria-label={hideTitle ? title : undefined}
@@ -3556,12 +3566,15 @@ function Section({ title, children, delay = 0, action = null, variant = 'section
           gap: 10, margin: block ? '0 0 10px' : '0 0 12px',
         }}>
           {!hideTitle && (block ? (
-            <h3 className="fd-block-title">{title}</h3>
+            <div style={{ minWidth: 0 }}>
+              <h3 className="fd-block-title">{Icon && <Icon size={15} strokeWidth={1.8} />}{title}</h3>
+              {hint && <p className="fd-block-hint">{hint}</p>}
+            </div>
           ) : (
             <h2 style={{
-              fontSize: 11, fontWeight: 600, color: N.textMuted,
+              fontSize: 10.5, fontWeight: 500, color: N.textFaint,
               margin: 0,
-              textTransform: 'uppercase', letterSpacing: '0.04em',
+              textTransform: 'uppercase', letterSpacing: '0.09em',
             }}>
               {title}
             </h2>
@@ -3574,32 +3587,6 @@ function Section({ title, children, delay = 0, action = null, variant = 'section
   );
 }
 
-// ── Chapitre ────────────────────────────────────────────────────────────────
-// Regroupe plusieurs blocs sous un titre de même graphie que celui de `Section`
-// (11 px, capitales, gris) ; le filet et les espacements viennent de
-// DetailLayout.css. Purement visuel : aucun état, aucun chargement.
-function Chapter({ title, className = '', children }) {
-  return (
-    <section className={`fd-chapter ${className}`.trim()}>
-      <h2 className="fd-chapter-title">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 function formatAuditDate(iso) {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -3609,442 +3596,6 @@ function formatAuditDate(iso) {
     hour: '2-digit', minute: '2-digit',
   });
 }
-
-// ── Section : Commentaires (fil interne Owner) ──────────────────────────────
-// Remplace la timeline mensuelle (2026-08-25). Porte le contexte humain du
-// recouvrement — « promesse de règlement au 15 », « en attente retour
-// cabinet » — que ni l'échéancier ni l'audit ne capturent.
-//
-// Endpoints (backend en cours de déploiement → code défensif) :
-//   GET    /finance-periods/client/{id}/comments        (trié serveur)
-//   POST   /finance-periods/client/{id}/comments        {body}
-//   PATCH  /finance-periods/client/{id}/comments/{cid}  {pinned}
-//   DELETE /finance-periods/client/{id}/comments/{cid}
-//
-// Les créations et modifications attendent la confirmation du serveur.
-// Les actions (modifier / épingler / supprimer) ne s'affichent que si le
-// backend a calculé `can_moderate` sur l'entrée.
-//
-// Fil INTERNE Owner : aucun lien vers le fil du board (le cabinet Opti'Lex
-// ne doit pas le voir).
-
-// Tri local appliqué après chaque mutation optimiste — même ordre que le
-// serveur : épinglés d'abord, puis du plus récent au plus ancien.
-const sortComments = (list) => [...list].sort((a, b) => {
-  if (!!b.pinned !== !!a.pinned) return b.pinned ? 1 : -1;
-  return String(b.created_at || '').localeCompare(String(a.created_at || ''));
-});
-
-// `readOnly` (rôles en lecture seule) : composer et actions visibles, désactivés ; le fil se lit.
-export function ClientComments({ clientId, onShowToast, variant = 'section', role = apiClient.getUser()?.role, readOnly = false }) {
-  const [comments, setComments] = useState(null);   // null = en cours / indispo
-  // Au-delà de quatre commentaires le fil noyait le reste de la fiche : on
-  // n'affiche que les plus récents, le reste se déplie (demande dev
-  // 2026-08-28). Les épinglés remontent déjà en tête côté backend, ils
-  // restent donc visibles.
-  const [allCommentsShown, setAllCommentsShown] = useState(false);
-  // Un seul commentaire visible, le plus récent, et les autres se déplient —
-  // exactement comme l'historique des actions (demande dev 2026-08-28). On
-  // voit d'un coup d'œil la dernière action ET le dernier commentaire, qui
-  // sont les deux choses qu'on vient chercher sur une fiche.
-  //
-  // Un commentaire épinglé prime : le backend le remonte en tête, et c'est
-  // volontairement lui qu'on garde à l'écran s'il existe.
-  const COMMENTS_PREVIEW = 1;
-  const visibleComments = (comments && !allCommentsShown)
-    ? comments.slice(0, COMMENTS_PREVIEW)
-    : (comments || []);
-  const [available, setAvailable] = useState(true); // false = endpoint absent
-  const [draft, setDraft] = useState('');
-  const [loadError, setLoadError] = useState('');
-  const [retry, setRetry] = useState(0);
-  const canPin = ['admin', 'ceo', 'finance_director'].includes(role);
-  const [posting, setPosting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(null); // id en attente
-  const taRef = useRef(null);
-
-  const base = clientId ? `/api/v1/finance-periods/client/${clientId}/comments` : null;
-
-  useEffect(() => {
-    if (!clientId) return undefined;
-    let cancelled = false;
-    setComments(null);
-    setAvailable(true);
-    setLoadError('');
-    setConfirmDelete(null);
-    apiClient.get(base)
-      .then((data) => {
-        if (cancelled) return;
-        const list = Array.isArray(data?.comments) ? data.comments
-          : Array.isArray(data) ? data : [];
-        setComments(sortComments(list));
-      })
-      .catch(() => {
-        // Afficher l’erreur sans perdre le brouillon.
-        if (!cancelled) { setAvailable(false); setComments([]); setLoadError('Les commentaires n’ont pas pu être chargés. Votre texte est conservé.'); }
-      });
-    return () => { cancelled = true; };
-  }, [clientId, base, retry]);
-
-  // Textarea auto-grow (pas de scrollbar interne, la fiche scrolle déjà).
-  const autoGrow = useCallback(() => {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 220)}px`;
-  }, []);
-
-  const submit = useCallback(async () => {
-    const body = draft.trim();
-    if (readOnly || !body || posting || !base || comments === null || !available) return;
-    setPosting(true);
-    try {
-      const created = await apiClient.post(base, { body });
-      if (!created?.id || !created?.body) throw new Error('Réponse d’enregistrement incomplète');
-      setComments(prev => sortComments([created, ...(prev || []).filter(c => c.id !== created.id)]));
-      setDraft('');
-      if (taRef.current) taRef.current.style.height = 'auto';
-    } catch (e) {
-      onShowToast?.(e?.data?.detail || 'Le commentaire n’a pas été confirmé. Votre texte est conservé.', 'error');
-    } finally {
-      setPosting(false);
-    }
-  }, [draft, posting, base, onShowToast, comments, available, readOnly]);
-
-  const togglePin = useCallback(async (comment) => {
-    if (!base) return;
-    const next = !comment.pinned;
-    const snapshot = comments;
-    setComments((prev) => sortComments(
-      (prev || []).map((c) => (c.id === comment.id ? { ...c, pinned: next } : c))
-    ));
-    try {
-      await apiClient.patch(`${base}/${comment.id}`, { pinned: next });
-    } catch (e) {
-      setComments(snapshot);
-      onShowToast?.(e?.data?.detail || "Erreur lors de l'épinglage", 'error');
-    }
-  }, [base, comments, onShowToast]);
-
-  const remove = useCallback(async (comment) => {
-    if (!base) return;
-    const snapshot = comments;
-    setConfirmDelete(null);
-    setComments((prev) => (prev || []).filter((c) => c.id !== comment.id));
-    try {
-      await apiClient.delete(`${base}/${comment.id}`);
-    } catch (e) {
-      setComments(snapshot);
-      onShowToast?.(e?.data?.detail || 'Erreur lors de la suppression', 'error');
-    }
-  }, [base, comments, onShowToast]);
-
-  const saveBody = async (comment, body) => {
-    const updated = await apiClient.patch(`${base}/${comment.id}`, { body });
-    if (!updated?.id || !updated?.body) throw new Error('La modification n’a pas été confirmée.');
-    setComments(prev => sortComments((prev || []).map(c => c.id === updated.id ? updated : c)));
-  };
-
-  return (
-    <Section title="Commentaires internes finance" delay={0.14} variant={variant}>
-      {loadError && <div role="alert" style={{ color: '#b42318', marginBottom: 10 }}>{loadError} <button type="button" onClick={() => setRetry(v => v + 1)}>Réessayer</button></div>}
-      {/* Composer */}
-      <div style={{
-        border: `1px solid ${N.borderSft}`,
-        borderRadius: 10,
-        padding: '10px 12px',
-        marginBottom: comments?.length ? 10 : 0,
-      }}>
-        <textarea
-          ref={taRef}
-          value={draft}
-          disabled={posting}
-          onChange={(e) => { setDraft(e.currentTarget.value); autoGrow(); }}
-          {...(readOnly ? READ_ONLY_PROPS : {})}
-          onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); submit(); }
-          }}
-          rows={2}
-          placeholder="Ajouter un commentaire… (promesse de règlement, retour cabinet…)"
-          style={{
-            width: '100%', border: 'none', outline: 'none', resize: 'none',
-            background: 'transparent',
-            fontSize: 13, lineHeight: 1.5, fontFamily: 'inherit', color: N.text,
-            minHeight: 38, maxHeight: 220, boxSizing: 'border-box',
-          }}
-        />
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          gap: 10, marginTop: 4,
-        }}>
-          <span style={{ fontSize: 10.5, color: N.textFaint }}>
-            ⌘ + Entrée pour publier
-          </span>
-          <button
-            type="button"
-            onClick={submit}
-            disabled={!draft.trim() || posting || comments === null || !available}
-            style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              height: 26, padding: '0 12px',
-              border: 'none', borderRadius: 6,
-              background: draft.trim() ? '#2383e2' : '#e9e9e7',
-              color: draft.trim() ? '#fff' : N.textFaint,
-              fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-              cursor: draft.trim() && !posting ? 'pointer' : 'default',
-              transition: 'background 0.15s, color 0.15s',
-            }}
-            {...(readOnly ? READ_ONLY_PROPS : {})}
-          >
-            <MessageSquarePlus size={12} strokeWidth={2} />
-            {posting ? 'Envoi…' : 'Commenter'}
-          </button>
-        </div>
-      </div>
-
-      {/* Fil */}
-      {comments === null ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {Array.from({ length: 2 }).map((_, i) => (
-            <div key={i} style={{
-              height: 52, background: '#f3f4f6', borderRadius: 10,
-              animation: 'tsfPulse 1.4s ease-in-out infinite', opacity: 1 - i * 0.15,
-            }} />
-          ))}
-        </div>
-      ) : comments.length === 0 ? (
-        <div style={{
-          padding: '10px 12px', fontSize: 12.5, color: N.textFaint,
-          fontStyle: 'italic',
-        }}>
-          Aucun commentaire pour ce client.
-        </div>
-      ) : (
-        <div>
-          {/* Le fil défile sans compresser les cartes ; le bouton reste
-              hors de la zone défilante, accessible même sur un long fil. */}
-          <div style={{
-            display: 'flex', flexDirection: 'column', gap: 6,
-            // Toujours borné et défilant : basculer maxHeight/overflow au
-            // « Réduire » changeait la géométrie en plein mouvement.
-            maxHeight: 320, overflowY: 'auto', paddingRight: 4,
-          }}>
-            <AnimatePresence initial={false}>
-              {visibleComments.map((c, i) => (
-                <CommentRow
-                  key={c.id}
-                  comment={c}
-                  index={i}
-                  confirming={confirmDelete === c.id}
-                  onAskDelete={() => setConfirmDelete(c.id)}
-                  onCancelDelete={() => setConfirmDelete(null)}
-                  onConfirmDelete={() => remove(c)}
-                  onTogglePin={() => togglePin(c)}
-                  canPin={canPin || readOnly}
-                  readOnly={readOnly}
-                  onSaveBody={body => saveBody(c, body)}
-                />
-              ))}
-            </AnimatePresence>
-          </div>
-          {comments.length > COMMENTS_PREVIEW && (
-            <button
-              type="button"
-              onClick={() => setAllCommentsShown((v) => !v)}
-              style={{
-                marginTop: 6,
-                border: 'none', background: 'transparent', cursor: 'pointer',
-                padding: '4px 2px', fontFamily: 'inherit',
-                fontSize: 12, fontWeight: 600, color: N.textMuted,
-              }}
-            >
-              {allCommentsShown
-                ? 'Réduire'
-                : (comments.length - COMMENTS_PREVIEW === 1
-                  ? 'Voir le commentaire précédent'
-                  : `Voir les ${comments.length - COMMENTS_PREVIEW} commentaires précédents`)}
-            </button>
-          )}
-        </div>
-      )}
-    </Section>
-  );
-}
-
-const COMMENT_AMBER = '#b45309';
-
-function CommentRow({
-  comment, index, confirming,
-  onAskDelete, onCancelDelete, onConfirmDelete, onTogglePin, canPin, onSaveBody, readOnly = false,
-}) {
-  const [hover, setHover] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(comment.body);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
-  async function save() {
-    if (!draft.trim() || saving) return;
-    setSaving(true); setError('');
-    try { await onSaveBody(draft.trim()); setEditing(false); }
-    catch (e) { setError(e?.data?.detail || 'La modification n’a pas été enregistrée. Votre texte est conservé.'); }
-    finally { setSaving(false); }
-  }
-  const av = avatarMeta(comment.author_name || comment.author_email || '?');
-  const edited = comment.updated_at && comment.updated_at !== comment.created_at;
-  const showActions = comment.can_moderate && !comment._pending && !editing;
-  const ro = readOnly ? READ_ONLY_PROPS : {};
-
-  return (
-    // Pas d'animation de mise en page (`layout`) ni de sortie en hauteur
-    // nulle : au « Réduire », framer-motion mesurait les cartes pendant que
-    // le conteneur perdait sa hauteur bornée et laissait la carte restante
-    // écrasée, ses lignes invisibles (retour finance 2026-09-18). Les cartes
-    // entrent et sortent en fondu, à leur hauteur naturelle.
-    <motion.div
-      initial={{ opacity: 0, y: 6 }}
-      animate={{ opacity: comment._pending ? 0.6 : 1, y: 0 }}
-      exit={{ opacity: 0, y: -4 }}
-      transition={{ duration: 0.18, delay: Math.min(index, 6) * 0.02, ease: [0.4, 0, 0.2, 1] }}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: 'relative',
-        display: 'flex', alignItems: 'flex-start', gap: 10,
-        // Une carte garde toute sa hauteur dans le fil plafonné à 300 px.
-        flexShrink: 0,
-        padding: '10px 12px',
-        border: `1px solid ${N.borderSft}`,
-        borderLeft: comment.pinned ? `2px solid ${COMMENT_AMBER}` : `1px solid ${N.borderSft}`,
-        borderRadius: 10,
-        background: comment.pinned ? '#fffdf8' : '#fff',
-        overflow: 'hidden',
-        transition: 'background 0.2s ease',
-      }}
-    >
-      {/* Avatar initiales de l'auteur */}
-      <span style={{
-        width: 26, height: 26, borderRadius: '50%', flexShrink: 0,
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        background: av.bg, color: av.fg,
-        fontSize: 10.5, fontWeight: 700, userSelect: 'none',
-      }}>
-        {av.initials}
-      </span>
-
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          flexWrap: 'wrap', minWidth: 0,
-        }}>
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: N.text }}>
-            {comment.author_name || comment.author_email || 'Inconnu'}
-          </span>
-          <span style={{ fontSize: 11, color: N.textFaint, whiteSpace: 'nowrap' }}>
-            {formatRelativeFR(comment.created_at)}
-          </span>
-          {edited && (
-            <span style={{ fontSize: 10.5, color: N.textFaint, fontStyle: 'italic' }}>
-              modifié
-            </span>
-          )}
-          {comment.pinned && (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              padding: '1px 7px', borderRadius: 999,
-              background: '#fff3e3', color: COMMENT_AMBER,
-              fontSize: 10, fontWeight: 700,
-              textTransform: 'uppercase', letterSpacing: '0.03em',
-            }}>
-              <Pin size={9} strokeWidth={2.4} />
-              Épinglé
-            </span>
-          )}
-        </div>
-        {/* Texte : les retours à la ligne saisis sont préservés */}
-        <div style={{
-          marginTop: 3,
-          fontSize: 13, lineHeight: 1.5, color: N.text,
-          whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-        }}>
-          {editing ? <div>
-            <textarea aria-label="Modifier le commentaire" value={draft} disabled={saving} onChange={e => setDraft(e.target.value)} rows={4} style={{ width: '100%', boxSizing: 'border-box', font: 'inherit', padding: 8 }} />
-            {error && <p role="alert" style={{ color: '#b42318' }}>{error}</p>}
-            <button type="button" disabled={saving || !draft.trim()} onClick={save}>{saving ? 'Enregistrement…' : 'Enregistrer'}</button>{' '}
-            <button type="button" disabled={saving} onClick={() => setEditing(false)}>Annuler</button>
-          </div> : comment.body}
-        </div>
-      </div>
-
-      {/* Actions — réservées à `can_moderate` (direction financière ou
-          auteur du message), révélées au survol. Suppression confirmée
-          INLINE : un window.confirm bloquerait l'UI. */}
-      {showActions && (
-        <span style={{
-          display: 'inline-flex', alignItems: 'center', gap: 4,
-          flexShrink: 0, alignSelf: 'flex-start',
-        }}>
-          {confirming ? (
-            <>
-              <span style={{ fontSize: 11, color: N.textMuted, whiteSpace: 'nowrap' }}>
-                Supprimer ?
-              </span>
-              <button
-                type="button"
-                onClick={onConfirmDelete}
-                style={{ ...commentActionStyle, color: '#b42318', fontWeight: 700, width: 'auto', padding: '0 7px' }}
-              >
-                Oui
-              </button>
-              <button
-                type="button"
-                onClick={onCancelDelete}
-                style={{ ...commentActionStyle, color: N.textMuted, width: 'auto', padding: '0 7px' }}
-              >
-                Annuler
-              </button>
-            </>
-          ) : (
-            <>
-              <button type="button" title="Modifier le commentaire" aria-label="Modifier le commentaire" style={commentActionStyle}
-                onClick={() => { setDraft(comment.body); setError(''); setEditing(true); }} {...ro}><Pencil size={12}/></button>
-              {canPin && <button
-                type="button"
-                title={comment.pinned ? 'Désépingler' : 'Épingler en tête'}
-                onClick={onTogglePin}
-                style={{ ...commentActionStyle, color: comment.pinned ? COMMENT_AMBER : N.textFaint }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = N.sideBg; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
-                {...ro}
-              >
-                <Pin size={12} strokeWidth={2} />
-              </button>}
-              <button
-                type="button"
-                title="Supprimer"
-                onClick={onAskDelete}
-                style={{ ...commentActionStyle, color: N.textFaint }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = '#fdecec'; e.currentTarget.style.color = '#b42318'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = N.textFaint; }}
-                {...ro}
-              >
-                <Trash2 size={12} strokeWidth={2} />
-              </button>
-            </>
-          )}
-        </span>
-      )}
-    </motion.div>
-  );
-}
-
-const commentActionStyle = {
-  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  height: 22, width: 22, padding: 0,
-  border: 'none', background: 'transparent',
-  borderRadius: 5, cursor: 'pointer',
-  fontFamily: 'inherit', fontSize: 11,
-  transition: 'background 0.12s, color 0.12s',
-};
 
 // ── Empty state ─────────────────────────────────────────────────────────────
 function Empty({ text = 'Aucune donnée disponible.' }) {

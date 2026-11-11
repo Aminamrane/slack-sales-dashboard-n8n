@@ -22,14 +22,14 @@ import apiClient from '../../../services/apiClient.js';
 import { formatEUR } from '../constants.js';
 
 const N = {
-  text: '#37352f',
-  textMuted: '#787774',
-  textFaint: '#9b9a97',
-  border: '#e3e2e0',
-  borderSft: '#ededec',
-  sideBg: '#f7f7f5',
-  green: '#0f7b6c',
-  amber: '#b45309',
+  text: '#1c1b19',
+  textMuted: '#8b867e',
+  textFaint: '#a8a39b',
+  border: '#e3ded6',
+  borderSft: '#ebe8e3',
+  sideBg: '#f7f5f2',
+  green: '#0b7a4b',
+  amber: '#c2500e',
 };
 
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
@@ -161,7 +161,7 @@ export default function StructureAmountCell({
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 marginBottom: 8,
               }}>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: N.text }}>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: N.text }}>
                   Récupéré par structure
                 </span>
                 <button
@@ -240,7 +240,7 @@ export default function StructureAmountCell({
                     marginTop: 9, width: '100%',
                     display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                     border: 'none', borderRadius: 6, padding: '7px 12px',
-                    fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit',
+                    fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit',
                     cursor: saving ? 'default' : 'pointer',
                     background: saving ? N.sideBg : N.text,
                     color: saving ? N.textFaint : '#fff',

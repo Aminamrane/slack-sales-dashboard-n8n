@@ -41,9 +41,9 @@ export default function CompanyNameInput({ value, onCommit }) {
         }}
         style={{ width: '100%', boxSizing: 'border-box', minWidth: 180,
           border: '1px solid #d9d9d5', borderRadius: 6, background: '#fff',
-          padding: '7px 10px', color: '#37352f', fontSize: 13, fontFamily: 'inherit' }}
+          padding: '7px 10px', color: '#1c1b19', fontSize: 13, fontFamily: 'inherit' }}
       />
-      {status && <div role="status" style={{ marginTop: 4, fontSize: 11, color: status === 'Enregistré' ? '#0f766e' : '#787774' }}>{status}</div>}
+      {status && <div role="status" style={{ marginTop: 4, fontSize: 11, color: status === 'Enregistré' ? '#0f766e' : '#8b867e' }}>{status}</div>}
     </div>
   );
 }
