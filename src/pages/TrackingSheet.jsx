@@ -1,5 +1,6 @@
 import SalePaymentMode from '../components/SalePaymentMode';
 import { ContractFolders } from '../components/BoardClientFiles.jsx';
+import { createLiveListener } from "../utils/liveDictation.js";
 import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
 import LeadTransfer, { TransferTag } from '../components/leadTransfer/LeadTransfer.jsx';
 import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from '../utils/saleRescheduling';
@@ -1258,30 +1259,20 @@ export default function TrackingSheet() {
   const [micError, setMicError] = useState(null); // flash error message
   const micRecorderRef = useRef(null);
   const micChunksRef = useRef([]);
-  // Dictée en direct (11/11/2026) : la reconnaissance vocale du navigateur montre le texte pendant qu'on parle. La
-  // transcription du serveur reste le texte final ; si elle échoue ou revient vide, le texte en direct est gardé.
+  // Dictée en direct (11/11/2026) : la reconnaissance vocale du navigateur montre le texte pendant qu'on parle, et ce
+  // texte part dans le commentaire dès l'arrêt (12/11/2026). La transcription du serveur n'est plus qu'un secours :
+  // navigateur sans reconnaissance vocale, écoute interrompue par une erreur, ou rien d'entendu.
   const [micLive, setMicLive] = useState('');
   const micLiveRef = useRef('');
   const micRecognitionRef = useRef(null);
   const micLiveStart = () => {
     micLiveRef.current = ''; setMicLive('');
     const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!Recognition) return;
-    try {
-      const recognition = new Recognition();
-      recognition.lang = 'fr-FR'; recognition.continuous = true; recognition.interimResults = true;
-      recognition.onresult = (event) => {
-        let text = '';
-        for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
-        micLiveRef.current = text.trim(); setMicLive(micLiveRef.current);
-      };
-      recognition.onerror = () => {};
-      recognition.start();
-      micRecognitionRef.current = recognition;
-    } catch { micRecognitionRef.current = null; }
+    micRecognitionRef.current = createLiveListener({ Recognition: Recognition || undefined, onText: (text) => { micLiveRef.current = text; setMicLive(text); } });
+    micRecognitionRef.current.start();
   };
   const micLiveStop = () => {
-    try { micRecognitionRef.current?.stop(); } catch { /* déjà arrêtée */ }
+    micRecognitionRef.current?.cancel();
     micRecognitionRef.current = null;
   };
   const getMicMimeType = () => {
@@ -1311,11 +1302,22 @@ export default function TrackingSheet() {
   const micStopAndTranscribe = (onText) => {
     const mr = micRecorderRef.current;
     if (!mr || mr.state === 'inactive') return;
-    micLiveStop();
+    // L'écoute en direct rend sa dernière phrase pendant que l'enregistrement se ferme.
+    const listener = micRecognitionRef.current;
+    micRecognitionRef.current = null;
+    const heard = listener ? listener.finish() : Promise.resolve({ text: micLiveRef.current, trusted: false });
     mr.onstop = async () => {
       setMicRecording(false);
+      const { text: live, trusted } = await heard;
+      // Le texte entendu en direct part tout de suite dans le commentaire (dev 12/11/2026 : « pour l'avoir dans le
+      // texte, ça met énormément de temps »). Le serveur ne transcrit l'enregistrement que si l'écoute a décroché.
+      if (trusted) {
+        onText(live);
+        micLiveRef.current = ''; setMicLive('');
+        mr.stream.getTracks().forEach(t => t.stop());
+        return;
+      }
       setMicTranscribing(true);
-      const live = micLiveRef.current;
       const ext = (mr.mimeType || '').includes('mp4') ? 'recording.mp4' : (mr.mimeType || '').includes('ogg') ? 'recording.ogg' : 'recording.webm';
       const blob = new Blob(micChunksRef.current, { type: mr.mimeType || 'audio/webm' });
       try {
