@@ -59,3 +59,59 @@ test('filterHistory : un seul type, sans jour vide', () => {
   assert.deepEqual(filterHistory(history, 'comments'), [{ day: '2026-11-10', items: [{ filter: 'comments' }] }]);
   assert.deepEqual(filterHistory(undefined, 'comments'), []);
 });
+
+test("le suivi d'Owner se mêle à l'historique d'Opti'Lex, et chaque entrée garde une clé stable", async () => {
+  const { eventKey, mergeHistory, missionComments, repliesTo } = await import("./automationBoard.js");
+  const history = [
+    { day: "2026-11-10", label: "mardi 10 novembre", items: [
+      { time: "16:42", what: "Note", who: "Direction", text: "Calcul validé.", filter: "comments" },
+      { time: "11:05", what: "Étape passée à « Tests »", who: "Direction", note: "Recette le 16.", filter: "decisions" }] },
+    { day: "2026-11-06", label: "vendredi 6 novembre", items: [{ time: "09:30", what: "Document ajouté", who: "Direction", file: { name: "cdc.pdf", size: 10 }, filter: "files" }] },
+  ];
+  const key = eventKey("2026-11-10", history[0].items[1]);
+  assert.match(key, /^x:[0-9a-f]{16}$/);
+  assert.equal(key, eventKey("2026-11-10", { ...history[0].items[1], note: "autre texte" }));
+  assert.notEqual(key, eventKey("2026-11-11", history[0].items[1]));
+  const entries = [
+    { id: 5, key: "o:5", kind: "comment", target_key: key, body: "Vu.", author_name: "Alice", created_at: "2026-11-11T08:00:00+00:00", mine: true, files: [] },
+    { id: 4, key: "o:4", kind: "comment", target_key: null, body: "Prioritaire.", author_name: "Alice", created_at: "2026-11-11T07:00:00+00:00", mine: true, files: [] },
+    { id: 3, key: "o:3", kind: "document", target_key: null, body: "", author_name: "Bruno", created_at: "2026-11-09T10:00:00+00:00", mine: false, files: [{ id: "f", file_name: "v4.pdf" }] },
+    { id: 2, key: "o:2", kind: "update", target_key: null, body: "Recette faite.", author_name: "Bruno", created_at: "2026-11-12T09:15:00+00:00", mine: false, files: [] },
+  ];
+  const merged = mergeHistory(history, entries);
+  assert.deepEqual(merged.days.map((day) => day.day), ["2026-11-12", "2026-11-10", "2026-11-09", "2026-11-06"]);
+  assert.deepEqual(merged.days[0].items.map((item) => [item.key, item.what, item.time]), [["o:2", "Point d’avancement", "10:15"]]);
+  assert.deepEqual(merged.counts, { steps: 2, files: 2 });
+  assert.deepEqual(mergeHistory(history, entries, "files").days.map((day) => day.items[0].what), ["Document déposé", "Document ajouté"]);
+  assert.deepEqual(missionComments(history, entries).map((item) => [item.shared, item.text]), [[false, "Prioritaire."], [true, "Calcul validé."]]);
+  assert.deepEqual(repliesTo(entries, key).map((item) => item.text), ["Vu."]);
+  assert.deepEqual(repliesTo(entries, "o:2"), []);
+});
+
+test("le parcours d'une mission : des jalons datés, l'étape en cours, la suite, et le reste rangé dessous", async () => {
+  const { journey, eventSentence, eventKey } = await import("./automationBoard.js");
+  const steps = [{ value: 0, label: "Non commencé" }, { value: 1, label: "Cahier des charges envoyé" }, { value: 2, label: "V1 réalisée, non testée" }, { value: 3, label: "V1 testée et approuvée" }];
+  const history = [
+    { day: "2026-11-10", items: [{ time: "11:05", kind: "decision", filter: "decisions", what: "a changé l'étape", who: "Direction", detail: "Cahier des charges envoyé → V1 réalisée, non testée" },
+      { time: "09:00", kind: "comment", filter: "comments", what: "a commenté", who: "Direction", text: "Vu." }] },
+    { day: "2026-11-06", items: [{ time: "09:30", kind: "file", filter: "files", what: "a déposé un fichier", who: "Direction", file: { name: "cdc.pdf", size: "471 Ko" } }] },
+    { day: "2026-10-02", items: [{ time: null, kind: "decision", filter: "decisions", what: "a changé l'étape", who: "Direction", detail: "Non commencé → Cahier des charges envoyé" }] },
+    { day: "2026-09-14", items: [{ time: "08:00", kind: "first", filter: "decisions", what: "Opti'Lex", who: null, detail: "Pas encore automatisée" }] },
+  ];
+  const entries = [{ id: 2, key: "o:2", kind: "update", target_key: null, body: "Recette faite.", author_name: "Alice", created_at: "2026-11-12T09:15:00+00:00", mine: true, files: [] },
+    { id: 3, key: "o:3", kind: "comment", target_key: "s:3", body: "On vise fin novembre.", author_name: "Alice", created_at: "2026-11-12T09:20:00+00:00", mine: true, files: [] }];
+  const path = journey({ step: 2, validated: null }, steps, history, entries);
+  assert.deepEqual(path.map((m) => [m.kind, m.state, m.label]), [
+    ["created", "done", "Entrée dans le suivi"], ["step", "done", "Cahier des charges envoyé"], ["step", "now", "V1 réalisée, non testée"],
+    ["step", "next", "V1 testée et approuvée"], ["validated", "next", "Validation par la direction du cabinet"]]);
+  assert.deepEqual(path.map((m) => m.event?.day || null), ["2026-09-14", "2026-10-02", "2026-11-10", null, null]);
+  assert.equal(path[2].key, eventKey("2026-11-10", history[0].items[0]));
+  assert.deepEqual([path[3].key, path[4].key], ["s:3", "s:9"]);
+  assert.deepEqual(path[1].items.map((item) => item.what), ["a déposé un fichier"]);            // déposé pendant l'étape « cahier des charges »
+  assert.deepEqual(path[2].items.map((item) => [item.key, item.source]), [["o:2", "owner"]]);   // le point d'Owner, sous l'étape en cours
+  assert.equal(eventSentence(path[2].event), "Direction a changé l'étape");
+  const fresh = journey({ step: 0, validated: null }, steps, [], []);
+  assert.deepEqual(fresh.map((m) => [m.state, m.key]), [["now", "s:0"], ["next", "s:1"], ["next", "s:2"], ["next", "s:3"], ["next", "s:9"]]);
+  const done = journey({ step: 3, validated: { by: "Direction", at: "12/11/2026 à 10:00" } }, steps, [{ day: "2026-11-12", items: [{ time: "10:00", kind: "validated", filter: "decisions", what: "a validé le process", who: "Direction" }] }], []);
+  assert.deepEqual([done.at(-1).state, done.at(-1).by, done[3].state, done[1].event], ["done", "Direction", "now", null]);
+});
