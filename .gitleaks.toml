@@ -1,0 +1,24 @@
+# Scan de secrets (gitleaks), règles par défaut + deux exceptions étroites (audit sécurité du 18/10/2026).
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Clé Supabase « anon » du projet : publique par conception, intégrée à chaque build du front (la protection repose sur les règles RLS). Exception limitée à sa charge utile exacte (rôle anon) ; toute autre clé Supabase reste détectée."
+regexTarget = "match"
+regexes = [
+  '''eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJxYWRyZnd3cW9xcWlnenJhdmt0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDk3MzA0NTAsImV4cCI6MjA2NTMwNjQ1MH0''',
+]
+
+[[allowlists]]
+description = "Bundles minifiés de dist/ (sortie de build versionnée) : la règle générique « clé d'API » y prend du code compressé pour des clés. Les autres règles (JWT, clés de fournisseurs connus) s'appliquent toujours à dist/."
+targetRules = ["generic-api-key"]
+paths = [
+  '''^dist/''',
+]
+
+[[allowlists]]
+description = "Nom de clé localStorage de la Tracking Sheet Finance (préférence d'affichage), pas un secret."
+regexTarget = "line"
+regexes = [
+  '''const SCOPE_LS_KEY = 'tsf-[a-z-]+-v[0-9]+'''',
+]
