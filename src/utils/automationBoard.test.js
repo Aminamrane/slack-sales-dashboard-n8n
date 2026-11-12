@@ -115,3 +115,19 @@ test("le parcours d'une mission : des jalons datés, l'étape en cours, la suite
   const done = journey({ step: 3, validated: { by: "Direction", at: "12/11/2026 à 10:00" } }, steps, [{ day: "2026-11-12", items: [{ time: "10:00", kind: "validated", filter: "decisions", what: "a validé le process", who: "Direction" }] }], []);
   assert.deepEqual([done.at(-1).state, done.at(-1).by, done[3].state, done[1].event], ["done", "Direction", "now", null]);
 });
+
+test("ce que le cabinet pose dans Opti'Lex : l'étape atteinte vient du logiciel, le commentaire dit l'étape qu'il vise", async () => {
+  const { journey, missionComments } = await import("./automationBoard.js");
+  const steps = [{ value: 0, label: "Non commencé" }, { value: 1, label: "Cahier des charges envoyé" }, { value: 2, label: "V1 réalisée, non testée" }];
+  const history = [{ day: "2026-11-10", items: [
+    { time: "16:00", filter: "comments", kind: "comment", what: "a commenté", who: "Direction", text: "À revoir avant la V1.", target: 1, step: null },
+    // Le libellé de l'étape a changé depuis : sans `step`, « avant → après » ne dirait plus rien.
+    { time: "11:05", filter: "decisions", kind: "decision", what: "a changé l'étape", who: "Direction", detail: "Ancien nom → Autre ancien nom", step: 2 },
+    { time: "09:00", filter: "files", kind: "file", what: "a déposé un fichier", who: "Direction", file: { name: "Cahier.pdf", size: "471 Ko", removed: false, id: "a".repeat(32) } },
+  ] }];
+  const path = journey({ step: 2 }, steps, history, []);
+  assert.equal(path[2].state, "now");
+  assert.equal(path[2].event?.who, "Direction");
+  assert.equal(path.flatMap((milestone) => milestone.items).find((item) => item.file)?.file.id, "a".repeat(32));
+  assert.deepEqual(missionComments(history, []).map((item) => [item.text, item.target]), [["À revoir avant la V1.", 1]]);
+});

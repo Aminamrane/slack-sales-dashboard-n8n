@@ -11,7 +11,7 @@ async function send(path, options) {
   const response = await apiClient._authenticatedFetch(apiClient.baseUrl + path, options);
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(typeof data.detail === "string" ? data.detail : "L’enregistrement n’a pas abouti. Réessayez.");
+    throw new Error(typeof data.detail === "string" ? data.detail : "L’action n’a pas abouti. Réessayez.");
   }
   return response;
 }
@@ -26,8 +26,9 @@ export const followupApi = {
   },
   remove: (id, entryId) => apiClient.delete(`${API}/${id}/followup/${entryId}`),
   react: (id, targetKey, emoji) => apiClient.post(`${API}/${id}/followup/reactions`, { target_key: targetKey, emoji }),
+  // `file.partner` : un fichier que le cabinet a déposé dans Opti'Lex, servi par Owner ; sinon une pièce du suivi d'Owner.
   async download(id, file) {
-    const blob = await (await send(`${API}/${id}/followup/files/${file.id}`)).blob();
+    const blob = await (await send(`${API}/${id}/${file.partner ? "files" : "followup/files"}/${file.id}`)).blob();
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url; link.download = file.file_name; link.click();
@@ -45,4 +46,9 @@ export function pickFiles(current, incoming) {
     list.push({ key: `${file.name}-${file.size}-${file.lastModified}-${list.length}`, file });
   });
   return [list, refused];
+}
+
+// Un fichier d'Opti'Lex (cahier des charges du cabinet) au format des pièces du suivi : `id` absent une fois le fichier retiré.
+export function partnerFile(file) {
+  return file?.id ? { id: file.id, file_name: file.name, byte_size: file.size, partner: true } : null;
 }
