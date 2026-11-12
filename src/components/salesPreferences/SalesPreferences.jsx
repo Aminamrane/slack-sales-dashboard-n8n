@@ -46,11 +46,11 @@ function SectorChip({ sectorKey, label, kind, active = true, onClick, darkMode }
     <button type="button" onClick={onClick} disabled={!clickable}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 999,
-        fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', lineHeight: 1.2,
+        fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', lineHeight: 1.2,
         cursor: clickable ? 'pointer' : 'default', transition: 'all 0.15s ease',
-        border: `1px solid ${active ? tint(color, darkMode ? 0.55 : 0.45) : (darkMode ? '#2a2b36' : '#e2e6ef')}`,
+        border: `1px solid ${active ? tint(color, darkMode ? 0.55 : 0.45) : (darkMode ? '#2e2e2e' : '#ece9e4')}`,
         background: active ? tint(color, darkMode ? 0.22 : 0.12) : 'transparent',
-        color: active ? (darkMode ? '#eef0f6' : '#1e2330') : (darkMode ? '#8b8fa0' : '#6b7280'),
+        color: active ? (darkMode ? '#f2f2f2' : '#1e2330') : (darkMode ? '#a3a3a3' : '#8b867e'),
         textDecoration: kind === 'excluded' && active ? 'line-through' : 'none',
         textDecorationColor: tint(color, 0.8),
       }}>
@@ -66,7 +66,7 @@ function Summary({ pref, C, darkMode }) {
   if (!preferred.length && !excluded.length) {
     return (
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-        <span style={{ fontSize: 12.5, fontWeight: 600, padding: '5px 10px', borderRadius: 999, background: C.subtle, color: C.secondary, border: `1px solid ${C.border}` }}>
+        <span style={{ fontSize: 12.5, fontWeight: 500, padding: '5px 10px', borderRadius: 999, background: C.subtle, color: C.secondary, border: `1px solid ${C.border}` }}>
           Ouvert à tout
         </span>
       </div>
@@ -81,7 +81,7 @@ function Summary({ pref, C, darkMode }) {
       )}
       {excluded.length > 0 && (
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: C.secondary, fontWeight: 600 }}>{preferred.length ? 'Jamais :' : 'Tout sauf :'}</span>
+          <span style={{ fontSize: 12, color: C.secondary, fontWeight: 500 }}>{preferred.length ? 'Jamais :' : 'Tout sauf :'}</span>
           {excluded.map((k) => <SectorChip key={k} sectorKey={k} kind="excluded" darkMode={darkMode} />)}
         </div>
       )}
@@ -99,7 +99,7 @@ function SectorRow({ sector, value, onChange, C, darkMode, disabled }) {
   const meta = sectorMeta(sector.key);
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '7px 0', borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 600, color: value === 'none' ? C.secondary : C.text, minWidth: 0 }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 500, color: value === 'none' ? C.secondary : C.text, minWidth: 0 }}>
         <span style={{ width: 8, height: 8, borderRadius: 999, background: meta?.color || '#8b94a6', flexShrink: 0, opacity: value === 'none' ? 0.45 : 1 }} />
         <span style={{ textDecoration: value === 'excluded' ? 'line-through' : 'none', textDecorationColor: 'rgba(194,85,85,0.7)' }}>{sector.label}</span>
       </span>
@@ -109,10 +109,10 @@ function SectorRow({ sector, value, onChange, C, darkMode, disabled }) {
           const tone = v === 'preferred' ? (meta?.color || color) : color;
           return (
             <button key={v} type="button" role="radio" aria-checked={on} disabled={disabled} onClick={() => onChange(v)}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 7, fontSize: 12, fontWeight: 600,
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 9px', borderRadius: 7, fontSize: 12, fontWeight: 500,
                 fontFamily: 'inherit', cursor: disabled ? 'default' : 'pointer', transition: 'all 0.15s ease',
                 border: `1px solid ${on ? (v === 'none' ? C.border : tint(tone, darkMode ? 0.55 : 0.4)) : 'transparent'}`,
-                background: on ? (v === 'none' ? (darkMode ? '#2a2b36' : '#fff') : tint(tone, darkMode ? 0.22 : 0.13)) : 'transparent',
+                background: on ? (v === 'none' ? (darkMode ? '#2e2e2e' : '#fff') : tint(tone, darkMode ? 0.22 : 0.13)) : 'transparent',
                 color: on ? (v === 'excluded' ? '#c25555' : C.text) : C.muted,
                 boxShadow: on && v === 'none' && !darkMode ? '0 1px 2px rgba(16,24,40,0.06)' : 'none' }}>
               {Icon && <Icon size={11.5} strokeWidth={2.4} />}{label}
@@ -126,7 +126,7 @@ function SectorRow({ sector, value, onChange, C, darkMode, disabled }) {
 
 function PriorityBadge() {
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: PRIORITY_COLOR,
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 500, color: PRIORITY_COLOR,
       background: tint(PRIORITY_COLOR, 0.12), border: `1px solid ${tint(PRIORITY_COLOR, 0.35)}`, borderRadius: 6, padding: '2px 7px' }}>
       <ChevronsUp size={12} strokeWidth={2.4} />Prioritaire RDV setters
     </span>
@@ -146,7 +146,7 @@ function PriorityToggle({ on, onChange, C, darkMode, disabled }) {
           boxShadow: '0 1px 2px rgba(16,24,40,0.25)', transition: 'left 0.22s cubic-bezier(0.22, 1, 0.36, 1)' }} />
       </span>
       <span style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-        <span style={{ fontSize: 13.5, fontWeight: 700, color: C.text }}>Prioritaire sur les RDV setters</span>
+        <span style={{ fontSize: 13.5, fontWeight: 500, color: C.text }}>Prioritaire sur les RDV setters</span>
         <span style={{ fontSize: 12.5, color: C.secondary, lineHeight: 1.45 }}>
           Passe avant les autres sales sur tous les rendez-vous posés par les setters, quel que soit le secteur. Seuls les
           sales prioritaires reçoivent les leads webinaire des setters.
@@ -180,24 +180,24 @@ function Editor({ pref, sectors, C, darkMode, saving, error, onSave, onCancel, c
         placeholder="Précision libre, par exemple « 3 à 20 salariés » ou « sud-ouest »"
         style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 9, fontSize: 13, fontFamily: 'inherit',
           border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#fff', color: C.text, outline: 'none' }} />
-      {error && <div style={{ fontSize: 12.5, color: '#c25555', fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ fontSize: 12.5, color: '#c25555', fontWeight: 500 }}>{error}</div>}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" disabled={saving}
           onClick={() => onSave({ preferred: pick('preferred'), excluded: pick('excluded'), note: note.trim() || null,
             ...(canPrioritize ? { setter_priority: priority } : {}) })}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 9, border: 'none',
-            background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', fontSize: 13, fontWeight: 600,
+            background: darkMode ? '#f2f2f2' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', fontSize: 13, fontWeight: 500,
             fontFamily: 'inherit', cursor: saving ? 'wait' : 'pointer', opacity: saving ? 0.7 : 1 }}>
           <Check size={14} strokeWidth={2.4} />{saving ? 'Enregistrement…' : 'Enregistrer'}
         </button>
         <button type="button" disabled={saving} onClick={() => setChoice({})}
           style={{ padding: '8px 12px', borderRadius: 9, border: `1px solid ${C.border}`, background: 'transparent', color: C.secondary,
-            fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}>
           Tout remettre à « ouvert à tout »
         </button>
         <button type="button" disabled={saving} onClick={onCancel}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '8px 10px', borderRadius: 9, border: 'none',
-            background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>
+            background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}>
           <X size={14} strokeWidth={2.2} />Annuler
         </button>
       </div>
@@ -221,7 +221,7 @@ function EditDialog({ title, subtitle, children, onClose, busy, C, darkMode }) {
           boxShadow: darkMode ? '0 24px 60px rgba(0,0,0,0.55)' : '0 24px 60px rgba(16,24,40,0.18)' }}>
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>{title}</div>
+            <div style={{ fontSize: 16, fontWeight: 500, color: C.text }}>{title}</div>
             {subtitle && <div style={{ fontSize: 12.5, color: C.secondary, marginTop: 3 }}>{subtitle}</div>}
           </div>
           <button type="button" onClick={onClose} disabled={busy} aria-label="Fermer"
@@ -263,9 +263,9 @@ function SalesCard({ pref, sectors, endpoint, C, darkMode, showName, onSaved, st
         <div style={{ minWidth: 0 }}>
           {showName && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 14.5, fontWeight: 700, color: C.text }}>{pref.full_name || pref.email}</span>
+              <span style={{ fontSize: 14.5, fontWeight: 500, color: C.text }}>{pref.full_name || pref.email}</span>
               {ROLE_LABEL[pref.role] && (
-                <span style={{ fontSize: 11, fontWeight: 600, color: C.secondary, background: C.subtle, borderRadius: 6, padding: '2px 7px' }}>{ROLE_LABEL[pref.role]}</span>
+                <span style={{ fontSize: 11, fontWeight: 500, color: C.secondary, background: C.subtle, borderRadius: 6, padding: '2px 7px' }}>{ROLE_LABEL[pref.role]}</span>
               )}
               {pref.setter_priority && <PriorityBadge />}
             </div>
@@ -275,7 +275,7 @@ function SalesCard({ pref, sectors, endpoint, C, darkMode, showName, onSaved, st
         {!(editing && !showName) && (
           <button type="button" onClick={() => setEditing(true)}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '6px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-              background: 'transparent', color: C.secondary, fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0 }}>
+              background: 'transparent', color: C.secondary, fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', flexShrink: 0 }}>
             <Pencil size={12.5} strokeWidth={2.2} />Modifier
           </button>
         )}
@@ -334,7 +334,7 @@ export default function SalesPreferences({ mode = 'all', C, darkMode }) {
   return (
     <div style={{ maxWidth: mode === 'me' ? 720 : 1180, margin: '0 auto', padding: '28px 32px 48px', display: 'flex', flexDirection: 'column', gap: 18 }}>
       <div>
-        <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
+        <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>
           {mode === 'me' ? 'Mes préférences' : 'Préférences des sales'}
         </h2>
         <p style={{ fontSize: 13, color: C.secondary, margin: '6px 0 0', lineHeight: 1.5, maxWidth: 680 }}>
@@ -343,7 +343,7 @@ export default function SalesPreferences({ mode = 'all', C, darkMode }) {
             : `Quand un setter pose un rendez-vous, le créneau va d'abord aux sales prioritaires libres, quel que soit le secteur, puis à un sales qui préfère le secteur du lead, puis au moins servi de la semaine. « Jamais » écarte le sales pour ce secteur. Les leads webinaire des setters ne vont qu'aux sales prioritaires.${rows ? ` ${counts.total} sales, dont ${counts.open} ouverts à tout${counts.priority.length ? ` ; prioritaires : ${counts.priority.join(', ')}` : ''}.` : ''}`}
         </p>
       </div>
-      {error && <div style={{ fontSize: 13, color: '#c25555', fontWeight: 600 }}>{error}</div>}
+      {error && <div style={{ fontSize: 13, color: '#c25555', fontWeight: 500 }}>{error}</div>}
       {!error && rows === null && <div style={{ fontSize: 13, color: C.muted }}>Chargement…</div>}
       {rows && (
         <div style={{ display: 'grid', gridTemplateColumns: mode === 'me' ? '1fr' : 'repeat(auto-fill, minmax(340px, 1fr))', gap: 14 }}>

@@ -27,25 +27,27 @@ function showsSmsActions(lead, catKey) {
 
 // ── Icônes (dessinées pour ces boutons) ─────────────────────────────────────
 
+// Redessinées le 11/11/2026 (demande du dev) : un lapin qui pointe les oreilles, une cassette de répondeur.
+// Trait fin de 1.6, bouts ronds, lisibles à 14 comme à 22 px.
 function RabbitIcon({ size = 22 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.55" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M9.3 10.5C7.6 8.6 6.6 5.6 7 3.4c.3-1.4 1.9-1.5 2.6-.3 1.2 1.9 1.6 4.8 1.3 7" />
-      <path d="M14.7 10.5c1.7-1.9 2.7-4.9 2.3-7.1-.3-1.4-1.9-1.5-2.6-.3-1.2 1.9-1.6 4.8-1.3 7" />
-      <ellipse cx="12" cy="15.6" rx="6.3" ry="5.6" />
-      <circle cx="9.6" cy="15" r="0.95" fill="currentColor" stroke="none" />
-      <circle cx="14.4" cy="15" r="0.95" fill="currentColor" stroke="none" />
-      <path d="M11.15 17.35h1.7l-.85.85z" fill="currentColor" strokeWidth="1" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8.5 13.5C6.8 11.2 6 7.3 6.6 4.2c.3-1.5 2.2-1.8 3-.5 1.4 2.3 2 5.6 1.7 8.5" />
+      <path d="M15.5 13.5c1.7-2.3 2.5-6.2 1.9-9.3-.3-1.5-2.2-1.8-3-.5-1.4 2.3-2 5.6-1.7 8.5" />
+      <path d="M6.5 21c0-3.6 2.4-6.3 5.5-6.3s5.5 2.7 5.5 6.3" />
+      <circle cx="10" cy="18.3" r="0.8" fill="currentColor" stroke="none" />
+      <circle cx="14" cy="18.3" r="0.8" fill="currentColor" stroke="none" />
     </svg>
   );
 }
 
 function VoicemailIcon({ size = 22 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <circle cx="6.4" cy="12" r="3.9" />
-      <circle cx="17.6" cy="12" r="3.9" />
-      <path d="M6.4 15.9h11.2" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2.8" y="6" width="18.4" height="12" rx="3.2" />
+      <circle cx="8.6" cy="11.6" r="2.1" />
+      <circle cx="15.4" cy="11.6" r="2.1" />
+      <path d="M8.6 13.7h6.8" />
     </svg>
   );
 }
@@ -166,27 +168,31 @@ function describe(type, action, flash) {
 
 // ── Bouton ───────────────────────────────────────────────────────────────────
 
-function SmsButton({ type, title, icon, color, action, busy, justSent, flash, onSend, C, darkMode }) {
+function SmsButton({ type, title, short, icon, color, action, busy, justSent, flash, onSend, C, darkMode }) {
   const state = action?.state;
   const clickable = !busy && (state === "ready" || state === "failed");
   const dimmed = state === "unavailable";
   const sent = state === "sent";
   const { text, tone } = busy ? { text: "Envoi…", tone: color } : describe(type, action, flash);
-  const border = sent ? `${SENT}40` : state === "failed" || flash ? `${FAIL}40` : `${color}33`;
-  const restBg = sent ? `${SENT}${darkMode ? "14" : "0d"}` : "transparent";
+  // Style Owner (11/11/2026) : au repos, deux tuiles au même trait fin ; la couleur ne vient qu'avec un état (envoyé, échec).
+  const border = sent ? `${SENT}40` : state === "failed" || flash ? `${FAIL}40` : C.border;
+  const restBg = sent ? `${SENT}${darkMode ? "14" : "0d"}` : (darkMode ? "transparent" : "#ffffff");
+  const hoverBg = darkMode ? "rgba(255,255,255,0.05)" : "#faf9f7";
+  const hoverBorder = darkMode ? "#3a3a3a" : "#ddd8d0";
   return (
     <button
       type="button"
       onClick={() => clickable && onSend(type)}
       disabled={!clickable}
       aria-label={`${title} : ${text}`}
+      title={`${title} : ${text}`}
       style={{
-        display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-        padding: "8px 10px 8px 8px", borderRadius: 12, border: `1px solid ${border}`,
+        display: "flex", alignItems: "center", gap: 10, width: "100%", minWidth: 0, textAlign: "left",
+        padding: "9px 10px 9px 9px", borderRadius: 14, border: `1px solid ${border}`,
         background: restBg, cursor: clickable ? "pointer" : "default", fontFamily: "inherit",
         opacity: dimmed ? 0.62 : 1, transition: `background 0.25s ${EASE}, border-color 0.25s ${EASE}, opacity 0.25s`,
       }}
-      onMouseEnter={(e) => { if (clickable) { e.currentTarget.style.background = `${color}${darkMode ? "1f" : "10"}`; e.currentTarget.style.borderColor = `${color}66`; } }}
+      onMouseEnter={(e) => { if (clickable) { e.currentTarget.style.background = hoverBg; e.currentTarget.style.borderColor = hoverBorder; } }}
       onMouseLeave={(e) => { if (clickable) { e.currentTarget.style.background = restBg; e.currentTarget.style.borderColor = border; } }}
     >
       <span style={{
@@ -196,9 +202,9 @@ function SmsButton({ type, title, icon, color, action, busy, justSent, flash, on
         {icon}
       </span>
       <span style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 650, color: C.text, letterSpacing: "-0.01em" }}>{title}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 500, color: C.text, letterSpacing: "-0.01em", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{short || title}</span>
         <span key={text} style={{
-          fontSize: 11, fontWeight: tone ? 600 : 500, color: tone || (dimmed ? C.secondary : C.muted), lineHeight: 1.35,
+          fontSize: 11, fontWeight: 500, color: tone || (dimmed ? C.secondary : C.muted), lineHeight: 1.35,
           whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
           animation: `lsaFade 0.35s ${EASE} both`,
         }}>
@@ -307,28 +313,28 @@ export default function LeadSmsActions({ lead, catKey, C, darkMode, onUpdate }) 
         @keyframes lsaSpin { to { transform: rotate(360deg); } }
         @keyframes lsaFade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
       `}</style>
-      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
+      <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : "#a8a39b", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 10, display: "flex", alignItems: "center", gap: 6 }}>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-        SMS {sentCount > 0 && <span style={{ fontWeight: 700, color: SENT }}>· {sentCount} envoyé{sentCount > 1 ? "s" : ""}</span>}
+        SMS {sentCount > 0 && <span style={{ fontWeight: 500, color: SENT }}>· {sentCount} envoyé{sentCount > 1 ? "s" : ""}</span>}
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <SmsButton type="sms_noshow" title="SMS Lapin" icon={<RabbitIcon />} color={LAPIN}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 1fr) minmax(0, 1fr)", gap: 8 }}>
+        <SmsButton type="sms_noshow" title="SMS Lapin" short="Lapin" icon={<RabbitIcon />} color={LAPIN}
           action={data?.actions?.sms_noshow} busy={busy === "sms_noshow"} justSent={justSent === "sms_noshow"}
           flash={flash.sms_noshow} onSend={send} C={C} darkMode={darkMode} />
-        <SmsButton type="sms_repondeur" title="SMS Répondeur" icon={<VoicemailIcon />} color={C.accent}
+        <SmsButton type="sms_repondeur" title="SMS Répondeur" short="Répondeur" icon={<VoicemailIcon />} color={C.accent}
           action={repondeur} busy={busy === "sms_repondeur"} justSent={justSent === "sms_repondeur"}
           flash={flash.sms_repondeur} onSend={send} C={C} darkMode={darkMode} />
       </div>
       {history.length > 0 && (
-        <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: darkMode ? "rgba(255,255,255,0.02)" : "rgba(0,0,0,0.015)" }}>
-          <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Historique</div>
+        <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 12, background: darkMode ? "rgba(255,255,255,0.03)" : "#f7f5f2" }}>
+          <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Historique</div>
           {history.map((h, i) => (
             <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 0", fontSize: 11, color: C.secondary }}>
               <span style={{ width: 14, height: 14, display: "inline-flex", color: h.type === "sms_noshow" ? LAPIN : C.accent }}>
                 {h.type === "sms_noshow" ? <RabbitIcon size={14} /> : <VoicemailIcon size={14} />}
               </span>
               <span style={{ fontWeight: 500 }}>{HISTORY_LABELS[h.type] || h.type}{h.rdv ? ` ${h.rdv.toUpperCase()}` : ""}</span>
-              {HISTORY_STATUS[h.status] && <span style={{ fontSize: 10, fontWeight: 600, color: h.status === "failed" ? FAIL : QUEUE }}>· {HISTORY_STATUS[h.status]}</span>}
+              {HISTORY_STATUS[h.status] && <span style={{ fontSize: 10, fontWeight: 500, color: h.status === "failed" ? FAIL : QUEUE }}>· {HISTORY_STATUS[h.status]}</span>}
               <span style={{ flex: 1 }} />
               <span style={{ fontSize: 10, color: C.muted }}>
                 {new Date(h.sent_at).toLocaleDateString("fr-FR", { timeZone: "Europe/Paris", day: "2-digit", month: "2-digit" })} {parisTime(new Date(h.sent_at))}

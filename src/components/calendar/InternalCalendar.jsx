@@ -27,15 +27,15 @@ const RULER = 56;
 const SALES_COL_MIN = 184;                // vue direction : largeur mini d'une colonne commercial (défilement horizontal au-delà)
 const POPOVER_WIDTH = 360;
 const RELOAD_EVERY_MS = 3 * 60 * 1000;
-const FONT = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", system-ui, Inter, sans-serif';
+const FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 const NO_SHOW_HATCH = 'repeating-linear-gradient(135deg, rgba(220,38,38,0.10) 0 5px, transparent 5px 11px)';
-const ABSENCE_HATCH = 'repeating-linear-gradient(45deg, rgba(100,116,139,0.12) 0 1.25px, transparent 1.25px 9px)';
+const ABSENCE_HATCH = 'repeating-linear-gradient(45deg, rgba(139,134,126,0.14) 0 1.25px, transparent 1.25px 9px)';
 
-// Encre, traits et fonds (clair = tokens Tedeles ; sombre = palette du CRM).
+// Encre, traits et fonds (clair = style Owner, docs/STYLE-OWNER.md ; sombre = palette du CRM).
 function tokens(C, dark) {
   return dark
-    ? { ink: C.text, muted: C.secondary, faint: C.muted, line: C.border, canvas: C.subtle, surface: C.bg, today: '#eef0f6', todayText: '#121b35' }
-    : { ink: '#171a20', muted: '#5c6470', faint: '#9aa2af', line: '#e7e9ee', canvas: '#f6f7f9', surface: '#ffffff', today: '#171a20', todayText: '#ffffff' };
+    ? { ink: C.text, muted: C.secondary, faint: C.muted, line: C.border, canvas: C.subtle, surface: C.bg, today: '#f2f2f2', todayText: '#141414' }
+    : { ink: '#1c1b19', muted: '#55514b', faint: '#a8a39b', line: '#ece9e4', canvas: '#f7f5f2', surface: '#ffffff', today: '#2b2927', todayText: '#ffffff' };
 }
 
 const GOOGLE_WARNINGS = {
@@ -67,7 +67,7 @@ function eventTitle(ev) {
 function SoftTag({ children, color, title, wide = false }) {
   return (
     <span title={title} style={{
-      flexShrink: 0, fontSize: 10, fontWeight: 600, lineHeight: '14px', padding: '0 5px', borderRadius: 999,
+      flexShrink: 0, fontSize: 10, fontWeight: 500, lineHeight: '14px', padding: '0 5px', borderRadius: 999,
       color, background: `${color}1f`, whiteSpace: 'nowrap', maxWidth: wide ? 'none' : 72, overflow: 'hidden', textOverflow: 'ellipsis',
     }}>
       {children}
@@ -81,7 +81,7 @@ function MineTag() {
 
 function SetterTag({ name }) {
   const first = String(name || '').trim().split(/\s+/)[0];
-  return first ? <SoftTag color="#475569" title={`Suivi par ${name}`}>{first}</SoftTag> : null;
+  return first ? <SoftTag color="#55514b" title={`Suivi par ${name}`}>{first}</SoftTag> : null;
 }
 
 function Chip({ ev, view, dark, onOpen, height, ring, offset = 0 }) {
@@ -510,7 +510,7 @@ export default function InternalCalendar({ view = 'sales', C, darkMode = false, 
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13.5, color: today ? T.ink : T.muted, fontWeight: today ? 500 : 400 }}>
                           {c.dow.charAt(0).toUpperCase() + c.dow.slice(1, -1)}
                           <span style={today
-                            ? { minWidth: 22, height: 22, padding: '0 4px', boxSizing: 'border-box', borderRadius: 999, background: T.today, color: T.todayText, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 600 }
+                            ? { minWidth: 22, height: 22, padding: '0 4px', boxSizing: 'border-box', borderRadius: 999, background: T.today, color: T.todayText, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 500 }
                             : undefined}>
                             {c.num}
                           </span>

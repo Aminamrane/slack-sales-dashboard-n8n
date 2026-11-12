@@ -86,7 +86,7 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
       {open && q.trim() && (
         <div role="listbox" style={{ position: 'absolute', top: 'calc(100% + 10px)', left: 0, right: 0, background: C.bg,
           border: `1px solid ${C.border}`, borderRadius: 12, zIndex: 30, maxHeight: 340, overflowY: 'auto',
-          boxShadow: '0 16px 36px rgba(16,24,40,0.14)', padding: '6px 0' }}>
+          boxShadow: '0 14px 34px rgba(28,27,25,0.10), 0 2px 6px rgba(28,27,25,0.04)', padding: '6px 0' }}>
           {options.length === 0 && (
             <div style={{ padding: '10px 14px', fontSize: 13, color: C.muted }}>
               Aucun code correspondant. Essayez un métier (« plombier »), un code NAF (« 43.22A »){kinds.includes('places')
@@ -95,7 +95,7 @@ export default function CriteriaInput({ C, kinds = ['activities', 'departements'
           )}
           {kinds.map((kind) => (found[kind] || []).length > 0 && (
             <div key={kind}>
-              <div style={{ padding: '8px 14px 4px', fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              <div style={{ padding: '8px 14px 4px', fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                 {SECTIONS[kind]}
               </div>
               {found[kind].map((item) => { index += 1; return row({ kind, item }, index); })}

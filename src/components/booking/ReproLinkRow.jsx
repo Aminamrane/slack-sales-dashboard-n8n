@@ -89,16 +89,16 @@ export default function ReproLinkRow({ lead, C, darkMode }) {
         <LinkIcon color={err ? '#ef4444' : copied ? '#10b981' : C.accent} />
       </div>
       <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        <div style={{ fontSize: 9, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
           Lien de rendez-vous
         </div>
-        <div style={{ fontSize: 12, color: valueColor, fontWeight: 600 }}>
+        <div style={{ fontSize: 12, color: valueColor, fontWeight: 500 }}>
           {err ? 'Erreur, réessayez' : copied ? 'Lien copié ✓' : loading ? 'Génération…' : label}
         </div>
         {status && (status.booked_at || status.opened_at) && (
           <div style={{ fontSize: 10, color: C.muted, marginTop: 2, fontWeight: 500 }}>
             {status.booked_at
-              ? <span style={{ color: '#10b981', fontWeight: 600 }}>Prospect a réservé le {fmt(status.booked_at)}</span>
+              ? <span style={{ color: '#10b981', fontWeight: 500 }}>Prospect a réservé le {fmt(status.booked_at)}</span>
               : <>Prospect a ouvert le {fmt(status.opened_at)}</>}
           </div>
         )}

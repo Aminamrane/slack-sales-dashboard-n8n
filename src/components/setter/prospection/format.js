@@ -16,16 +16,16 @@ export const fmtDay = (iso) => {
 };
 
 export const STATUS_META = {
-  a_contacter: { label: 'À contacter', dot: '#9ca3af' },
-  contacte: { label: 'Contactée', dot: '#5b6abf' },
+  a_contacter: { label: 'À contacter', dot: '#9d9890' },
+  contacte: { label: 'Contactée', dot: '#1b6fd0' },
   repondu: { label: 'A répondu', dot: '#15803d' },
   ecarte: { label: 'Écartée', dot: '#b42318' },
 };
 
 export const chipColors = (C, darkMode) => ({
-  bg: darkMode ? 'rgba(124,138,219,0.16)' : '#eef1fb',
-  text: darkMode ? '#c7cdf3' : '#2f3d8f',
-  close: darkMode ? '#9aa3dd' : '#6b75b3',
+  bg: darkMode ? 'rgba(255,255,255,0.08)' : '#f1eee9',
+  text: darkMode ? '#e3e3e3' : '#4a4540',
+  close: darkMode ? '#a3a3a3' : '#8b867e',
 });
 
 export const inputStyle = (C) => ({
@@ -44,8 +44,8 @@ export const fmtDateTime = (iso) => {
 
 // Recherches Pappers : statuts et étapes de GET /lead-searches.
 export const PAPPERS_STATUS = {
-  pending: { label: 'En file', dot: '#9ca3af' },
-  running: { label: 'En cours', dot: '#5b6abf' },
+  pending: { label: 'En file', dot: '#9d9890' },
+  running: { label: 'En cours', dot: '#1b6fd0' },
   completed: { label: 'Terminée', dot: '#15803d' },
   failed: { label: 'Échec', dot: '#b42318' },
 };
