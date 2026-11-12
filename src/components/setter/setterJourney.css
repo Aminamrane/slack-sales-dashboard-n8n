@@ -8,3 +8,36 @@
 .sj-duplicate p{margin:0}
 .sj-duplicate button{justify-self:start;border:0;border-radius:9px;padding:9px 14px;background:#121b35;color:#fff;font:inherit;font-weight:600;cursor:pointer}
 .sj-duplicate button:disabled{opacity:.6;cursor:default}
+
+/* Style Owner (12/11/2026) : la fenêtre des setters reprend la fenêtre épurée des sales (`sj-pure`) : un titre, des
+   lignes de choix, l'action principale anthracite. Accent neutre, graisses 400/500, champs à trait fin. */
+.stj-overlay{--sj-accent:#2b2927}.stj-overlay.sj-dark{--sj-accent:#ededed}
+.sj-dialog.sj-pure.stj-dialog.stj-wide{width:min(880px,100%)}
+.stj-dialog.sj-pure .stj-step,.stj-dialog.sj-pure .stj-calendar,.stj-dialog.sj-pure .stj-fields,.stj-dialog.sj-pure .stj-note,.stj-dialog.sj-pure .stj-summary,.stj-dialog.sj-pure .stj-manual,.stj-dialog.sj-pure .stj-booking-mode,.stj-dialog.sj-pure .sj-duplicate{margin-left:12px;margin-right:12px}
+.stj-dialog.sj-pure .stj-step{margin-bottom:14px}.stj-dialog.sj-pure .stj-step strong{font-weight:500}
+.stj-dialog.sj-pure .stj-step button{border-radius:9px;padding:6px 8px;margin-left:-8px;transition:background .15s,color .15s}
+.stj-dialog.sj-pure .stj-step button:hover:not(:disabled){background:var(--sj-soft);color:var(--sj-text)}
+.stj-dialog.sj-pure .stj-calendar-bar strong{font-weight:500}
+.stj-dialog.sj-pure .stj-days button{border-radius:12px;transition:background .15s,border-color .15s}
+.stj-dialog.sj-pure .stj-days strong{font-size:12.5px;font-weight:500}
+.stj-dialog.sj-pure .stj-sales-card{border-radius:14px}
+.stj-dialog.sj-pure .stj-sales-name>span{background:var(--sj-soft);color:var(--sj-text);font-weight:500}
+.stj-dialog.sj-pure .stj-sales-name strong{font-size:13px;font-weight:500}.stj-dialog.sj-pure .stj-sales-name small{font-size:11.5px}
+.stj-dialog.sj-pure .stj-slots button{border-radius:9px;font-size:12px;padding:8px 2px}
+.stj-dialog.sj-pure .stj-slots button[aria-pressed=true]{color:#fff}.sj-dark .stj-dialog.sj-pure .stj-slots button[aria-pressed=true]{color:#141414}
+.stj-dialog.sj-pure .stj-fields label,.stj-dialog.sj-pure .stj-note,.stj-dialog.sj-pure .stj-sales-filter{font-size:13px;font-weight:400;color:var(--sj-muted)}
+.stj-dialog.sj-pure .stj-fields input,.stj-dialog.sj-pure .stj-fields select,.stj-dialog.sj-pure .stj-note textarea,.stj-dialog.sj-pure .stj-sales-filter select{border-radius:12px;font-size:13.5px;color:var(--sj-text)}
+.stj-dialog.sj-pure .stj-fields input:focus,.stj-dialog.sj-pure .stj-fields select:focus,.stj-dialog.sj-pure .stj-note textarea:focus{outline:none;border-color:var(--sj-accent);box-shadow:0 0 0 3px rgba(43,41,39,.08)}
+.stj-dialog.sj-pure .stj-summary{color:var(--sj-text);border-radius:14px}.stj-dialog.sj-pure .stj-summary strong{font-size:13px;font-weight:500}
+.stj-dialog.sj-pure .stj-muted,.stj-dialog.sj-pure .stj-unavailable{font-size:12px}.stj-dialog.sj-pure .stj-unavailable{color:#c2500e}
+.stj-dialog.sj-pure .stj-manual{border-radius:14px;border:0;background:var(--sj-soft)}
+.sj-duplicate{background:#fbf1c2;color:#7a5a05;border-color:#f0e09a;border-radius:12px}
+.sj-duplicate button{background:#2b2927;font-weight:500;border-radius:10px}
+.sj-dark .sj-duplicate{background:rgba(234,179,8,.14);color:#e3c76a;border-color:rgba(234,179,8,.26)}.sj-dark .sj-duplicate button{background:#ededed;color:#141414}
+/* Boutons d'entrée de la feuille des setters : le même bouton que « Qualifier le contact » des sales, sans teinte violette. */
+.stj-entry{border-color:#e8e3dc;border-radius:13px;padding:14px;background:#f9f8f6;color:#423f3b;transition:background .18s,transform .18s}
+.stj-entry:hover{background:#f3f1ed;transform:translateY(-1px)}
+.stj-entry>svg{color:inherit}.stj-entry strong{font-weight:500}.stj-entry small{font-size:11px;color:#7e786f;opacity:1}
+html.dark-mode .stj-entry{border-color:#2e2e2e;background:#262626;color:#f2f2f2}html.dark-mode .stj-entry:hover{background:#2e2e2e}html.dark-mode .stj-entry small{color:#8a8a8a}
+.stj-filter-button{font-weight:500}.stj-filter-button svg{color:inherit}.stj-filter-button small{opacity:1;color:#9d9890}
+@media(prefers-reduced-motion:reduce){.stj-entry,.stj-entry:hover{transition:none;transform:none}}
