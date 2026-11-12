@@ -1589,7 +1589,7 @@ export default function TrackingSheetFinance() {
               ) : activeTab === 'promises' ? (
                 <PromisesView scope={scope} onOpenClient={openClientById} />
               ) : activeTab === 'sequences' ? (
-                <SequencesView onOpenClient={openClientById} />
+                <SequencesView onOpenClient={openClientById} readOnly={readOnly} />
               ) : activeTab === 'statistics' ? (
                 <StatisticsView onOpenClient={openClientById} canOpenClient={canOpenClient} />
               ) : (

@@ -18,6 +18,10 @@
 // en-têtes illustrés). Les chargements et les règles de lecture sont ceux
 // d'origine.
 //
+// Depuis le 12/11/2026, l'onglet s'ouvre sur les séquences que la finance
+// configure elle-même (SequenceRules.jsx) ; ce suivi reste à un clic (« Envois »)
+// et montre aussi leurs messages, un envoi par séquence et par jour.
+//
 // Sources : GET /finance-sequences, /finance-sequences/detail?key=…,
 // /finance-sequences/messages/{id}/content.
 
@@ -31,7 +35,8 @@ import apiClient from '../../../services/apiClient.js';
 import { reducedMotion, useDrawn } from '../../../components/perfSales/motion.jsx';
 import { count, plural } from '../statistics/model.js';
 import { Fill, ProgressRing } from '../statistics/parts.jsx';
-import { Card, Empty, Num, OpenCue, Page, Pill, RefreshButton, Reveal, Stat, Stats, TableBox, Tag, Th } from './PageKit.jsx';
+import { Card, Empty, Num, OpenCue, Page, Pill, RefreshButton, Reveal, Segmented, Stat, Stats, TableBox, Tag, Th } from './PageKit.jsx';
+import SequenceRules from './SequenceRules.jsx';
 import './FollowupTabs.css';
 
 const GREEN = '#6cc493';
@@ -92,7 +97,14 @@ const day = (ymd) => (ymd ? ymd.split('-').reverse().join('/') : '—');
 const fold = (text) => String(text || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const ratio = (part, total) => (total ? part / total : null);
 
-export default function SequencesView({ onOpenClient }) {
+// Deux vues dans l'onglet (dev 12/11/2026) : les séquences que la finance configure, et le suivi de tous les envois.
+const MODES = [
+  { key: 'rules', label: 'Séquences', title: 'Les relances que vous réglez vous-même' },
+  { key: 'sends', label: 'Envois', title: 'Chaque envoi parti, sa remise et ses ouvertures' },
+];
+
+export default function SequencesView({ onOpenClient, readOnly = false }) {
+  const [mode, setMode] = useState('rules');
   const [items, setItems] = useState(null);
   const [error, setError] = useState(null);
   const [reloading, setReloading] = useState(false);
@@ -142,14 +154,17 @@ export default function SequencesView({ onOpenClient }) {
 
   const reload = () => setRefresh((n) => n + 1);
 
+  const switcher = <Segmented options={MODES} value={mode} onChange={setMode} label="Vue de l’onglet Séquences" />;
+  if (mode === 'rules') return <SequenceRules readOnly={readOnly} onOpenClient={onOpenClient} switcher={switcher} />;
+
   if (openKey) {
     return <SequenceDetail sequenceKey={openKey} onBack={() => setOpenKey(null)} onOpenClient={onOpenClient} />;
   }
 
   const head = {
-    title: 'Séquences',
+    title: 'Envois',
     sub: 'Chaque envoi d’emails et de SMS de la finance : à qui il est parti, s’il a été remis, s’il a été ouvert.',
-    actions: <RefreshButton onClick={reload} busy={reloading} />,
+    actions: <>{switcher}<RefreshButton onClick={reload} busy={reloading} /></>,
   };
 
   if (error && items === null) {
