@@ -1,5 +1,7 @@
 import SalePaymentMode from '../components/SalePaymentMode';
 import { ContractFolders } from '../components/BoardClientFiles.jsx';
+import { createLiveListener } from "../utils/liveDictation.js";
+import { revealInRail } from "../utils/tabRail.js";
 import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
 import LeadTransfer, { TransferTag } from '../components/leadTransfer/LeadTransfer.jsx';
 import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from '../utils/saleRescheduling';
@@ -1258,30 +1260,20 @@ export default function TrackingSheet() {
   const [micError, setMicError] = useState(null); // flash error message
   const micRecorderRef = useRef(null);
   const micChunksRef = useRef([]);
-  // Dictée en direct (11/11/2026) : la reconnaissance vocale du navigateur montre le texte pendant qu'on parle. La
-  // transcription du serveur reste le texte final ; si elle échoue ou revient vide, le texte en direct est gardé.
+  // Dictée en direct (11/11/2026) : la reconnaissance vocale du navigateur montre le texte pendant qu'on parle, et ce
+  // texte part dans le commentaire dès l'arrêt (12/11/2026). La transcription du serveur n'est plus qu'un secours :
+  // navigateur sans reconnaissance vocale, écoute interrompue par une erreur, ou rien d'entendu.
   const [micLive, setMicLive] = useState('');
   const micLiveRef = useRef('');
   const micRecognitionRef = useRef(null);
   const micLiveStart = () => {
     micLiveRef.current = ''; setMicLive('');
     const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
-    if (!Recognition) return;
-    try {
-      const recognition = new Recognition();
-      recognition.lang = 'fr-FR'; recognition.continuous = true; recognition.interimResults = true;
-      recognition.onresult = (event) => {
-        let text = '';
-        for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
-        micLiveRef.current = text.trim(); setMicLive(micLiveRef.current);
-      };
-      recognition.onerror = () => {};
-      recognition.start();
-      micRecognitionRef.current = recognition;
-    } catch { micRecognitionRef.current = null; }
+    micRecognitionRef.current = createLiveListener({ Recognition: Recognition || undefined, onText: (text) => { micLiveRef.current = text; setMicLive(text); } });
+    micRecognitionRef.current.start();
   };
   const micLiveStop = () => {
-    try { micRecognitionRef.current?.stop(); } catch { /* déjà arrêtée */ }
+    micRecognitionRef.current?.cancel();
     micRecognitionRef.current = null;
   };
   const getMicMimeType = () => {
@@ -1311,11 +1303,22 @@ export default function TrackingSheet() {
   const micStopAndTranscribe = (onText) => {
     const mr = micRecorderRef.current;
     if (!mr || mr.state === 'inactive') return;
-    micLiveStop();
+    // L'écoute en direct rend sa dernière phrase pendant que l'enregistrement se ferme.
+    const listener = micRecognitionRef.current;
+    micRecognitionRef.current = null;
+    const heard = listener ? listener.finish() : Promise.resolve({ text: micLiveRef.current, trusted: false });
     mr.onstop = async () => {
       setMicRecording(false);
+      const { text: live, trusted } = await heard;
+      // Le texte entendu en direct part tout de suite dans le commentaire (dev 12/11/2026 : « pour l'avoir dans le
+      // texte, ça met énormément de temps »). Le serveur ne transcrit l'enregistrement que si l'écoute a décroché.
+      if (trusted) {
+        onText(live);
+        micLiveRef.current = ''; setMicLive('');
+        mr.stream.getTracks().forEach(t => t.stop());
+        return;
+      }
       setMicTranscribing(true);
-      const live = micLiveRef.current;
       const ext = (mr.mimeType || '').includes('mp4') ? 'recording.mp4' : (mr.mimeType || '').includes('ogg') ? 'recording.ogg' : 'recording.webm';
       const blob = new Blob(micChunksRef.current, { type: mr.mimeType || 'audio/webm' });
       try {
@@ -2272,11 +2275,16 @@ export default function TrackingSheet() {
       });
     };
     place();
-    rail.querySelector('[data-tab-active="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     const observer = new ResizeObserver(place);
     observer.observe(rail);
     return () => observer.disconnect();
   }, [activeTab, sidebarView, tabCounts, calSettings?.r3_enabled]);
+
+  // L'onglet actif reste visible dans sa rangée : au changement d'onglet seulement, et sans déplacer la page.
+  useLayoutEffect(() => {
+    const rail = tabRailRef.current;
+    revealInRail(rail, rail?.querySelector('[data-tab-active="true"]'));
+  }, [activeTab, sidebarView]);
 
   const handleTabChange = (idx) => {
     if (idx === activeTab) return;
@@ -6387,6 +6395,25 @@ export default function TrackingSheet() {
               </div>
 
               <div style={{ display: leadTab === 'infos' ? 'block' : 'none' }}>
+              {/* Les notes se lisent dès la première page de la fiche (demande des sales, 12/11/2026) : la note du rappel
+                  et le commentaire du lead, en lecture ; « Modifier » ouvre le volet Commentaire, où ils se saisissent. */}
+              {(recallText || notesShown) && (
+                <div style={{ marginBottom: 14, padding: '14px 16px', borderRadius: 14, fontSize: 13.5, background: darkMode ? '#181818' : '#f7f5f2', animation: 'contentReveal 0.3s cubic-bezier(0.4,0,0.2,1) both' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{recallText && !notesShown ? 'Note du rappel' : 'Commentaire'}</span>
+                    <button type="button" onClick={() => setPanelTab({ leadId: lead.id, tab: 'commentaire' })}
+                      style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 500, color: C.muted }}>
+                      Modifier
+                    </button>
+                  </div>
+                  {recallText && <SalesNotesView value={recallText}/>}
+                  {recallText && notesShown && <div style={{ height: 1, margin: '8px 0', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }} />}
+                  {notesShown && <SalesNotesView value={lead.notes}/>}
+                  {notesShown && lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: 'right' }}>Modifié {formatNoteDate(lead.notes_updated_at)}</div>
+                  )}
+                </div>
+              )}
               {intakeSaved[lead.id]?.available && <div style={{ marginBottom: 14 }}>
                 <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
               </div>}
