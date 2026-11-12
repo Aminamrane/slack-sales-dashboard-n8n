@@ -1,15 +1,15 @@
 /* État des créances dans la fiche du board (BoardReceivables.jsx, dev 29/10/2026). Pastille à l'icône dans la teinte
    de l'état (palette pastel du dev), fenêtre de détail aux coins ronds, frise des mois qui se pose case par case. */
-.rv-chip { --rv-tile:#eceef3; --rv-ink:#5b6472; display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 11px 0 8px; border:0; border-radius:999px;
-  background:var(--rv-tile); color:var(--rv-ink); font:inherit; font-size:12.5px; font-weight:650; cursor:pointer; transition:filter .15s, transform .25s cubic-bezier(.34,1.56,.64,1); }
+.rv-chip { --rv-tile:#f1eee9; --rv-ink:#6b665f; display:inline-flex; align-items:center; gap:6px; height:28px; padding:0 11px 0 8px; border:0; border-radius:999px;
+  background:var(--rv-tile); color:var(--rv-ink); font:inherit; font-size:12.5px; font-weight:500; cursor:pointer; transition:filter .15s, transform .25s cubic-bezier(.34,1.56,.64,1); }
 .rv-chip:hover:not(:disabled) { transform:translateY(-1px); }
 .rv-chip:disabled { cursor:default; }
 .rv-chip svg { overflow:visible; transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
 .rv-chip:hover:not(:disabled) svg { transform:rotate(-10deg) scale(1.1); }
 .is-sage { --rv-tile:#e3f0e1; --rv-ink:#3f7f4b; }
 .is-coral { --rv-tile:#ffe2dc; --rv-ink:#bf4436; }
-.is-sky { --rv-tile:#e5ecf9; --rv-ink:#2b4a7a; }
-.is-mist { --rv-tile:#eceef3; --rv-ink:#5b6472; }
+.is-sky { --rv-tile:#e4f0fd; --rv-ink:#1b6fd0; }
+.is-mist { --rv-tile:#f1eee9; --rv-ink:#6b665f; }
 .is-wine { --rv-tile:#f1e2ea; --rv-ink:#85334e; }
 /* En retard : le point d'exclamation se secoue une fois à l'ouverture de la fiche. */
 /* En retard : l'aiguille de l'horloge fait un tour à l'ouverture de la fiche, puis au survol. */
@@ -22,49 +22,49 @@
 @keyframes rvFlag { 0%, 100% { transform:none; } 50% { transform:skewY(-12deg) scaleX(1.1); } }
 .rv-tick { stroke-dasharray:12; animation:rvTick .6s ease .35s backwards; }
 @keyframes rvTick { from { stroke-dashoffset:12; } to { stroke-dashoffset:0; } }
-.rv-hint { margin-left:8px; font-size:12px; font-weight:500; color:#8a93a4; }
-.rv-none { font-size:12.5px; font-weight:500; color:#a3abba; }
-.rv-skel { display:inline-block; width:120px; height:24px; border-radius:999px; background:linear-gradient(90deg, #f1f2f4 25%, #e8eaee 37%, #f1f2f4 63%); background-size:400% 100%; animation:rvShimmer 1.3s ease infinite; }
+.rv-hint { margin-left:8px; font-size:12px; font-weight:500; color:#8b867e; }
+.rv-none { font-size:12.5px; font-weight:500; color:#a8a39b; }
+.rv-skel { display:inline-block; width:120px; height:24px; border-radius:999px; background:linear-gradient(90deg, #f4f2ee 25%, #ece9e4 37%, #f4f2ee 63%); background-size:400% 100%; animation:rvShimmer 1.3s ease infinite; }
 @keyframes rvShimmer { 0% { background-position:100% 50%; } 100% { background-position:0 50%; } }
 
 /* Fenêtre de détail : en-tête blanc, corps gris clair aux cartes blanches (briques DashParts). */
-.rv-overlay { position:fixed; inset:0; z-index:10055; display:grid; place-items:center; padding:16px; background:rgba(18,27,53,.34); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
-  font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color:#1e2330; }
-.rv-modal { display:flex; flex-direction:column; width:min(640px, 100%); max-height:90vh; overflow:hidden; border-radius:28px; background:#fff; box-shadow:0 24px 70px rgba(18,27,53,.22), 0 2px 6px rgba(18,27,53,.06); }
-.rv-head { display:flex; align-items:center; gap:13px; padding:20px 22px 16px; border-bottom:1px solid #eef0f3; }
-.rv-head h3 { margin:0; font-size:17px; font-weight:750; letter-spacing:-.01em; }
-.rv-head p { margin:2px 0 0; font-size:12.5px; color:#8a93a4; }
+.rv-overlay { position:fixed; inset:0; z-index:10055; display:grid; place-items:center; padding:16px; background:rgba(28,27,25,.22); backdrop-filter:blur(3px); -webkit-backdrop-filter:blur(3px);
+  font-family:'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; color:#1c1b19; }
+.rv-modal { display:flex; flex-direction:column; width:min(640px, 100%); max-height:90vh; overflow:hidden; border-radius:22px; background:#fff; box-shadow:0 24px 70px rgba(28,27,25,.14), 0 2px 6px rgba(43,41,39,.042); }
+.rv-head { display:flex; align-items:center; gap:13px; padding:20px 22px 16px; border-bottom:1px solid #f4f2ee; }
+.rv-head h3 { margin:0; font-size:17px; font-weight:500; letter-spacing:-.01em; }
+.rv-head p { margin:2px 0 0; font-size:12.5px; color:#8b867e; }
 .rv-tile { display:grid; place-items:center; flex-shrink:0; width:44px; height:44px; border-radius:13px; background:var(--rv-tile); color:var(--rv-ink); }
 .rv-tile svg { overflow:visible; }
-.rv-close { display:grid; place-items:center; width:30px; height:30px; margin-left:auto; border:0; background:transparent; padding:0; color:#8a93a4; cursor:pointer; }
+.rv-close { display:grid; place-items:center; width:30px; height:30px; margin-left:auto; border:0; background:transparent; padding:0; color:#8b867e; cursor:pointer; }
 .rv-close svg { transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
-.rv-close:hover { color:#1e2330; }
+.rv-close:hover { color:#1c1b19; }
 .rv-close:hover svg { transform:rotate(90deg); }
-.rv-body { overflow-y:auto; padding:16px 18px 18px; background:#f6f7f9; }
+.rv-body { overflow-y:auto; padding:16px 18px 18px; background:#f4f2ef; }
 /* Frise : une case par mois, posée l'une après l'autre. */
 .rv-months { display:grid; grid-template-columns:repeat(13, minmax(0, 1fr)); gap:5px; }
 .rv-m { display:flex; flex-direction:column; align-items:center; gap:5px; cursor:default; }
-.rv-m-sq { display:block; width:100%; aspect-ratio:1; max-width:32px; border-radius:8px; background:#eef0f4; animation:rvPop .45s cubic-bezier(.34,1.56,.64,1) backwards; animation-delay:calc(.2s + var(--rv-i) * .035s); transition:transform .2s cubic-bezier(.34,1.56,.64,1); }
+.rv-m-sq { display:block; width:100%; aspect-ratio:1; max-width:32px; border-radius:8px; background:#f4f2ee; animation:rvPop .45s cubic-bezier(.34,1.56,.64,1) backwards; animation-delay:calc(.2s + var(--rv-i) * .035s); transition:transform .2s cubic-bezier(.34,1.56,.64,1); }
 .rv-m:hover .rv-m-sq { transform:translateY(-2px) scale(1.08); }
-.rv-m small { font-size:10.5px; font-weight:600; color:#a3abba; text-transform:capitalize; }
+.rv-m small { font-size:10.5px; font-weight:500; color:#a8a39b; text-transform:capitalize; }
 .rv-m.is-paid .rv-m-sq { background:#bfe0bb; }
 .rv-m.is-partial .rv-m-sq { background:#fbe48a; }
 .rv-m.is-unpaid .rv-m-sq { background:#ffb3a5; }
-.rv-m.is-upcoming .rv-m-sq { background:#fff; box-shadow:inset 0 0 0 1.5px #d5dae3; }
-.rv-m.is-none .rv-m-sq { background:#f4f5f7; }
+.rv-m.is-upcoming .rv-m-sq { background:#fff; box-shadow:inset 0 0 0 1.5px #e3ded6; }
+.rv-m.is-none .rv-m-sq { background:#f7f5f2; }
 .rv-m.is-regularized .rv-m-sq { background:#bfe0bb; box-shadow:inset 0 0 0 2px #8fc58a; }
-.rv-m.is-deferred .rv-m-sq { background:#e6d6f7; }
-.rv-m.is-paused .rv-m-sq { background:repeating-linear-gradient(135deg, #e5ecf9 0 4px, #f3f6fc 4px 8px); }
+.rv-m.is-deferred .rv-m-sq { background:#eae9fb; }
+.rv-m.is-paused .rv-m-sq { background:repeating-linear-gradient(135deg, #e4f0fd 0 4px, #f3f6fc 4px 8px); }
 @keyframes rvPop { from { opacity:0; transform:scale(.4); } to { opacity:1; transform:none; } }
-.rv-legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11.5px; color:#8a93a4; }
+.rv-legend { display:flex; flex-wrap:wrap; gap:10px; font-size:11.5px; color:#8b867e; }
 .rv-legend span { display:inline-flex; align-items:center; gap:5px; }
-.rv-legend span::before { content:""; width:9px; height:9px; border-radius:3px; background:#eef0f4; }
+.rv-legend span::before { content:""; width:9px; height:9px; border-radius:3px; background:#f4f2ee; }
 .rv-legend .is-paid::before { background:#bfe0bb; }
 .rv-legend .is-partial::before { background:#fbe48a; }
 .rv-legend .is-unpaid::before { background:#ffb3a5; }
-.rv-legend .is-upcoming::before { background:#fff; box-shadow:inset 0 0 0 1.5px #d5dae3; }
+.rv-legend .is-upcoming::before { background:#fff; box-shadow:inset 0 0 0 1.5px #e3ded6; }
 .rv-legend .is-regularized::before { background:#bfe0bb; box-shadow:inset 0 0 0 1.5px #8fc58a; }
-.rv-legend .is-deferred::before { background:#e6d6f7; }
-.rv-legend .is-paused::before { background:#e5ecf9; }
+.rv-legend .is-deferred::before { background:#eae9fb; }
+.rv-legend .is-paused::before { background:#e4f0fd; }
 @media (max-width:560px) { .rv-months { grid-template-columns:repeat(7, minmax(0, 1fr)); } }
 @media (prefers-reduced-motion:reduce) { .rv-chip *, .rv-modal * { animation:none!important; transition:none!important; } }

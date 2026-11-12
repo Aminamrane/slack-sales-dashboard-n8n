@@ -47,18 +47,18 @@ export function OnboardedSeal({ date, size = 96, ink = "#2f7a4f" }) {
         <circle cx="60" cy="60" r="56" strokeWidth="4.2" />
         <circle cx="60" cy="60" r="49.5" strokeWidth="1.4" />
         <circle cx="60" cy="60" r="31" strokeWidth="1.4" />
-        <text fill={ink} stroke="none" fontSize="10.5" fontWeight="800" letterSpacing="3" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">
+        <text fill={ink} stroke="none" fontSize="10.5" fontWeight="500" letterSpacing="3" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">
           <textPath href={`#st-${uid}`} startOffset="50%" textAnchor="middle">ONBOARDING</textPath>
         </text>
         {day && (
-          <text fill={ink} stroke="none" fontSize="9.5" fontWeight="800" letterSpacing="2" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">
+          <text fill={ink} stroke="none" fontSize="9.5" fontWeight="500" letterSpacing="2" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">
             <textPath href={`#sb-${uid}`} startOffset="50%" textAnchor="middle" dominantBaseline="hanging">{day}</textPath>
           </text>
         )}
         <path d="M14.5 60l1.7 3.4 3.8.5-2.7 2.6.6 3.7-3.4-1.8-3.4 1.8.7-3.7-2.8-2.6 3.8-.5Z" fill={ink} stroke="none" transform="translate(-1 -5)" />
         <path d="M105.5 60l1.7 3.4 3.8.5-2.7 2.6.6 3.7-3.4-1.8-3.4 1.8.7-3.7-2.8-2.6 3.8-.5Z" fill={ink} stroke="none" transform="translate(1 -5)" />
         <rect x="10" y="49" width="100" height="23" rx="3" fill="#fff" strokeWidth="2.6" />
-        <text x="60" y="65.5" textAnchor="middle" fill={ink} stroke="none" fontSize="14" fontWeight="900" letterSpacing="1.6" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">ONBOARDÉ</text>
+        <text x="60" y="65.5" textAnchor="middle" fill={ink} stroke="none" fontSize="14" fontWeight="500" letterSpacing="1.6" fontFamily="Inter, -apple-system, 'Segoe UI', sans-serif">ONBOARDÉ</text>
         <path d="m52 33.5 5 5 10-10" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" transform="translate(0 2)" />
       </g>
     </svg>
@@ -87,7 +87,7 @@ export function Barcode({ value, height = 30, width: maxWidth = 132, className =
 
 // ── Confettis : une gerbe tirée du haut de la fenêtre, qui retombe en 3 secondes. ──────────────────────
 // Dessinés sur un canevas posé par-dessus tout (aucun clic intercepté) ; rien si l'utilisateur réduit les animations.
-const CONFETTI_COLORS = ["#3e7d5a", "#34b37c", "#121b35", "#f5b301", "#e85d75", "#5b8def", "#9b7bf0", "#ffd4a3"];
+const CONFETTI_COLORS = ["#3e7d5a", "#34b37c", "#1c1b19", "#f5b301", "#e85d75", "#5b8def", "#9b7bf0", "#ffd4a3"];
 export function ConfettiBurst({ origin = { x: 0.5, y: 0.32 }, count = 160, duration = 3200 }) {
   const ref = useRef(null);
   useEffect(() => {

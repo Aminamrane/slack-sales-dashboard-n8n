@@ -137,7 +137,7 @@ function ReceivablesModal({ data, from, onClose }) {
               <div className="ofd-list">
                 {data.last_payment && <ListRow icon="coin" label="Dernier paiement">{money(data.last_payment.amount)} le {day(data.last_payment.date)}</ListRow>}
                 {data.next_due && <ListRow icon="date" label="Prochaine échéance">{money(data.next_due.amount)} en {monthLabel(data.next_due.month, true)}</ListRow>}
-                {data.promise && <ListRow icon="promise" label="Promesse de paiement">{money(data.promise.amount)} le {day(data.promise.date)}{data.promise.note ? <Tag tone="#5b6472">{data.promise.note}</Tag> : null}</ListRow>}
+                {data.promise && <ListRow icon="promise" label="Promesse de paiement">{money(data.promise.amount)} le {day(data.promise.date)}{data.promise.note ? <Tag tone="#6b665f">{data.promise.note}</Tag> : null}</ListRow>}
               </div>
             </Panel>
           )}

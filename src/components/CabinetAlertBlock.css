@@ -1,51 +1,51 @@
 /* Barre « Convention Opti'Lex » en tête de fiche et bloc « Prévenir Lisa » (dev 29/10/2026 : « something little with
    a svg action »). Une ligne fine aux couleurs de la fiche ; seul le pictogramme prend la teinte de l'état (corail =
    expirée, pêche = non signée, ciel = planifiée). Les gestes jouent une fois à l'ouverture, puis au survol. */
-.ocv { --ocv-ink:#2b4a7a; display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; min-height:44px; padding:6px 6px 6px 12px; border:1px solid #eceef2; border-radius:12px; background:#fff; animation:ocvIn .45s cubic-bezier(.16,1,.3,1) backwards; }
+.ocv { --ocv-ink:#1b6fd0; display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; min-height:44px; padding:6px 6px 6px 12px; border:1px solid #f1eee9; border-radius:12px; background:#fff; animation:ocvIn .45s cubic-bezier(.16,1,.3,1) backwards; }
 .ocv.is-coral { --ocv-ink:#c2493b; border-color:#f4dcd7; background:#fffaf9; }
 .ocv.is-peach { --ocv-ink:#b45d14; }
-.ocv.is-sky { --ocv-ink:#2b4a7a; }
+.ocv.is-sky { --ocv-ink:#1b6fd0; }
 @keyframes ocvIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 .ocv-ic { position:relative; display:grid; place-items:center; flex-shrink:0; width:26px; height:26px; color:var(--ocv-ink); }
 /* Expirée : une onde part du sablier à l'ouverture, pour que l'œil la trouve tout de suite. */
 .ocv.is-coral .ocv-ic::after { content:""; position:absolute; inset:0; border-radius:50%; animation:ocvPing 1.1s cubic-bezier(.16,1,.3,1) .45s 2 backwards; pointer-events:none; }
 @keyframes ocvPing { 0% { box-shadow:0 0 0 0 color-mix(in srgb, var(--ocv-ink) 35%, transparent); } 100% { box-shadow:0 0 0 10px transparent; } }
 .ocv-tx { display:flex; flex-direction:column; flex:1 1 220px; min-width:0; line-height:1.3; }
-.ocv-tx strong { font-size:13px; font-weight:650; color:#1e2330; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ocv-tx strong { font-size:13px; font-weight:500; color:#1c1b19; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ocv.is-coral .ocv-tx strong { color:var(--ocv-ink); }
-.ocv-tx small { font-size:11.5px; color:#8a93a4; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.ocv-tx small { font-size:11.5px; color:#8b867e; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ocv-actions { display:flex; align-items:center; gap:6px; flex-shrink:0; margin-left:auto; }
 .ocv-anchor { position:relative; display:inline-flex; align-items:center; gap:8px; }
-.ocv-btn { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border:1px solid #e3e7ee; border-radius:9px; background:#fff; font:inherit; font-size:12.5px; font-weight:600; color:#1e2330; cursor:pointer; white-space:nowrap; transition:border-color .15s, background .15s; }
-.ocv-btn svg { color:#5b6472; transition:transform .35s cubic-bezier(.34,1.56,.64,1), color .15s; }
-.ocv-btn:hover:not(:disabled), .ocv-btn[aria-expanded="true"] { border-color:#d5dae3; background:#fafbfc; }
-.ocv-btn:hover:not(:disabled) svg, .ocv-btn[aria-expanded="true"] svg { color:#1e2330; transform:translate(2px, -2px) rotate(-8deg); }
-.ocv-btn.is-confirm { border-color:#b42318; background:#b42318; color:#fff; }
+.ocv-btn { display:inline-flex; align-items:center; gap:6px; height:30px; padding:0 11px; border:1px solid #e8e4de; border-radius:9px; background:#fff; font:inherit; font-size:12.5px; font-weight:500; color:#1c1b19; cursor:pointer; white-space:nowrap; transition:border-color .15s, background .15s; }
+.ocv-btn svg { color:#6b665f; transition:transform .35s cubic-bezier(.34,1.56,.64,1), color .15s; }
+.ocv-btn:hover:not(:disabled), .ocv-btn[aria-expanded="true"] { border-color:#e3ded6; background:#faf9f7; }
+.ocv-btn:hover:not(:disabled) svg, .ocv-btn[aria-expanded="true"] svg { color:#1c1b19; transform:translate(2px, -2px) rotate(-8deg); }
+.ocv-btn.is-confirm { border-color:#c5221f; background:#c5221f; color:#fff; }
 .ocv-btn.is-confirm svg { color:#fff; }
-.ocv-btn.is-done { border-color:#e9f7ef; background:#e9f7ef; color:#15794a; }
+.ocv-btn.is-done { border-color:#e2f6ea; background:#e2f6ea; color:#0b7a4b; }
 .ocv-btn:disabled { cursor:default; }
 /* Lisa déjà prévenue : une coche ronde, le détail (date, auteur, canaux) au survol. */
-.ocv-last { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#e9f7ef; color:#15794a; cursor:help; }
+.ocv-last { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#e2f6ea; color:#0b7a4b; cursor:help; }
 .ocv-last.is-partial { background:#fdf3e4; color:#a4581d; }
 .ocv-last svg { width:12px; height:12px; }
 /* Petite fenêtre « Prévenir Lisa », sous le bouton. */
-.ocv-pop { position:absolute; top:calc(100% + 8px); right:0; z-index:30; width:330px; padding:16px; border:1px solid #e9ebf0; border-radius:20px; background:#fff; box-shadow:0 14px 36px rgba(18,27,53,.16), 0 2px 6px rgba(18,27,53,.06); transform-origin:top right; }
-.ocv-pop-rule { margin:0 0 10px; font-size:12px; line-height:1.45; color:#6b7385; }
+.ocv-pop { position:absolute; top:calc(100% + 8px); right:0; z-index:30; width:330px; padding:16px; border:1px solid #ece9e4; border-radius:20px; background:#fff; box-shadow:0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(43,41,39,.042); transform-origin:top right; }
+.ocv-pop-rule { margin:0 0 10px; font-size:12px; line-height:1.45; color:#8b867e; }
 .ocv-kinds { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
-.ocv-kind { display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px 0 8px; border:1px solid #e3e7ee; border-radius:999px; background:#fff; font:inherit; font-size:12px; font-weight:600; color:#1e2330; cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
-.ocv-kind svg { color:#8a93a4; transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .15s; }
-.ocv-kind:hover svg { color:#1e2330; transform:rotate(-8deg) scale(1.1); }
-.ocv-kind.is-on { border-color:#1e2330; background:#1e2330; color:#fff; }
+.ocv-kind { display:inline-flex; align-items:center; gap:5px; height:28px; padding:0 10px 0 8px; border:1px solid #e8e4de; border-radius:999px; background:#fff; font:inherit; font-size:12px; font-weight:500; color:#1c1b19; cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
+.ocv-kind svg { color:#8b867e; transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .15s; }
+.ocv-kind:hover svg { color:#1c1b19; transform:rotate(-8deg) scale(1.1); }
+.ocv-kind.is-on { border-color:#1c1b19; background:#2b2927; color:#fff; }
 .ocv-kind.is-on svg { color:#fff; }
-.ocv-input { display:block; box-sizing:border-box; width:100%; height:34px; padding:0 11px; border:1px solid #e3e7ee; border-radius:10px; background:#fff; font:inherit; font-size:12.5px; color:#1e2330; outline:0; transition:border-color .15s, box-shadow .15s; }
-.ocv-input::placeholder { color:#a3abba; }
-.ocv-input:focus { border-color:#9db7e3; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
-.ocv-error { margin:8px 0 0; font-size:12px; color:#b42318; }
+.ocv-input { display:block; box-sizing:border-box; width:100%; height:34px; padding:0 11px; border:1px solid #e8e4de; border-radius:10px; background:#fff; font:inherit; font-size:12.5px; color:#1c1b19; outline:0; transition:border-color .15s, box-shadow .15s; }
+.ocv-input::placeholder { color:#a8a39b; }
+.ocv-input:focus { border-color:#d8d3cb; box-shadow:0 0 0 3px rgba(43,41,39,.05); }
+.ocv-error { margin:8px 0 0; font-size:12px; color:#c5221f; }
 .ocv-pop-actions { display:flex; justify-content:flex-end; gap:6px; margin-top:12px; }
-.ocv-ghost { height:32px; padding:0 12px; border:1px solid #e3e7ee; border-radius:9px; background:#fff; font:inherit; font-size:12.5px; font-weight:600; color:#1e2330; cursor:pointer; }
-.ocv-send { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 13px; border:0; border-radius:9px; background:#1e2330; font:inherit; font-size:12.5px; font-weight:650; color:#fff; cursor:pointer; }
+.ocv-ghost { height:32px; padding:0 12px; border:1px solid #e8e4de; border-radius:9px; background:#fff; font:inherit; font-size:12.5px; font-weight:500; color:#1c1b19; cursor:pointer; }
+.ocv-send { display:inline-flex; align-items:center; gap:6px; height:32px; padding:0 13px; border:0; border-radius:9px; background:#2b2927; font:inherit; font-size:12.5px; font-weight:500; color:#fff; cursor:pointer; }
 .ocv-send svg { transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
-.ocv-send:hover:not(:disabled) { background:#121b35; }
+.ocv-send:hover:not(:disabled) { background:#2b2927; }
 .ocv-send:hover:not(:disabled) svg { transform:translate(2px, -2px) rotate(-6deg); }
 .ocv-send:disabled { opacity:.6; cursor:progress; }
 
@@ -75,36 +75,36 @@ button:hover:not(:disabled) .mail-ic { animation:cabWiggle .9s ease-in-out infin
 @keyframes cabWiggle { 0%, 100% { transform:translateX(0); } 25% { transform:translateX(-2.5px); } 75% { transform:translateX(2.5px); } }
 
 /* Prévenir Lisa : motif en puces, un mot, l'envoi ; puis ce qui est parti, par canal. */
-.cab-rule { margin:0 0 10px; font-size:12px; line-height:1.5; color:#6b7385; }
+.cab-rule { margin:0 0 10px; font-size:12px; line-height:1.5; color:#8b867e; }
 .cab-kinds { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
-.cab-kind { display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 9px; border:1px solid rgba(30,35,48,.1); border-radius:999px; background:#fff; font:inherit; font-size:12.5px; font-weight:600; color:#1e2330; cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
-.cab-kind svg { color:#8a93a4; transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .15s; }
-.cab-kind:hover svg { color:#1e2330; transform:translateY(-1px) rotate(-8deg) scale(1.1); }
-.cab-kind.is-on { border-color:#1e2330; background:#1e2330; color:#fff; }
+.cab-kind { display:inline-flex; align-items:center; gap:6px; padding:6px 12px 6px 9px; border:1px solid rgba(43,41,39,.07); border-radius:999px; background:#fff; font:inherit; font-size:12.5px; font-weight:500; color:#1c1b19; cursor:pointer; transition:background .15s, border-color .15s, color .15s; }
+.cab-kind svg { color:#8b867e; transition:transform .3s cubic-bezier(.34,1.56,.64,1), color .15s; }
+.cab-kind:hover svg { color:#1c1b19; transform:translateY(-1px) rotate(-8deg) scale(1.1); }
+.cab-kind.is-on { border-color:#1c1b19; background:#2b2927; color:#fff; }
 .cab-kind.is-on svg { color:#fff; }
-.cab-msg { display:block; box-sizing:border-box; width:100%; min-height:58px; padding:10px 12px; border:1px solid rgba(30,35,48,.1); border-radius:12px; background:#fff; font:inherit; font-size:13px; line-height:1.5; color:#1e2330; resize:vertical; outline:0; transition:border-color .15s, box-shadow .15s; }
-.cab-msg::placeholder { color:#a3abba; }
-.cab-msg:focus { border-color:#9db7e3; box-shadow:0 0 0 3px rgba(37,99,235,.1); }
+.cab-msg { display:block; box-sizing:border-box; width:100%; min-height:58px; padding:10px 12px; border:1px solid rgba(43,41,39,.07); border-radius:12px; background:#fff; font:inherit; font-size:13px; line-height:1.5; color:#1c1b19; resize:vertical; outline:0; transition:border-color .15s, box-shadow .15s; }
+.cab-msg::placeholder { color:#a8a39b; }
+.cab-msg:focus { border-color:#d8d3cb; box-shadow:0 0 0 3px rgba(43,41,39,.05); }
 .cab-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:10px; }
-.cab-go { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border:0; border-radius:11px; background:#1e2330; font:inherit; font-size:13px; font-weight:650; color:#fff; cursor:pointer; transition:background .15s; }
+.cab-go { display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border:0; border-radius:11px; background:#2b2927; font:inherit; font-size:13px; font-weight:500; color:#fff; cursor:pointer; transition:background .15s; }
 .cab-go svg { transition:transform .35s cubic-bezier(.34,1.56,.64,1); }
-.cab-go:hover:not(:disabled) { background:#121b35; }
+.cab-go:hover:not(:disabled) { background:#2b2927; }
 .cab-go:hover:not(:disabled) svg { transform:translate(2px, -2px) rotate(-6deg); }
-.cab-go.is-confirm { background:#b42318; }
+.cab-go.is-confirm { background:#c5221f; }
 .cab-go.is-confirm:hover:not(:disabled) { background:#9a1d14; }
-.cab-go.is-done { background:#e9f7ef; color:#15794a; }
+.cab-go.is-done { background:#e2f6ea; color:#0b7a4b; }
 .cab-go:disabled { cursor:default; }
-.cab-ghost { padding:9px 14px; border:1px solid rgba(30,35,48,.12); border-radius:11px; background:#fff; font:inherit; font-size:13px; font-weight:600; color:#1e2330; cursor:pointer; }
-.cab-error { margin:8px 0 0; font-size:12px; color:#b42318; }
-.cab-done { margin-top:12px; padding:10px 12px; border-radius:12px; background:#eef7f1; font-size:12px; line-height:1.5; color:#3d4556; }
+.cab-ghost { padding:9px 14px; border:1px solid rgba(43,41,39,.084); border-radius:11px; background:#fff; font:inherit; font-size:13px; font-weight:500; color:#1c1b19; cursor:pointer; }
+.cab-error { margin:8px 0 0; font-size:12px; color:#c5221f; }
+.cab-done { margin-top:12px; padding:10px 12px; border-radius:12px; background:#eef7f1; font-size:12px; line-height:1.5; color:#55514b; }
 .cab-done.is-partial { background:#fdf6ec; }
-.cab-done strong { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#15794a; }
+.cab-done strong { display:flex; align-items:center; gap:6px; font-size:12.5px; color:#0b7a4b; }
 .cab-done.is-partial strong { color:#a4581d; }
 .cab-ch { display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:6px 0 2px; }
-.cab-ch-kind { color:#6b7385; }
-.cab-ch-pill { padding:1px 8px; border-radius:999px; background:#fff; font-size:11.5px; font-weight:650; }
-.cab-ch-pill.is-ok { color:#15794a; }
-.cab-ch-pill.is-ko { color:#b42318; }
-.cab-done small { font-size:11.5px; color:#8a93a4; }
-.cab-done b { font-weight:650; color:#1e2330; }
+.cab-ch-kind { color:#8b867e; }
+.cab-ch-pill { padding:1px 8px; border-radius:999px; background:#fff; font-size:11.5px; font-weight:500; }
+.cab-ch-pill.is-ok { color:#0b7a4b; }
+.cab-ch-pill.is-ko { color:#c5221f; }
+.cab-done small { font-size:11.5px; color:#8b867e; }
+.cab-done b { font-weight:500; color:#1c1b19; }
 @media (prefers-reduced-motion:reduce) { .ocv, .ocv *, .cab *, .cg * { animation:none!important; transition:none!important; } }

@@ -55,7 +55,7 @@ export default function GlobeArch({ avatarMap, dark, C }) {
         map.addLayer({
           id: '3d-buildings', source: 'composite', 'source-layer': 'building', filter: ['==', 'extrude', 'true'], type: 'fill-extrusion', minzoom: 14,
           paint: {
-            'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'height'], 0, '#e8ebf4', 30, '#d5dae8', 80, '#b8bfd3', 150, '#9aa3bf'],
+            'fill-extrusion-color': ['interpolate', ['linear'], ['get', 'height'], 0, '#f1eee9', 30, '#e3ded6', 80, '#cfc9c0', 150, '#b5aea4'],
             'fill-extrusion-height': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'height']],
             'fill-extrusion-base': ['interpolate', ['linear'], ['zoom'], 15, 0, 15.05, ['get', 'min_height']],
             'fill-extrusion-opacity': 0.94, 'fill-extrusion-vertical-gradient': true,
@@ -68,8 +68,8 @@ export default function GlobeArch({ avatarMap, dark, C }) {
             const labelEl = document.createElement('div');
             labelEl.style.cssText = 'display:flex;flex-direction:column;align-items:center;pointer-events:none;';
             labelEl.innerHTML = `
-              <div style="background:#1c2b6e;color:#fff;font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:600;letter-spacing:-0.01em;padding:4px 9px;border-radius:10px;box-shadow:0 4px 12px rgba(28,43,110,0.4);white-space:nowrap;margin-bottom:2px;">Opti'Lex</div>
-              <div style="width:10px;height:10px;background:#1c2b6e;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.25);"></div>`;
+              <div style="background:#2b2927;color:#fff;font-family:Inter,system-ui,sans-serif;font-size:11px;font-weight:500;letter-spacing:-0.01em;padding:4px 9px;border-radius:10px;box-shadow:0 4px 12px rgba(28,27,25,0.28);white-space:nowrap;margin-bottom:2px;">Opti'Lex</div>
+              <div style="width:10px;height:10px;background:#2b2927;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,0.25);"></div>`;
             new mapboxgl.Marker({ element: labelEl, anchor: 'bottom' }).setLngLat([2.3485, 48.8595]).addTo(map);
           });
         });
@@ -86,7 +86,7 @@ export default function GlobeArch({ avatarMap, dark, C }) {
       {active && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>}
     </div>
   );
-  const menuBox = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16, padding: 6, boxShadow: dark ? '0 12px 32px rgba(0,0,0,0.45)' : '0 12px 32px rgba(0,0,0,0.10)', animation: 'ceoFadeIn 0.2s cubic-bezier(0.16,1,0.3,1) both' };
+  const menuBox = { background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14, padding: 6, boxShadow: C.popShadow || (dark ? '0 12px 32px rgba(0,0,0,0.45)' : '0 12px 32px rgba(0,0,0,0.10)'), animation: 'ceoFadeIn 0.2s cubic-bezier(0.16,1,0.3,1) both' };
 
   return (
     <motion.div ref={hostRef} className="an-panel an-arch" variants={item} style={{ zIndex: menuOpen ? 100 : 'auto', aspectRatio: '1 / 1' }} aria-label="Globe de l’équipe">

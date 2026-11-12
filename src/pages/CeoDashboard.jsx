@@ -202,6 +202,18 @@ export default function CeoDashboard() {
   }, [sideCollapsed]);
   const [user, setUser] = useState(null);
   const C = useMemo(() => getColors(darkMode), [darkMode]);
+  // Palette de la page, au style Owner (docs/STYLE-OWNER.md) en mode clair : toile grège, cartes blanches à trait fin,
+  // encre et gris chauds, bouton principal anthracite. La palette commune (utils/ceoColors) n'est pas modifiée, les
+  // autres vues /ceo/* gardent la leur ; le mode sombre garde ses couleurs et ne prend que les graisses.
+  const P = useMemo(() => (darkMode
+    ? { ...C, veil: 'rgba(0,0,0,0.55)', veilBlur: 'blur(4px)', sheetShadow: '0 24px 64px rgba(0,0,0,0.5)', current: 'rgba(124,138,219,0.08)', label: C.accent, danger: '#ef4444',
+        popShadow: '0 12px 32px rgba(0,0,0,0.45)', wBold: 500, wSemi: 500, wMid: 500 }
+    : { ...C, bg: '#ffffff', surface: '#f4f2ef', border: '#ece9e4', text: '#1c1b19', muted: '#8b867e', subtle: '#f7f5f2', secondary: '#55514b', accent: '#2b2927',
+        veil: 'rgba(28,27,25,.22)', veilBlur: 'none', sheetShadow: '0 24px 60px rgba(28,27,25,.14)', current: '#f7f5f2', label: '#a8a39b', danger: '#c5221f',
+        popShadow: '0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)', track: '#ebe8e3', chip: '#f7f5f2', wBold: 500, wSemi: 500, wMid: 500,
+        tags: { rep: { color: '#c2500e', bg: '#fde9da', edge: '#f8d4ba' }, imm: { color: '#0b7a4b', bg: '#e2f6ea', edge: '#c3ebd3' },
+          man: { color: '#4a4540', bg: '#f1eee9', edge: '#e3ded6' }, std: { color: '#8b867e', bg: '#f7f5f2', edge: '#ece9e4' } } }
+  ), [darkMode, C]);
   const { list } = useMotionPrefs();
 
   // ── AUTH CHECK ──────────────────────────────────────────────────────
@@ -336,9 +348,9 @@ export default function CeoDashboard() {
 
   useEffect(() => {
     localStorage.setItem('darkMode', darkMode);
-    document.body.style.background = C.surface;
+    document.body.style.background = P.surface;
     return () => { document.body.style.background = ''; };
-  }, [darkMode, C]);
+  }, [darkMode, P]);
 
   // ── ÉQUIPE SALES (onglet inline, chargé à la première visite) ───────
   const [salesTeamUsers, setSalesTeamUsers] = useState([]);
@@ -380,7 +392,7 @@ export default function CeoDashboard() {
   // RENDER
   // ══════════════════════════════════════════════════════════════════════
   return (
-    <div className="ceo-page" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: C.surface, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'optimizeLegibility' }}>
+    <div className="ceo-page" style={{ display: 'flex', height: '100vh', overflow: 'hidden', background: P.surface, fontFamily: 'Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif', WebkitFontSmoothing: 'antialiased', MozOsxFontSmoothing: 'grayscale', textRendering: 'optimizeLegibility' }}>
       <style>{`
         @keyframes ceoFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
         @keyframes ceoCardPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
@@ -409,9 +421,14 @@ export default function CeoDashboard() {
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
         .ceo-page *, .ceo-page *::before, .ceo-page *::after { box-sizing: border-box; }
         /* Cartes de l'onglet Équipe Sales (grilles partagées). */
+        ${darkMode ? `
         .ceo-card { position: relative; border-radius: 16px; background: transparent; border: none; overflow: visible; isolation: isolate; }
         .ceo-card::before { content: ''; position: absolute; inset: -3px; border-radius: 18px; background: linear-gradient(180deg, #EDEDEE 0%, #DCDCDD 100%); z-index: -2; pointer-events: none; }
         .ceo-card::after { content: ''; position: absolute; inset: 0; border-radius: 16px; background: linear-gradient(180deg, #FCFCFD 0%, #F8F8F8 40%, #F8F8F8 60%, #F3F3F4 100%); box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.85); pointer-events: none; z-index: -1; }
+        ` : `
+        .ceo-card { position: relative; border-radius: 18px; background: #ffffff; border: 1px solid #ece9e4; transition: border-color .18s ease; }
+        .ceo-card:hover { border-color: #ddd8d0; }
+        `}
       `}</style>
 
       {/* ═══ LEFT SIDEBAR (Notion-style — mirror TSF) ═══════════════════ */}
@@ -469,7 +486,7 @@ export default function CeoDashboard() {
                     onEditObjectives={() => setObjectivesModalOpen(true)}
                     monthLabel={monthLabel}
                   />
-                  <GlobeArch avatarMap={avatarMap} dark={darkMode} C={C} />
+                  <GlobeArch avatarMap={avatarMap} dark={darkMode} C={P} />
                 </motion.div>
               </section>
             </div>
@@ -480,22 +497,22 @@ export default function CeoDashboard() {
             <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 32 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
                 <div>
-                  <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                  <h1 style={{ fontSize: 24, fontWeight: 500, color: P.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
                     {salesTeamView === 'sales' ? 'Équipe Sales' : 'Setters'}
                   </h1>
-                  <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
+                  <p style={{ fontSize: 14, color: P.muted, margin: 0 }}>
                     {salesTeamView === 'sales'
                       ? 'Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).'
                       : 'Les setters classés par équipe, avec les sales dont ils traitent les leads.'}
                   </p>
                 </div>
-                <SalesSettersToggle view={salesTeamView} setView={setSalesTeamView} C={C} darkMode={darkMode} />
+                <SalesSettersToggle view={salesTeamView} setView={setSalesTeamView} C={P} darkMode={darkMode} />
               </div>
               {salesTeamView === 'sales' ? (
-                <SalesTeamGrid users={salesTeamUsers} teams={salesTeams} loading={salesTeamLoading} C={C} darkMode={darkMode}
+                <SalesTeamGrid users={salesTeamUsers} teams={salesTeams} loading={salesTeamLoading} C={P} darkMode={darkMode}
                   onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)} />
               ) : (
-                <SettersGrid setters={settersOverview} teams={salesTeams} loading={settersLoading} C={C} darkMode={darkMode}
+                <SettersGrid setters={settersOverview} teams={salesTeams} loading={settersLoading} C={P} darkMode={darkMode}
                   onOpenAccount={(email) => navigate(`/ceo/setter-sheet/${encodeURIComponent(email)}?ghost=true`)} />
               )}
             </div>
@@ -507,19 +524,19 @@ export default function CeoDashboard() {
       {objectivesModalOpen && canEditObjectives && createPortal(
         <div
           onClick={(e) => { if (e.target === e.currentTarget) setObjectivesModalOpen(false); }}
-          style={{ position: 'fixed', inset: 0, zIndex: 3000, background: darkMode ? 'rgba(0,0,0,0.55)' : 'rgba(15,18,30,0.35)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'ceoFadeIn 0.18s cubic-bezier(0.16,1,0.3,1) both', padding: 20 }}
+          style={{ position: 'fixed', inset: 0, zIndex: 3000, background: P.veil, backdropFilter: P.veilBlur, WebkitBackdropFilter: P.veilBlur, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'ceoFadeIn 0.18s cubic-bezier(0.16,1,0.3,1) both', padding: 20 }}
         >
-          <div style={{ width: '100%', maxWidth: 480, background: C.bg, border: `1px solid ${C.border}`, borderRadius: 18, boxShadow: darkMode ? '0 24px 64px rgba(0,0,0,0.5)' : '0 24px 64px rgba(0,0,0,0.18)', overflow: 'hidden', animation: 'ceoCardPop 0.28s cubic-bezier(0.16,1,0.3,1) both' }}>
-            <div style={{ padding: '18px 22px', borderBottom: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ width: '100%', maxWidth: 480, background: P.bg, border: `1px solid ${P.border}`, borderRadius: 22, boxShadow: P.sheetShadow, overflow: 'hidden', animation: 'ceoCardPop 0.28s cubic-bezier(0.16,1,0.3,1) both' }}>
+            <div style={{ padding: '18px 22px', borderBottom: `1px solid ${P.border}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>Objectifs mensuels</div>
-                <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Ventes cibles par mois</div>
+                <div style={{ fontSize: 17, fontWeight: 500, color: P.text, letterSpacing: '-0.02em' }}>Objectifs mensuels</div>
+                <div style={{ fontSize: 12, color: P.muted, marginTop: 2 }}>Ventes cibles par mois</div>
               </div>
               <button
                 onClick={() => setObjectivesModalOpen(false)}
-                style={{ width: 32, height: 32, borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', padding: 0 }}
-                onMouseEnter={(e) => { e.currentTarget.style.background = C.subtle; e.currentTarget.style.color = C.text; }}
-                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
+                style={{ width: 32, height: 32, borderRadius: 12, border: `1px solid ${P.border}`, background: 'transparent', color: P.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', padding: 0 }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = P.subtle; e.currentTarget.style.color = P.text; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = P.muted; }}
                 aria-label="Fermer"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -535,8 +552,7 @@ export default function CeoDashboard() {
                   saving={savingPeriod === period}
                   errorMessage={objectiveError?.period === period ? objectiveError.message : null}
                   onSave={(val) => saveObjective(period, val)}
-                  C={C}
-                  darkMode={darkMode}
+                  C={P}
                   isCurrent={period === currentMonthKey}
                 />
               ))}
@@ -550,7 +566,7 @@ export default function CeoDashboard() {
 }
 
 // ── Single editable row inside the objectives modal ─────────────────────────
-function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, darkMode, isCurrent }) {
+function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, isCurrent }) {
   const [draft, setDraft] = useState(currentValue !== undefined ? String(currentValue) : '');
   // Sync local draft when external value changes (e.g. successful save or refetch).
   useEffect(() => {
@@ -564,13 +580,13 @@ function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, da
   };
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: isCurrent ? (darkMode ? 'rgba(124,138,219,0.08)' : 'rgba(91,106,191,0.06)') : 'transparent', transition: 'background 0.15s' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, background: isCurrent ? C.current : 'transparent', transition: 'background 0.15s' }}>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 650, color: C.text, letterSpacing: '-0.01em' }}>
-          {label}{isCurrent && <span style={{ marginLeft: 8, fontSize: 10, color: C.accent, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.6px' }}>actuel</span>}
+        <div style={{ fontSize: 14, fontWeight: 500, color: C.text, letterSpacing: '-0.01em' }}>
+          {label}{isCurrent && <span style={{ marginLeft: 8, fontSize: 10.5, color: C.label, fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.09em' }}>actuel</span>}
         </div>
         {errorMessage && (
-          <div style={{ fontSize: 11, color: '#ef4444', marginTop: 2 }}>{errorMessage}</div>
+          <div style={{ fontSize: 11, color: C.danger, marginTop: 2 }}>{errorMessage}</div>
         )}
       </div>
       <input
@@ -583,14 +599,14 @@ function ObjectiveRow({ label, currentValue, saving, errorMessage, onSave, C, da
         placeholder="45"
         disabled={saving}
         className="ceo-objective-input"
-        style={{ width: 84, padding: '8px 12px', border: `1px solid ${errorMessage ? '#ef4444' : C.border}`, borderRadius: 10, background: C.subtle, color: C.text, fontSize: 14, fontWeight: 600, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textAlign: 'right', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s, background 0.15s, opacity 0.15s', opacity: saving ? 0.6 : 1 }}
+        style={{ width: 84, padding: '8px 12px', border: `1px solid ${errorMessage ? C.danger : C.border}`, borderRadius: 10, background: C.subtle, color: C.text, fontSize: 14, fontWeight: 500, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.01em', textAlign: 'right', outline: 'none', fontFamily: 'inherit', transition: 'border-color 0.15s, background 0.15s, opacity 0.15s', opacity: saving ? 0.6 : 1 }}
         onFocus={(e) => { if (!errorMessage) e.target.style.borderColor = C.accent; }}
         onBlur={(e) => { if (!errorMessage) e.target.style.borderColor = C.border; }}
       />
       <button
         onClick={() => onSave(draft)}
         disabled={!dirty || saving}
-        style={{ width: 32, height: 32, borderRadius: 9, border: `1px solid ${dirty && !saving ? C.accent : C.border}`, background: dirty && !saving ? C.accent : 'transparent', color: dirty && !saving ? '#fff' : C.muted, cursor: dirty && !saving ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', padding: 0, opacity: dirty && !saving ? 1 : 0.5 }}
+        style={{ width: 32, height: 32, borderRadius: 10, border: `1px solid ${dirty && !saving ? C.accent : C.border}`, background: dirty && !saving ? C.accent : 'transparent', color: dirty && !saving ? '#fff' : C.muted, cursor: dirty && !saving ? 'pointer' : 'default', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', padding: 0, opacity: dirty && !saving ? 1 : 0.5 }}
         aria-label="Sauvegarder"
       >
         {saving ? (

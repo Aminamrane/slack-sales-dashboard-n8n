@@ -103,7 +103,7 @@ export default function CeoOptilexBoardView() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: darkMode ? "#13141b" : "#f7f8fa",
+        background: darkMode ? "#13141b" : "#f4f2ef",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
