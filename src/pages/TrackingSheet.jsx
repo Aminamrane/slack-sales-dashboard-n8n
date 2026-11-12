@@ -1525,6 +1525,8 @@ export default function TrackingSheet() {
   // immédiate (leads issus des bookings webinaire avec R2 déjà placé par le
   // prospect). Mêmes mécaniques collapsible que cancelled/setter_placed.
   const [r2WebinaireExpanded, setR2WebinaireExpanded] = useState(true);
+  // R1 tab — "R1 Webinaire" container (anciens webinaires, dev 12/11/2026) : état plié/déplié distinct de R2.
+  const [r1WebinaireExpanded, setR1WebinaireExpanded] = useState(true);
   // Onglet Signés — conteneurs par mois de signature : { [monthKey]: bool } override
   // du défaut (mois en cours ouvert, autres mois repliés).
   const [signedMonthOpen, setSignedMonthOpen] = useState({});
@@ -5344,10 +5346,17 @@ export default function TrackingSheet() {
             // Landing pages dynamiques (Broad LP, BTP LP, etc.) : origin finit par " LP".
             // RDV R1 pris directement depuis la LP (/live) → propre conteneur "R1 Landing".
             const isLandingLead = (l) => (l.origin || '').toLowerCase().trimEnd().endsWith(' lp');
-            const r1SetterPlaced = isR1Tab ? filteredLeads.filter(isSetterPlacedUnqualified) : [];
-            const r1Landing    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && isLandingLead(l)) : [];
-            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && !isLandingLead(l)) : [];
-            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetterPlacedUnqualified(l) && (l.r1_result === 'no_show' || l.r1_result === 'to_reschedule' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
+            // Anciens webinaires (dev 12/11/2026) : R1 posé par un setter sur un inscrit d'un ancien webinaire, puis
+            // affecté à la main dans Gestion des leads. Conteneur "R1 Webinaire" en tête de l'onglet, comme
+            // "R2 Webinaire" ; le lead y reste tant que son R1 n'est pas qualifié, à la place de "Traité par …".
+            // L'origine ne commence pas par "webinaire" : ces leads ne vont pas dans "R2 Webinaire".
+            const isR1Webinaire = (l) => (l.origin || '').trim().toLowerCase() === 'anciens webinaires' && (!l.r1_result || l.r1_result === 'rescheduled');
+            const isSetApart = (l) => isSetterPlacedUnqualified(l) || isR1Webinaire(l);
+            const r1Webinaire  = isR1Tab ? filteredLeads.filter(isR1Webinaire) : [];
+            const r1SetterPlaced = isR1Tab ? filteredLeads.filter(l => isSetterPlacedUnqualified(l) && !isR1Webinaire(l)) : [];
+            const r1Landing    = isR1Tab ? filteredLeads.filter(l => !isSetApart(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && isLandingLead(l)) : [];
+            const r1Scheduled  = isR1Tab ? filteredLeads.filter(l => !isSetApart(l) && (!l.r1_result || l.r1_result === 'rescheduled') && !isDatePast(l.r1) && !isLandingLead(l)) : [];
+            const r1Pending    = isR1Tab ? filteredLeads.filter(l => !isSetApart(l) && (l.r1_result === 'no_show' || l.r1_result === 'to_reschedule' || ((!l.r1_result || l.r1_result === 'rescheduled') && isDatePast(l.r1)))) : [];
             const r1Cancelled  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'cancelled') : [];
             const r1Completed  = isR1Tab ? filteredLeads.filter(l => l.r1_result === 'done') : [];
 
@@ -5394,6 +5403,12 @@ export default function TrackingSheet() {
 
             // Unified groups array for the active tab
             const groups = isR1Tab ? [
+              // Container "R1 Webinaire" en TÊTE : anciens webinaires affectés à la main, R1 déjà posé par un
+              // setter (dev 12/11/2026). Même couleur et même mécanique que "R2 Webinaire". Affiché si non vide.
+              ...(r1Webinaire.length > 0 ? [{
+                key: 'webinaire', leads: r1Webinaire, label: 'R1 Webinaire',
+                color: '#8b5cf6',
+              }] : []),
               // Container "R1 Landing" en TÊTE : leads Broad LP, RDV R1 pris directement
               // depuis la landing page (/live). Couleur cyan (cohérent avec "R2 Landing").
               // Affiché uniquement si non vide.
@@ -5898,7 +5913,7 @@ export default function TrackingSheet() {
                             : isSetterPlacedGrp
                               ? setterPlacedExpanded
                               : isWebinaireGrp
-                                ? r2WebinaireExpanded
+                                ? (isR1Tab ? r1WebinaireExpanded : r2WebinaireExpanded)
                                 : isLandingGrp
                                   ? (isR1Tab ? r1LandingExpanded : r2LandingExpanded)
                                   : true;
@@ -5907,7 +5922,7 @@ export default function TrackingSheet() {
                             : isSetterPlacedGrp
                               ? () => setSetterPlacedExpanded(prev => !prev)
                               : isWebinaireGrp
-                                ? () => setR2WebinaireExpanded(prev => !prev)
+                                ? () => (isR1Tab ? setR1WebinaireExpanded : setR2WebinaireExpanded)(prev => !prev)
                                 : isLandingGrp
                                   ? () => (isR1Tab ? setR1LandingExpanded : setR2LandingExpanded)(prev => !prev)
                                   : undefined;

@@ -131,3 +131,32 @@ test('un setter reporte un R2 par l’agenda du commercial du lead, jamais un R2
     assert.equal(canRescheduleSetterR2({ ...lead, ...patch }, { isSetter: true }), false, JSON.stringify(patch));
   }
 });
+
+// Anciens webinaires (dev 12/11/2026) : R1 posé sans commercial, affectation à la main dans Gestion des leads.
+test('an old webinar lead waits for a sales only under that exact origin', async () => {
+ const { isOldWebinar, awaitsSales } = await import('./setterJourney.js');
+ assert.equal(isOldWebinar({ origin: ' Anciens Webinaires ' }), true);
+ for (const origin of ['Webinaire 10/22', 'Ancien webinaire', 'setter', '', null]) assert.equal(isOldWebinar({ origin }), false, String(origin));
+ assert.equal(awaitsSales({ origin: 'Anciens webinaires', assigned_to: null }), true);
+ assert.equal(awaitsSales({ origin: 'Anciens webinaires', assigned_to: 'a@example.com' }), false);
+ assert.equal(awaitsSales({ origin: 'setter', assigned_to: null }), false);
+});
+test('a booking without a sales says where the assignment happens', async () => {
+ const { bookedMessage } = await import('./setterJourney.js');
+ assert.equal(bookedMessage('r1', { manual_assignment: true, sales_email: null }), 'R1 placé. L’affectation à un commercial se fait dans Gestion des leads.');
+ assert.equal(bookedMessage('r1', { sales_full_name: 'Prénom Nom' }), 'R1 placé avec Prénom Nom.');
+ assert.equal(bookedMessage('r2', {}), 'R2 placé avec un commercial.');
+});
+test('the R1 of a waiting old webinar lead can be moved, any other lead still needs its sales', () => {
+ const waiting = { id: 9, origin: 'Anciens webinaires', assigned_to: null, r1: '2026-11-20T10:00:00', _setter_bucket: 'r1_placed' };
+ assert.equal(canRescheduleSetterR1(waiting, { isSetter: true }), true);
+ assert.equal(canRescheduleSetterR1({ ...waiting, origin: 'setter' }, { isSetter: true }), false);
+ assert.equal(canRescheduleSetterR1({ ...waiting, r1_result: 'done' }, { isSetter: true }), false);
+});
+test('disqualifying offers frequent reasons that pass the minimum length', async () => {
+ const { disqualifyReasons } = await import('./setterJourney.js');
+ assert.ok(disqualifyReasons.length >= 4);
+ for (const reason of disqualifyReasons) {
+  assert.deepEqual(setterAction({ lead: { id: 9 }, outcome: 'disqualify', note: reason }).body, { reason });
+ }
+});

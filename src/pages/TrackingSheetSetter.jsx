@@ -18,7 +18,7 @@ import LeadsManagement from "./LeadsManagement.jsx";
 // ── Setter modales (Option B duplication intégrale TrackingSheet) ──────────
 import SetterJourneyDialog from "../components/setter/SetterJourneyDialog.jsx";
 import SetterRescheduleDialog from "../components/setter/SetterRescheduleDialog.jsx";
-import { canPlanSetterR2, canRescheduleSetterR1, canRescheduleSetterR2 } from '../utils/setterJourney.js';
+import { awaitsSales, canPlanSetterR2, canRescheduleSetterR1, canRescheduleSetterR2, isOldWebinar } from '../utils/setterJourney.js';
 import {Phone, CalendarDays, ChevronRight, UserSearch, ListChecks, UsersRound, Video, RotateCcw, Check, X, TriangleAlert} from "lucide-react";
 import NotesDialog from "../components/salesJourney/NotesDialog";
 import { SalesNotesView } from "../components/salesJourney/SalesNotes";
@@ -407,6 +407,10 @@ export default function TrackingSheetSetter() {
   // Setter modales state — ouvertes via setter actions dans panel détail
   const [showSetterAvailability, setShowSetterAvailability] = useState(false);
   const [setterModal, setSetterModal] = useState(null); // { kind, lead?, mode, rdv? }
+  // Report d'un RDV par le setter. Ancien webinaire sans commercial (dev 12/11/2026) : il n'y a pas d'agenda de
+  // commercial à consulter, le R1 se repose par l'agenda libre de la fiche (« Placer un R1 »).
+  const openReschedule = (lead, rdv) => setSetterModal(rdv === 'r1' && awaitsSales(lead)
+    ? { kind: 'qualify', lead, initialOutcome: 'r1' } : { kind: 'reschedule', lead, rdv });
   const [agendaReload, setAgendaReload] = useState(0);   // relecture de l'agenda après un RDV repositionné (27/10/2026)
   const [setterSubmitting, setSetterSubmitting] = useState(false);
   const [setterToast, setSetterToast] = useState(null); // { text, kind }
@@ -2962,7 +2966,7 @@ export default function TrackingSheetSetter() {
                 // Lead hors de ses listes (R2 pris via son lien webinaire) : la fenêtre se nourrit de l'événement de l'agenda.
                 const lead = leads.find((l) => l.id === ev.lead_id)
                   || { id: ev.lead_id, full_name: ev.prospect, assigned_to: ev.assigned_email || '', assigned_to_name: ev.assigned?.name, [ev.rdv_type]: ev.start };
-                setSetterModal({ kind: 'reschedule', lead, rdv: ev.rdv_type });
+                openReschedule(lead, ev.rdv_type);
               }}
             />
           </div>
@@ -4602,7 +4606,7 @@ export default function TrackingSheetSetter() {
                 color: C.muted,
                 display: 'flex', alignItems: 'center', gap: 8,
               }}>
-                {activeCat.description} — {filterMobileOnly ? `${filteredLeads.length} sur ${tabCounts[activeCat.key]}` : tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
+                {activeCat.key === 'mine' && filteredLeads.some(isOldWebinar) ? 'Tes cold calls et tes anciens webinaires' : activeCat.description} — {filterMobileOnly ? `${filteredLeads.length} sur ${tabCounts[activeCat.key]}` : tabCounts[activeCat.key]} lead{tabCounts[activeCat.key] !== 1 ? 's' : ''}
                 {/* Garde Option B : bouton "+" ajouter lead générique caché
                     côté setter — le setter utilise "+ Nouveau lead" dans
                     les folder tabs (CreateColdLeadModal). */}
@@ -5167,8 +5171,10 @@ export default function TrackingSheetSetter() {
 
                       {/* Origin badge (sales/admin) — Sales owner first name (setter) */}
                       {isSetter ? (() => {
-                        const ownerColor = getSalesOwnerColor(lead.assigned_to);
-                        const firstName = lead.assigned_to_name?.split(' ')[0] || '—';
+                        // Ancien webinaire sans commercial (dev 12/11/2026) : l'origine à la place du prénom du sales.
+                        const waiting = awaitsSales(lead);
+                        const ownerColor = waiting ? '#8b5cf6' : getSalesOwnerColor(lead.assigned_to);
+                        const firstName = waiting ? 'Ancien webinaire' : (lead.assigned_to_name?.split(' ')[0] || '—');
                         return (
                           <span style={{
                             display: 'inline-flex', alignItems: 'center',
@@ -5180,7 +5186,7 @@ export default function TrackingSheetSetter() {
                             flexShrink: 0,
                             letterSpacing: '-0.005em',
                           }}
-                            title={lead.assigned_to_name || ''}
+                            title={waiting ? 'Ancien webinaire : sans commercial, affecté ensuite dans Gestion des leads' : (lead.assigned_to_name || '')}
                           >
                             {firstName}
                           </span>
@@ -5890,7 +5896,7 @@ export default function TrackingSheetSetter() {
                   padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 500,
                   background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
                 }}>
-                  {originDisplay(lead.origin, lead.cc_sector)}
+                  {originDisplay(lead.origin, lead.cc_sector)}{isOldWebinar(lead) && lead.form_name ? ` · ${lead.form_name}` : ''}
                 </span>
                 {/* Name (editable) */}
                 {editingField?.leadId === lead.id && editingField?.field === 'full_name' ? (
@@ -6281,7 +6287,7 @@ export default function TrackingSheetSetter() {
                       <RdvRow key={r.field} first={index === 0} last={index === rows.length - 1} next={upcoming?.field === r.field} label={r.label} value={r.value} C={C} darkMode={darkMode}
                         action={((r.field === 'r1' && canRescheduleSetterR1(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }))
                           || (r.field === 'r2' && canRescheduleSetterR2(lead, { isSetter, readOnly: urlParams.get('ghost') === 'true' }))) ? (
-                          <button type="button" onClick={() => setSetterModal({ kind: 'reschedule', lead, rdv: r.field })}
+                          <button type="button" onClick={() => openReschedule(lead, r.field)}
                             aria-label={`Reprogrammer le ${r.label}`}
                             style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', border: `1px solid ${C.border}`, borderRadius: 9, background: C.bg, color: C.text, fontSize: 11.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'border-color 0.15s ease' }}
                             onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
@@ -6875,7 +6881,7 @@ export default function TrackingSheetSetter() {
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('Lapin', '#f59e0b', rabbitIcon, 30, () => handleWorkflowSubmit(lead.id, { r1_result: 'no_show' }), true)}
                           {/* Setter (dev 13/10/2026) : report dans l'agenda du seul commercial du R1, créneaux libres uniquement. */}
-                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => isSetter ? setSetterModal({ kind: 'reschedule', lead, rdv: 'r1' }) : setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
+                          {wfPill('Reporter', '#3b82f6', '↻', 70, () => isSetter ? openReschedule(lead, 'r1') : setActiveWorkflow(prev => ({ ...prev, r1Result: 'rescheduled', newDate: '' })))}
                           {wfPill('R1 effectué', '#10b981', '✓', 110, () => handleWorkflowSubmit(lead.id, { r1_result: 'done', r1_completed_at: new Date().toISOString() }))}
                           {wfPill('Annulé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { r1_result: 'cancelled' }))}
                         </div>
@@ -8648,7 +8654,7 @@ export default function TrackingSheetSetter() {
               setAgendaReload((v) => v + 1);
               refreshData().catch(() => {});
             }}/>}
-          {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} teamSales={teamSales} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
+          {setterModal?.kind === 'qualify' && <SetterJourneyDialog key={setterModal.lead.id} lead={setterModal.lead} initialOutcome={setterModal.initialOutcome || null} teamSales={teamSales} currentEmail={userMeta?.email} dark={darkMode} onClose={() => setSetterModal(null)} onSaved={message => {showSetterToast(message);refreshData().catch(() => {});}}/>}
           <CreateColdLeadModal
             open={setterModal?.kind === 'createCold'}
             onClose={() => !setterSubmitting && setSetterModal(null)}

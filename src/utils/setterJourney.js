@@ -1,10 +1,22 @@
 import { validParisAppointment } from './parisDates.js';
 export const setterOutcomes = ['r1', 'r2', 'voicemail', 'callback', 'disqualify'];
+// Anciens webinaires (dev 12/11/2026) : sur cette seule origine, le setter pose le R1 sans commercial, librement à partir
+// du lendemain ; l'affectation se fait ensuite à la main dans Gestion des leads. Le serveur décide (old_webinar) : ces
+// fonctions ne servent qu'aux libellés et à l'accès au report.
+export const isOldWebinar = lead => (lead?.origin || '').trim().toLowerCase() === 'anciens webinaires';
+export const awaitsSales = lead => isOldWebinar(lead) && !(lead?.assigned_to || '').trim();
+// Disqualifier en un clic (dev 12/11/2026 : « il faut qu'ils puissent facilement les archiver ») : les raisons les plus
+// fréquentes remplissent le champ, qui reste modifiable. La fiche disqualifiée quitte la sheet du setter.
+export const disqualifyReasons = ['Pas intéressé', 'Ne veut plus être appelé', 'Faux numéro', 'Injoignable', 'Hors cible', 'Déjà client'];
+export function bookedMessage(outcome, booked) {
+  if (booked?.manual_assignment) return `${outcome.toUpperCase()} placé. L’affectation à un commercial se fait dans Gestion des leads.`;
+  return `${outcome.toUpperCase()} placé avec ${booked?.sales_full_name || booked?.sales_email || 'un commercial'}.`;
+}
 // A transverse view (Lapins, R1 en retard, À faire) must keep the same
 // rescheduling access as the lead's R1 card. Never reopen a completed journey.
 export function canRescheduleSetterR1(lead, { isSetter = false, readOnly = false } = {}) {
   return Boolean(isSetter && !readOnly && lead?.id && (lead.r1 || lead.r1_date)
-    && lead.assigned_to && !lead.setter_disqualified_at
+    && (lead.assigned_to || awaitsSales(lead)) && !lead.setter_disqualified_at
     && !(lead.r2 || lead.r2_date || lead.r3 || lead.r3_date)
     && !['done', 'showed_up'].includes(lead.r1_result)
     && ![lead.status, lead._setter_bucket, lead._lead_status].some(status =>
