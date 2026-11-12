@@ -456,9 +456,12 @@ export default function ExpectedManager({
     .map(([id, v]) => ({ row: byId.get(id), value: v }))
     .filter(({ row, value }) => row && value !== '' && round2(value) !== row.attendu),
   [drafts, byId]);
+  // Le reçu saisi est le TOTAL du mois, part « sur retard » comprise : le
+  // serveur remet celle-ci à zéro (dev 2026-11-12, n°565 : août posé à 0
+  // affichait encore 338 € saisis « sur retard », dans la grille et le relevé).
   const recEdits = useMemo(() => Object.entries(recDrafts)
     .map(([id, v]) => ({ row: byId.get(id), value: v }))
-    .filter(({ row, value }) => row && value !== '' && round2(value) !== row.recuMois),
+    .filter(({ row, value }) => row && value !== '' && round2(value) !== row.recu),
   [recDrafts, byId]);
   // Reste dû : seulement un mois passé ou en cours, et seulement si la valeur change.
   const resteEdits = useMemo(() => Object.entries(resteDrafts)
@@ -499,7 +502,7 @@ export default function ExpectedManager({
     }), { before: 0, after: 0 });
     return {
       attendu: edits.length ? sum(edits, 'attendu') : null,
-      recu: recEdits.length ? sum(recEdits, 'recuMois') : null,
+      recu: recEdits.length ? sum(recEdits, 'recu') : null,
       reste: resteEdits.length ? sum(resteEdits, 'reste') : null,
     };
   }, [mode, editCount, edits, recEdits, resteEdits]);
@@ -1075,7 +1078,7 @@ export default function ExpectedManager({
                         {formatEUR(r.recu)}
                         {r.recuCreances > 0 && (
                           <span
-                            title="Récupéré sur des créances antérieures, en plus du reçu du mois"
+                            title="Saisi « sur retard », compris dans le reçu du mois. Corriger le reçu remplace le total du mois, cette part comprise."
                             style={{ display: 'block', fontSize: 10.5, color: N.textFaint, whiteSpace: 'nowrap' }}
                           >
                             dont {formatEUR(r.recuCreances)} sur créances
@@ -1141,7 +1144,7 @@ export default function ExpectedManager({
                             <AmountInput
                               width={82}
                               value={recDrafts[r.id] ?? ''}
-                              placeholder={formatEUR(r.recuMois, { withSymbol: false })}
+                              placeholder={formatEUR(r.recu, { withSymbol: false })}
                               onChange={(v) => setRecDrafts((d) => ({ ...d, [r.id]: v }))}
                             />
                           </span>
