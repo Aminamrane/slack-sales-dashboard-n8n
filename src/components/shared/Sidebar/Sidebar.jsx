@@ -20,6 +20,11 @@
 //   - activeTab + setActiveTab : routing/state côté caller
 //   - width / collapsed / onToggle : pilotage de la largeur animée
 //
+// Ton Owner (docs/STYLE-OWNER.md) : en mode clair le menu porte sa propre palette chaude (OWNER_C), quelle que soit
+// celle de la page, avec les formes et le mouvement du menu de la page Finance (règles `.ceo-side.is-owner` de
+// Sidebar.css). Dev 10/11/2026 : « le menu de gauche, pour tout le monde, peu importe le rôle, on va aller sur ce
+// style-là ». Le mode sombre garde la palette C de la page.
+//
 // Les classes CSS `.ceo-side`, `.ceo-side-item`, `.ceo-side-scroll`,
 // `.ceo-icon-btn` sont conservées telles quelles (déjà injectées dans le
 // `<style>` de chaque page hôte).
@@ -27,9 +32,9 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { ChevronDown, Home, MessageSquare, Mail, Search, Sparkles, PanelLeft } from "lucide-react";
-import companyLogo from "../../../assets/my_image.png";
+import OwnerMark from "./OwnerMark.jsx";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
@@ -56,6 +61,10 @@ let railHovered = false;
 // que les entrées). easeOutExpo : gros déplacement immédiat puis pose douce.
 const OPEN_T = { duration: 0.06, ease: [0.16, 1, 0.3, 1] };
 const CLOSE_T = { duration: 0.08, ease: [0.16, 1, 0.3, 1] };
+// Ton Owner : le menu se déplie comme celui de la page Finance (300 ms, sortie douce).
+const OWNER_T = { duration: 0.3, ease: [0.22, 1, 0.36, 1] };
+// Palette du menu en mode clair : toile grège, encre chaude (docs/STYLE-OWNER.md).
+const OWNER_C = { bg: "#f4f2ef", surface: "#f4f2ef", border: "#e8e4de", text: "#1c1b19", muted: "#9d9890", subtle: "#ebe8e3", secondary: "#55514b", accent: "#2b2927" };
 const EXPANDED_W = 260;   // largeur de la barre dépliée au survol
 const NOTIF_W = 360;      // largeur le temps de lire les notifications
 
@@ -85,12 +94,15 @@ function buildLayout(sections) {
   };
 }
 
-export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C, darkMode, setDarkMode, headerExtra }) {
+export default function Sidebar({ width, collapsed, onToggle, sections, activeTab, setActiveTab, C: pageC, darkMode, setDarkMode, headerExtra }) {
   // Les tableaux de bord n'affichent que leurs propres onglets, sans « Mes pages » (dev 10/11/2026 : « mon menu de
   // gauche est hyper long »). « Mes pages » vit sur les pages hors tableau de bord (PageWithSidebar, SheetSidebar).
   // Survol = dépliage automatique (réactif) : si la barre est repliée, la survoler
   // l'ouvre (largeur étendue + labels) ; en sortir la referme. Le bouton de pin
   // (onToggle/collapsed) reste prioritaire : barre épinglée ouverte = toujours ouverte.
+  const owner = !darkMode;
+  const C = useMemo(() => (owner ? { ...pageC, ...OWNER_C } : pageC), [owner, pageC]);
+  const reduced = useReducedMotion();
   const [hovered, setHovered] = useState(() => railHovered);
   const setHover = (v) => { railHovered = v; setHovered(v); };
   // Notifications : la liste s'ouvre dans le menu, qui reste déplié et s'élargit le temps de la lecture.
@@ -227,10 +239,12 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
       {createPortal(
       <motion.aside
         ref={asideRef}
-        className={`ceo-side${darkMode ? " is-dark" : ""}`}
+        className={`ceo-side${darkMode ? " is-dark" : ""}${owner ? " is-owner" : ""}`}
+        // Dépliée par-dessus la page (survol, notifications) : le ton Owner lui donne alors son relief.
+        data-floating={collapsed && !renderCollapsed ? "true" : undefined}
         animate={{ width: effWidth }}
         initial={false}
-        transition={effCollapsed ? CLOSE_T : OPEN_T}
+        transition={owner ? (reduced ? { duration: 0 } : OWNER_T) : effCollapsed ? CLOSE_T : OPEN_T}
         onAnimationComplete={() => { if (effCollapsed) setRenderCollapsed(true); }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -306,33 +320,25 @@ function WorkspaceHeader({ collapsed, C }) {
       gap: 6,
     }}>
       <button
-        className="ceo-icon-btn"
+        className="ceo-icon-btn sb-brand"
         style={{
           flex: 1,
-          display: 'flex', alignItems: 'center', gap: 8,
+          display: 'flex', alignItems: 'center', gap: 10,
           justifyContent: collapsed ? 'center' : 'flex-start',
-          padding: '4px 6px',
+          padding: collapsed ? '5px 6px' : '5px 7px',
           borderRadius: 4,
           border: 'none', background: 'transparent', cursor: 'pointer',
-          fontFamily: 'inherit', textAlign: 'left',
+          fontFamily: 'inherit', textAlign: 'left', color: C.text,
           minWidth: 0,
         }}
       >
-        <span style={{
-          width: 22, height: 22, flexShrink: 0,
-          borderRadius: 4,
-          background: '#fff',
-          border: `1px solid ${C.border}`,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          overflow: 'hidden',
-        }}>
-          <img src={companyLogo} alt="Owner" style={{ width: 18, height: 18, objectFit: 'contain' }} />
-        </span>
+        {/* Le sigle seul, sans cadre, à la couleur de l'encre : son axe tombe sur celui des pictos du menu. */}
+        <OwnerMark size={24} className="sb-brand-mark" />
         {!collapsed && (
           <>
-            <span style={{
-              fontSize: 14, fontWeight: 600, color: C.text,
-              letterSpacing: '-0.01em',
+            <span className="sb-brand-name" style={{
+              fontSize: 14.5, fontWeight: 600, color: C.text,
+              letterSpacing: '-0.015em',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               Owner Technology
@@ -393,6 +399,7 @@ function SidebarSection({ section, collapsed, activeTab, setActiveTab, C, darkMo
     <div ref={draggable ? setNodeRef : undefined} style={{ padding: collapsed ? '4px 6px' : '4px 8px', ...dragStyle }}>
       {!collapsed && (
         <button
+          className="sb-sec-label"
           onClick={() => setOpen((o) => !o)}
           {...handleProps}
           style={{

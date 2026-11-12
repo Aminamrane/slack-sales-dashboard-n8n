@@ -101,3 +101,55 @@
 .ceo-side .ceo-icon-btn { transition: background 0.12s, color 0.12s; }
 .ceo-side .ceo-icon-btn:hover { background: var(--sb-hover); }
 @media (prefers-reduced-motion: reduce) { .ceo-side { transition: none; } }
+
+/* ── Ton Owner (le menu de tout le monde en mode clair) ─────────────────────
+   Le même menu aux teintes, formes et graisses de docs/STYLE-OWNER.md, calé sur celui de la page Finance : toile
+   grège, entrée active en tuile blanche relevée, graisses 400 et 500, relief seulement quand il passe par-dessus la
+   page ; au repos un simple filet le sépare des pages qui n'ont pas encore la toile grège. Le menu est stylé en ligne : ces règles passent donc par !important, et ne visent que .is-owner. */
+.ceo-side.is-owner { --sb-hover: #ebe8e3; --sb-red: #c5221f; --sb-red-bg: #fde6e6; --sb-tile: 0 1px 2px rgba(50,40,30,.07), 0 6px 14px -10px rgba(50,40,30,.22);
+  --sb-spring: cubic-bezier(.34,1.56,.64,1); border-right: 0 !important; border-radius: 0; box-shadow: inset -1px 0 0 #ece9e4 !important;
+  font-feature-settings: 'cv11', 'ss01'; -webkit-font-smoothing: antialiased; transition: box-shadow .3s ease, border-radius .3s ease; }
+.ceo-side.is-owner[data-floating] { border-radius: 0 22px 22px 0; box-shadow: 1px 0 0 #ece9e4, 0 24px 60px -24px rgba(50,40,30,.34), 0 2px 10px rgba(50,40,30,.05) !important; }
+
+.ceo-side.is-owner .ceo-side-item { gap: 9px !important; padding: 7px 9px !important; border-radius: 11px !important; font-size: 13.5px !important;
+  transition: background .16s ease, box-shadow .2s ease, transform .18s var(--sb-spring); }
+.ceo-side.is-owner .ceo-side-item:not([aria-current]):hover { background: var(--sb-hover) !important; }
+.ceo-side.is-owner .ceo-side-item:active { transform: scale(.975); }
+.ceo-side.is-owner .ceo-side-item[aria-current="page"] { background: #fff !important; box-shadow: var(--sb-tile); }
+.ceo-side.is-owner nav .ceo-side-item:not([aria-current]) > span:not([class]) { color: #8b867e !important; }
+.ceo-side.is-owner .ceo-side-item svg { transition: transform .3s var(--sb-spring); }
+.ceo-side.is-owner .ceo-side-item:hover svg { transform: translateY(-1px) scale(1.08); }
+.ceo-side.is-owner .ceo-icon-btn { border-radius: 9px !important; transition: background .14s, color .14s, transform .18s var(--sb-spring); }
+.ceo-side.is-owner .ceo-icon-btn:active { transform: scale(.92); }
+.ceo-side.is-owner .sb-brand-name { font-weight: 500 !important; }
+.ceo-side .sb-brand-mark { transition: transform .42s cubic-bezier(.34,1.56,.64,1); }
+.ceo-side .sb-brand:hover .sb-brand-mark { transform: rotate(-10deg) scale(1.06); }
+.ceo-side .sb-brand:active .sb-brand-mark { transform: scale(.92); }
+.ceo-side.is-owner .sb-sec-label { font-weight: 500 !important; color: #a8a39b !important; border-radius: 8px !important; }
+.ceo-side.is-owner .sb-sec-label:hover { background: var(--sb-hover) !important; }
+.ceo-side.is-owner .sb-sec-label svg { color: #a8a39b !important; }
+
+.ceo-side.is-owner .sb-notif-btn { gap: 9px; padding: 7px 9px; border-radius: 11px; font-size: 13.5px; color: #8b867e; }
+.ceo-side.is-owner .sb-notif-row.is-collapsed .sb-notif-btn { padding: 7px 0; }
+.ceo-side.is-owner .sb-notif-btn.has-unread { color: var(--sb-red); font-weight: 500; }
+.ceo-side.is-owner .sb-notif-count, .ceo-side.is-owner .sb-item-badge, .ceo-side.is-owner .sb-notif-tabs button span { font-weight: 500; }
+.ceo-side.is-owner .sb-notif-head h2 { font-weight: 500; letter-spacing: -.02em; }
+.ceo-side.is-owner .sb-notif-back, .ceo-side.is-owner .sb-tool { border-radius: 9px !important; font-weight: 500; }
+.ceo-side.is-owner .sb-notif-tabs { border-radius: 13px; }
+.ceo-side.is-owner .sb-notif-tabs button { border-radius: 10px; font-weight: 500; transition: background .2s ease, color .2s ease, box-shadow .2s ease; }
+.ceo-side.is-owner .sb-notif-tabs button.is-on { background: #fff; color: #1c1b19; box-shadow: var(--sb-tile); }
+.ceo-side.is-owner .sb-notif-ic { background: #fff; box-shadow: inset 0 0 0 1px #ece9e4; }
+.ceo-side.is-owner .sb-notif-top strong, .ceo-side.is-owner .sb-notif-item.is-unread .sb-notif-top strong { font-weight: 500; }
+.ceo-side.is-owner .sb-notif-action { background: #fff; box-shadow: inset 0 0 0 1px #e8e4de; font-weight: 500; }
+.ceo-side.is-owner .sb-notif-action:hover { background: #faf9f7; filter: none; }
+.ceo-side.is-owner .sb-notif-dot { background: #0b7a4b; }
+.ceo-side.is-owner .sb-notif-dot:hover { box-shadow: 0 0 0 4px rgba(11,122,75,.14); }
+.ceo-side.is-owner .sb-notif-foot button { border-radius: 9px; font-weight: 500; }
+
+.ceo-side.is-owner .sb-profile-me { border-radius: 11px; }
+.ceo-side.is-owner .sb-avatar { background: #fff; box-shadow: inset 0 0 0 1px #e8e4de; color: #1c1b19; font-weight: 500; }
+.ceo-side.is-owner .sb-profile-id strong { font-weight: 500; }
+@media (prefers-reduced-motion: reduce) {
+  .ceo-side.is-owner, .ceo-side.is-owner .ceo-side-item, .ceo-side.is-owner .ceo-side-item svg, .ceo-side.is-owner .ceo-icon-btn { transition: none; transform: none !important; }
+  .ceo-side .sb-brand-mark { transition: none; transform: none !important; }
+}
