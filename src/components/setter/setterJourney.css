@@ -41,3 +41,9 @@
 html.dark-mode .stj-entry{border-color:#2e2e2e;background:#262626;color:#f2f2f2}html.dark-mode .stj-entry:hover{background:#2e2e2e}html.dark-mode .stj-entry small{color:#8a8a8a}
 .stj-filter-button{font-weight:500}.stj-filter-button svg{color:inherit}.stj-filter-button small{opacity:1;color:#9d9890}
 @media(prefers-reduced-motion:reduce){.stj-entry,.stj-entry:hover{transition:none;transform:none}}
+/* Raisons fréquentes de disqualification (12/11/2026) : un clic remplit le champ. */
+.stj-reasons{display:flex;flex-wrap:wrap;gap:6px;margin-top:16px}.stj-reasons+.stj-note{margin-top:10px}
+.stj-reasons button{padding:6px 11px;border:1px solid var(--sj-line);border-radius:999px;background:var(--sj-bg);color:var(--sj-text);font-size:12px;cursor:pointer;transition:background .15s,border-color .15s}
+.stj-reasons button:hover:not(:disabled){border-color:var(--sj-accent)}.stj-reasons button[aria-pressed=true]{background:var(--sj-soft);border-color:var(--sj-accent)}
+.stj-dialog.sj-pure .stj-reasons{margin-left:12px;margin-right:12px}
+@media(prefers-reduced-motion:reduce){.stj-reasons button{transition:none}}
