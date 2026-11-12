@@ -61,12 +61,15 @@ test('Paris appointments validate independently from the browser timezone',()=>{
 import {hasGuidedSalesJourney} from './guidedSalesJourney.js';
 test('old contracts do not hide qualification or R2 planning for the private pilot',()=>{
  const rollout={available:true,can_manage:true,pilot_enabled:true,enabled:false};
- const lead={id:11873,assigned_to:'y.amrane@ownertechnology.com'};
- assert.equal(hasGuidedSalesJourney(rollout,lead,{required:false,ready:true}),true);
- assert.equal(hasGuidedSalesJourney(rollout,lead,undefined),true);
- assert.equal(hasGuidedSalesJourney(rollout,{...lead,assigned_to:'another@ownertechnology.com'},{required:false}),false);
- assert.equal(hasGuidedSalesJourney({...rollout,available:false},lead,{required:false}),false);
- assert.equal(hasGuidedSalesJourney({...rollout,can_manage:false},lead,{required:false}),false);
+ const pilot='pilote@example.test';
+ const lead={id:11873,assigned_to:'Pilote@Example.test'};
+ assert.equal(hasGuidedSalesJourney(rollout,lead,{required:false,ready:true},pilot),true);
+ assert.equal(hasGuidedSalesJourney(rollout,lead,undefined,pilot),true);
+ assert.equal(hasGuidedSalesJourney(rollout,{...lead,assigned_to:'another@example.test'},{required:false},pilot),false);
+ assert.equal(hasGuidedSalesJourney({...rollout,available:false},lead,{required:false},pilot),false);
+ assert.equal(hasGuidedSalesJourney({...rollout,can_manage:false},lead,{required:false},pilot),false);
+ assert.equal(hasGuidedSalesJourney(rollout,lead,{required:false}),false);
+ assert.equal(hasGuidedSalesJourney({...rollout,enabled:true},lead,undefined),true);
 });
 import {parisInstantLabel} from './parisDates.js';
 test('server timestamps are shown at Paris time, appointment wall times are not concerned',()=>{

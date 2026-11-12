@@ -62,7 +62,7 @@ export default function PappersSearch({ C, darkMode, meta, initial, onClose, onT
     }
   };
 
-  const label = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 600, color: C.text };
+  const label = { display: 'flex', flexDirection: 'column', gap: 6, fontSize: 13, fontWeight: 500, color: C.text };
   const select = { ...inputStyle(C), width: '100%', cursor: 'pointer' };
   const help = { fontSize: 12, fontWeight: 400, color: C.muted, lineHeight: 1.5 };
 
@@ -155,11 +155,11 @@ export default function PappersSearch({ C, darkMode, meta, initial, onClose, onT
       </div>
 
       <div style={{ borderTop: `1px solid ${C.border}`, marginTop: 22, paddingTop: 16 }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: C.text, marginBottom: 10 }}>Recherches récentes</div>
+        <div style={{ fontSize: 13, fontWeight: 500, color: C.text, marginBottom: 10 }}>Recherches récentes</div>
         {searches === null && <div style={{ fontSize: 13, color: C.muted }}>Chargement…</div>}
         {searches?.length === 0 && <div style={{ fontSize: 13, color: C.muted }}>Aucune recherche lancée pour l'instant.</div>}
         {searches?.slice(0, 10).map((s) => {
-          const status = PAPPERS_STATUS[s.status] || { label: s.status, dot: '#9ca3af' };
+          const status = PAPPERS_STATUS[s.status] || { label: s.status, dot: '#9d9890' };
           return (
             <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: `1px solid ${C.border}`, fontSize: 13, flexWrap: 'wrap' }}>
               <span style={{ color: C.muted, minWidth: 130 }}>{fmtDateTime(s.created_at)}</span>

@@ -298,10 +298,10 @@ export function layoutDay(items) {
 // ── Apparence ─────────────────────────────────────────────────────────────────────────────────────────
 
 export const RDV_COLORS = { r1: '#3b82f6', r2: '#f97316', r3: '#8b5cf6' };
-export const GOOGLE_COLOR = '#121b35';          // marine Owner
-export const GOOGLE_COLOR_DARK = '#8b9bc7';     // le marine disparaît sur fond sombre
+export const GOOGLE_COLOR = '#2b2927';          // anthracite Owner (style du 11/11/2026, avant : marine)
+export const GOOGLE_COLOR_DARK = '#a3a3a3';     // l'anthracite disparaît sur fond sombre
 export const CALLBACK_COLOR = '#0891b2';         // distinct du R2 (orange) et de « À qualifier » (ambre)
-export const ABSENCE_COLOR = '#64748b';
+export const ABSENCE_COLOR = '#8b867e';
 
 export const OUTCOME = {
   upcoming: { label: 'À venir', color: '#3b82f6', hint: 'Le rendez-vous n\'a pas encore eu lieu.' },
@@ -323,7 +323,7 @@ function channels(hex) {
 export function chipColors(hex, dark = false) {
   const [r, g, b] = channels(hex);
   if (dark) {
-    const base = [30, 31, 40];
+    const base = [31, 31, 31];
     const mix = [r, g, b].map((c, i) => Math.round(base[i] + (c - base[i]) * 0.26));
     const text = [r, g, b].map((c) => Math.round(c + (255 - c) * 0.45));
     return { bg: `rgb(${mix.join(', ')})`, text: `rgb(${text.join(', ')})`, line: hex };

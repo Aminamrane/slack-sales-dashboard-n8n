@@ -133,8 +133,8 @@ export function CreativePopup({ creative, triggerRect, darkMode, onClose }) {
 
   const rect = triggerRect || { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 40, height: 40 };
   const hasVideo = !!creative.video_url;
-  const bg = darkMode ? "#1e1f28" : "#ffffff";
-  const text = darkMode ? "#eef0f6" : "#1e2330";
+  const bg = darkMode ? "#1f1f1f" : "#ffffff";
+  const text = darkMode ? "#f2f2f2" : "#1e2330";
   const muted = darkMode ? "rgba(255,255,255,0.5)" : "rgba(0,0,0,0.45)";
   const textSoft = darkMode ? "rgba(238,240,246,0.82)" : "#33373f";
 
@@ -241,11 +241,11 @@ export function CreativePopup({ creative, triggerRect, darkMode, onClose }) {
 
         {/* Texte de la pub */}
         <div className="pc-scroll" style={{ flex: 1, overflowY: "auto", padding: "8px 26px 28px" }}>
-          <div style={{ fontSize: 10.5, fontWeight: 600, letterSpacing: 1.4, textTransform: "uppercase", color: muted, marginBottom: 12 }}>
+          <div style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: 1.4, textTransform: "uppercase", color: muted, marginBottom: 12 }}>
             Publicité d'inscription
           </div>
           {creative.title && (
-            <div style={{ fontSize: 19, fontWeight: 600, color: text, marginBottom: 10, letterSpacing: "-0.022em" }}>
+            <div style={{ fontSize: 19, fontWeight: 500, color: text, marginBottom: 10, letterSpacing: "-0.022em" }}>
               {creative.title}
             </div>
           )}

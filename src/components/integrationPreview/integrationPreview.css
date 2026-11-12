@@ -1,12 +1,12 @@
 .integration-preview {
-  --ink: #202c38;
-  --muted: #687681;
-  --line: #e2e8eb;
+  --ink: #2f2d29;
+  --muted: #7b766e;
+  --line: #ebe7e2;
   --teal: #21675d;
-  --wash: #f3f6f6;
+  --wash: #f7f5f2;
   --card: #fff;
   color: var(--ink);
-  background: #f5f7f8;
+  background: #f8f7f5;
   min-height: 100vh;
   font-family:
     Inter,
@@ -38,7 +38,7 @@
 .integration-preview input:focus-visible,
 .integration-preview textarea:focus-visible,
 .integration-preview select:focus-visible {
-  outline: 3px solid #9bc9c0;
+  outline: 3px solid #b7b3ad;
   outline-offset: 3px;
 }
 .integration-preview button,
@@ -127,13 +127,13 @@
 .ip-eyebrow,
 .ip-overline {
   font-size: 10px;
-  font-weight: 700;
+  font-weight:500;
   letter-spacing: 0.12em;
   color: var(--muted);
 }
 .ip-page-head h1 {
   font-size: clamp(26px, 3vw, 39px);
-  font-weight: 650;
+  font-weight:500;
   letter-spacing: -1.35px;
   margin: 8px 0 7px;
 }
@@ -148,7 +148,7 @@
   border: 1px solid transparent;
   border-radius: 10px;
   padding: 11px 16px;
-  font-weight: 600;
+  font-weight:500;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -165,30 +165,30 @@
   color: white;
 }
 .ip-primary:hover:not(:disabled) {
-  background: #344858;
-  box-shadow: 0 4px 12px #202c3817;
+  background: #4a4742;
+  box-shadow: 0 4px 12px #2f2d2917;
   transform: translateY(-1px);
 }
 .ip-secondary {
   background: #fff;
   color: var(--ink);
-  border-color: #d9e1e5;
+  border-color: #e5e0d9;
 }
 .ip-secondary:hover {
-  background: #f3f6f7;
+  background: #f7f5f3;
 }
 .ip-control {
   display: flex;
   align-items: center;
   gap: 17px;
-  background: #eaf1ef;
-  border: 1px solid #d8e5e1;
+  background: #f1eeea;
+  border: 1px solid #e5e0d8;
   padding: 20px 23px;
   border-radius: 14px;
 }
 .ip-control-icon {
   background: #fff9;
-  border: 1px solid #d4e3de;
+  border: 1px solid #e3ddd4;
   border-radius: 12px;
   width: 45px;
   height: 45px;
@@ -201,12 +201,12 @@
 }
 .ip-control strong {
   font-size: 15px;
-  font-weight: 650;
+  font-weight:500;
 }
 .ip-control p {
   font-size: 12px;
   margin-top: 3px;
-  color: #567169;
+  color: #69655e;
 }
 .ip-control .ip-primary {
   background: #21675d;
@@ -217,7 +217,7 @@
   justify-content: space-between;
   gap: 12px;
   font-size: 11px;
-  color: #7b8790;
+  color: #8d877e;
   padding: 13px 2px 22px;
 }
 .ip-demo-line > span:first-child {
@@ -226,7 +226,7 @@
   align-items: center;
 }
 .ip-demo-dot {
-  background: #93a0a8;
+  background: #a39f98;
   width: 5px;
   height: 5px;
 }
@@ -273,7 +273,7 @@
   display: flex;
   gap: 9px;
   align-items: center;
-  color: #8b969e;
+  color: #9b968e;
   font-size: 12px;
 }
 .ip-steps button > span {
@@ -281,13 +281,13 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  border: 1px solid #dce2e6;
+  border: 1px solid #e7e2db;
   border-radius: 50%;
   font-size: 11px;
   background: #fff;
 }
 .ip-steps button[aria-current="step"] {
-  font-weight: 650;
+  font-weight:500;
   color: var(--ink);
 }
 .ip-steps button[aria-current="step"] > span {
@@ -298,7 +298,7 @@
 .ip-panel {
   background: var(--card);
   border: 1px solid var(--line);
-  box-shadow: 0 3px 18px #24364103;
+  box-shadow: 0 3px 18px #36332f03;
   border-radius: 16px;
   padding: 30px;
   animation: ip-enter 0.24s ease-out;
@@ -310,7 +310,7 @@
   align-items: flex-start;
 }
 .ip-section-number {
-  color: #9caab1;
+  color: #aca8a1;
   font-size: 13px;
   padding-top: 3px;
   font-weight: 550;
@@ -335,7 +335,7 @@
 }
 .ip-block-title h3 {
   font-size: 14px;
-  font-weight: 650;
+  font-weight:500;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -354,7 +354,7 @@
   align-items: center;
   gap: 12px;
   padding: 17px 16px;
-  border-bottom: 1px solid #e9edef;
+  border-bottom: 1px solid #f0ede8;
   background: #fff;
   transition: background 0.2s;
 }
@@ -375,7 +375,7 @@
   height: 38px;
   background: var(--wash);
   border-radius: 8px;
-  color: #667a85;
+  color: #7d776e;
 }
 .ip-company > div:nth-of-type(2) {
   flex: 1;
@@ -390,7 +390,7 @@
 }
 .ip-inline-name {
   font-size: 13px !important;
-  font-weight: 600;
+  font-weight:500;
   color: var(--ink);
 }
 .ip-inline-meta {
@@ -399,28 +399,28 @@
   margin-top: 4px;
 }
 .ip-inline-meta::placeholder {
-  color: #a3adb4;
+  color: #b1ada6;
 }
 .ip-pill {
   font-size: 10px;
   font-weight: 550;
-  border: 1px solid #e0e7e6;
+  border: 1px solid #e9e5de;
   border-radius: 6px;
   padding: 3px 7px;
-  color: #5d726c;
-  background: #f4f8f6;
+  color: #6e6961;
+  background: #f8f6f4;
   white-space: nowrap;
 }
 .ip-company.is-excluded {
-  background: #f6f7f8;
+  background: #f9f7f5;
 }
 .ip-company.is-excluded .ip-inline-name {
-  color: #859099;
+  color: #969088;
 }
 .ip-company.is-excluded .ip-pill {
-  color: #87919a;
-  background: #f3f4f5;
-  border-color: #e4e7e9;
+  color: #97928a;
+  background: #f6f4f2;
+  border-color: #ebe7e2;
 }
 .ip-text-button {
   display: inline-flex;
@@ -428,13 +428,13 @@
   gap: 7px;
   border: 0;
   background: none;
-  color: #546774;
+  color: #6a655e;
   font-size: 12px !important;
   font-weight: 550;
   padding: 12px 0;
 }
 .ip-text-button:hover {
-  color: #1f5149;
+  color: #3b3935;
 }
 .ip-spaced {
   margin-top: 28px;
@@ -454,13 +454,13 @@
 .ip-avatar {
   width: 36px;
   height: 36px;
-  border: 1px solid #dfe5e8;
+  border: 1px solid #e9e5de;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: #f6f8f9;
+  background: #f9f8f6;
   font-size: 11px;
-  color: #677986;
+  color: #7e786f;
 }
 .ip-director-top > div {
   flex: 1;
@@ -472,7 +472,7 @@
   padding: 2px 0;
   background: none;
   color: var(--ink);
-  font-weight: 600;
+  font-weight:500;
   font-size: 13px;
 }
 .ip-director-top input + input {
@@ -485,7 +485,7 @@
   place-items: center;
   background: none;
   border: 0;
-  color: #8d99a1;
+  color: #9d9891;
   border-radius: 6px;
   padding: 6px;
 }
@@ -500,7 +500,7 @@
   margin-top: 14px;
 }
 .ip-company-tags label {
-  border: 1px solid #e6eaed;
+  border: 1px solid #eeeae5;
   border-radius: 6px;
   padding: 5px 7px;
   display: flex;
@@ -508,7 +508,7 @@
   gap: 6px;
   font-size: 10px;
   cursor: pointer;
-  color: #697982;
+  color: #7d776e;
 }
 .ip-company-tags input {
   width: 12px;
@@ -542,18 +542,18 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  color: #789089;
+  color: #8b857d;
   gap: 10px;
 }
 .ip-aside-title .ip-overline {
-  color: #6f7d86;
+  color: #827c73;
   font-size: 9px;
 }
 .ip-readiness-value {
   font-size: 27px;
   letter-spacing: -0.7px;
   line-height: 1.3;
-  font-weight: 650;
+  font-weight:500;
   margin: 23px 0 18px;
 }
 .ip-readiness-value > span {
@@ -566,13 +566,13 @@
 }
 .ip-progress {
   height: 5px;
-  background: #edf1f2;
+  background: #f3f0ec;
   border-radius: 5px;
   overflow: hidden;
 }
 .ip-progress > span {
   display: block;
-  background: #628f83;
+  background: #807a71;
   height: 100%;
   border-radius: 5px;
   transition: width 0.35s ease;
@@ -590,15 +590,15 @@
   align-items: center;
   gap: 10px;
   font-size: 11px;
-  color: #82909a;
+  color: #958f87;
 }
 .ip-readiness li.is-done {
-  color: #46655d;
+  color: #5b5750;
 }
 .ip-empty-check {
   width: 17px;
   height: 17px;
-  border: 1px solid #d7dfe2;
+  border: 1px solid #e3ded6;
   border-radius: 50%;
   margin: 0 1px;
 }
@@ -611,7 +611,7 @@
   display: flex;
   align-items: center;
   gap: 5px;
-  color: #84949d;
+  color: #97928a;
   font-size: 11px;
 }
 .ip-aside-counts strong {
@@ -638,8 +638,8 @@
   border-radius: 6px;
 }
 .ip-contract-state.is-ready {
-  color: #56746a;
-  border-color: #e0e9e5;
+  color: #6b665f;
+  border-color: #eae6df;
   background: #f2f7f4;
 }
 .ip-contract p {
@@ -657,12 +657,12 @@
   align-items: flex-start;
   gap: 9px;
   padding: 4px 6px;
-  color: #a0abb1;
+  color: #aeaaa3;
 }
 .ip-test-note p {
   font-size: 10px;
   line-height: 1.7;
-  color: #8c989f;
+  color: #9c978f;
 }
 .ip-field {
   display: flex;
@@ -673,13 +673,13 @@
 .ip-field > span {
   font-size: 12px;
   font-weight: 550;
-  color: #4f5f69;
+  color: #625d56;
 }
 .ip-field input,
 .ip-field textarea,
 .ip-field select {
   background: #fff;
-  border: 1px solid #dbe3e7;
+  border: 1px solid #e7e2db;
   border-radius: 8px;
   padding: 11px 12px;
   color: var(--ink);
@@ -695,7 +695,7 @@
 }
 .ip-field input::placeholder,
 .ip-field textarea::placeholder {
-  color: #9aa6ad;
+  color: #a9a59e;
 }
 .ip-fields-two {
   display: grid;
@@ -710,8 +710,8 @@
 }
 .ip-mission-options button {
   background: #fff;
-  color: #657681;
-  border: 1px solid #dfe6e9;
+  color: #7a746c;
+  border: 1px solid #e9e5df;
   padding: 8px 10px;
   border-radius: 8px;
   font-size: 11px;
@@ -720,9 +720,9 @@
   align-items: center;
 }
 .ip-mission-options button[aria-pressed="true"] {
-  background: #eef5f2;
-  color: #2a6254;
-  border-color: #bcd3ca;
+  background: #f4f2ef;
+  color: #4a4742;
+  border-color: #cdc9c2;
 }
 .ip-details {
   border-top: 1px solid var(--line);
@@ -736,7 +736,7 @@
   cursor: pointer;
   font-size: 12px;
   font-weight: 550;
-  color: #5c707b;
+  color: #726d65;
 }
 .ip-details[open] summary {
   margin-bottom: 20px;
@@ -756,8 +756,8 @@
   margin: 0 auto 16px;
   display: grid;
   place-items: center;
-  background: #eef4f5;
-  color: #547b8c;
+  background: #f4f2ef;
+  color: #777169;
 }
 .ip-weather-intro h3 {
   font-size: 17px;
@@ -782,18 +782,18 @@
   align-items: center;
   flex-direction: column;
   gap: 11px;
-  color: #8a9aa3;
+  color: #9d9890;
   transition: all 0.2s;
 }
 .ip-weather-options strong {
   font-size: 21px;
-  color: #465d6a;
-  font-weight: 600;
+  color: #5d5953;
+  font-weight:500;
 }
 .ip-weather-options small {
   font-size: 11px;
   font-weight: 400;
-  color: #8b979e;
+  color: #9b968e;
 }
 .ip-weather-options span {
   font-size: 9px;
@@ -801,13 +801,13 @@
   white-space: nowrap;
 }
 .ip-weather-options button[aria-pressed="true"] {
-  color: #276e5e;
-  background: #eef7f3;
-  border-color: #7eae9f;
-  box-shadow: 0 0 0 2px #e4f1eb;
+  color: #4f4b46;
+  background: #f5f3f0;
+  border-color: #9c9790;
+  box-shadow: 0 0 0 2px #efebe6;
 }
 .ip-weather-options button[aria-pressed="true"] strong {
-  color: #26634f;
+  color: #494540;
 }
 .ip-weather-options button:hover {
   transform: translateY(-2px);
@@ -816,9 +816,9 @@
   display: flex;
   gap: 10px;
   padding: 15px;
-  background: #f6f8f9;
+  background: #f9f8f6;
   border-radius: 9px;
-  color: #83969f;
+  color: #98928a;
 }
 .ip-soft-note p {
   font-size: 11px;
@@ -834,19 +834,19 @@
 .ip-summary-title > div > span {
   font-size: 9px;
   letter-spacing: 0.14em;
-  color: #81918b;
+  color: #908a82;
 }
 .ip-summary-title h3 {
   font-size: 25px;
   margin-top: 8px;
-  font-weight: 650;
+  font-weight:500;
   letter-spacing: -0.6px;
 }
 .ip-summary-metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  background: #f3f6f5;
-  border: 1px solid #e5ebe8;
+  background: #f7f5f2;
+  border: 1px solid #ede9e3;
   border-radius: 11px;
   padding: 20px 0;
   margin-bottom: 28px;
@@ -863,23 +863,23 @@
 }
 .ip-summary-metrics strong {
   font-size: 27px;
-  font-weight: 600;
+  font-weight:500;
   font-variant-numeric: tabular-nums;
 }
 .ip-summary-metrics small {
   font-size: 15px;
   font-weight: 400;
-  color: #91a197;
+  color: #9f9a93;
 }
 .ip-summary-metrics span {
   font-size: 10px;
-  color: #6c7b74;
+  color: #7a756d;
 }
 .ip-summary h4 {
   font-size: 12px;
-  font-weight: 650;
+  font-weight:500;
   margin: 24px 0 9px;
-  color: #385449;
+  color: #4a4742;
 }
 .ip-summary p {
   font-size: 12px;
@@ -891,13 +891,13 @@
   display: flex;
   gap: 11px;
   align-items: center;
-  border-bottom: 1px solid #eef1f2;
+  border-bottom: 1px solid #f3f1ed;
   padding: 13px 0;
-  color: #879993;
+  color: #979189;
 }
 .ip-summary-row strong {
   font-size: 12px;
-  color: #465e54;
+  color: #57534d;
   font-weight: 550;
 }
 .ip-summary-row p {
@@ -916,20 +916,20 @@
   padding: 5px 9px;
   border-radius: 6px;
   font-size: 10px;
-  color: #587267;
+  color: #6b665f;
 }
 .ip-summary-weather {
   display: flex;
   align-items: center;
   gap: 13px;
-  color: #538575;
+  color: #726d66;
 }
 .ip-summary-weather strong {
   font-size: 13px;
 }
 .ip-print-footer {
   font-size: 9px;
-  color: #8a9992;
+  color: #98938b;
   border-top: 1px solid var(--line);
   margin-top: 28px;
   padding-top: 15px;
@@ -947,8 +947,8 @@
   margin-bottom: 15px;
 }
 .ip-calendar-icon {
-  background: #eef4f2;
-  color: #5f8a7a;
+  background: #f4f2ee;
+  color: #7b766e;
   border-radius: 12px;
   display: grid;
   place-items: center;
@@ -974,7 +974,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  color: #438268;
+  color: #68645d;
 }
 .ip-feedback {
   position: fixed;
@@ -988,7 +988,7 @@
   color: #785c2b;
   border-radius: 12px;
   padding: 16px 18px;
-  box-shadow: 0 12px 45px #253b4324;
+  box-shadow: 0 12px 45px #37353124;
   display: flex;
   align-items: center;
   gap: 25px;
@@ -1010,8 +1010,8 @@
 }
 .ip-feedback.is-success {
   background: #f0f8f3;
-  border-color: #bfdbcd;
-  color: #326c52;
+  border-color: #d2cec8;
+  color: #54504a;
 }
 @keyframes ip-enter {
   from {
@@ -1341,7 +1341,7 @@
     break-after: avoid;
   }
 }
-.ip-handoff-comments{display:grid;gap:24px}.ip-handoff-comments h3{font-size:13px;font-weight:600;margin:0 0 12px;color:var(--ip-muted,#64748b)}.ip-handoff-comments .ip-field>span{font-size:16px;font-weight:650}.ip-handoff-comments textarea{min-height:145px;resize:vertical}.ip-handoff-summary h4{font-size:16px!important}.ip-handoff-summary p{white-space:pre-wrap;overflow-wrap:anywhere}
+.ip-handoff-comments{display:grid;gap:24px}.ip-handoff-comments h3{font-size:13px;font-weight:500;margin:0 0 12px;color:var(--ip-muted,#7f7970)}.ip-handoff-comments .ip-field>span{font-size:16px;font-weight:500}.ip-handoff-comments textarea{min-height:145px;resize:vertical}.ip-handoff-summary h4{font-size:16px!important}.ip-handoff-summary p{white-space:pre-wrap;overflow-wrap:anywhere}
 
 .ip-company-lookup { margin-top: 8px; display: grid; gap: 6px; }
 .ip-company-lookup button {
@@ -1350,112 +1350,194 @@
   font: inherit; font-size: 11px; background: #fff; color: var(--ink);
   transition: background .18s, border-color .18s;
 }
-.ip-company-lookup button:hover:not(:disabled) { background: var(--wash); border-color: #a1a9b5; }
+.ip-company-lookup button:hover:not(:disabled) { background: var(--wash); border-color: #b0aca6; }
 .ip-company-lookup button:disabled { opacity: .6; cursor: wait; }
 .ip-company-lookup [role="alert"] { color: #b42318; font-size: 11px; line-height: 1.5; }
 
-.ip-registration { display:flex; align-items:center; gap:8px; font-size:12px; color:#566174; margin:8px 0; }
-.ip-director-access { margin:12px 0; padding:12px; border:1px solid #e2e5eb; border-radius:14px; background:#f7f8fa; }
-.ip-director-access.is-active { border-color:#272c38; background:#f1f2f5; }
+.ip-registration { display:flex; align-items:center; gap:8px; font-size:12px; color:#6b665f; margin:8px 0; }
+.ip-director-access { margin:12px 0; padding:12px; border:1px solid #ebe7e2; border-radius:14px; background:#faf9f7; }
+.ip-director-access.is-active { border-color:#32302d; background:#f5f3f1; }
 .ip-director-access > label:first-child { display:flex; align-items:center; gap:10px; cursor:pointer; }
-.ip-director-access small { display:block; font-size:11px; color:#657084; line-height:1.5; margin-top:4px; }
+.ip-director-access small { display:block; font-size:11px; color:#7b766e; line-height:1.5; margin-top:4px; }
 .ip-director-access .ip-field { margin-top:12px; }
-.ip-director-access input[type=checkbox], .ip-registration input { accent-color:#202432; }
+.ip-director-access input[type=checkbox], .ip-registration input { accent-color:#2b2927; }
 .si-title { display:flex; align-items:center; gap:14px; margin:12px 0 20px; }
 .si-title h2 { font-size:21px; line-height:1.25; margin:0 0 5px; }
-.si-title p { font-size:13px; color:#657084; margin:0; }
+.si-title p { font-size:13px; color:#7b766e; margin:0; }
 .si-handoff fieldset { border:0; padding:0; margin:0; display:grid; grid-template-columns:minmax(0,1fr); gap:16px; min-width:0; }
 .si-handoff .ip-weather-options { margin:0; gap:6px; }
 .si-handoff .ip-weather-options button { padding:10px 4px; min-height:95px; }
 .si-handoff .ip-weather-options span { font-size:10px; }
 .si-actions { display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px; margin-top:22px; }
-.si-director-documents { border:1px solid #e1e5ed; padding:14px; border-radius:16px; margin-top:14px; }
+.si-director-documents { border:1px solid #ece8e2; padding:14px; border-radius:16px; margin-top:14px; }
 .si-director-documents h3 { display:flex; align-items:center; gap:9px; font-size:15px; margin:0 0 12px; }
 .si-document-slots { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
-.si-document-slot { display:flex; flex-direction:column; gap:7px; border:1px dashed #ccd2dd; border-radius:10px; padding:12px; color:#737e91; font-size:12px; }
+.si-document-slot { display:flex; flex-direction:column; gap:7px; border:1px dashed #d9d5d0; border-radius:10px; padding:12px; color:#8a847a; font-size:12px; }
 .si-document-slot small { font-size:10px; }
-.si-account-holder {display:grid;gap:12px;padding:14px 0;border-bottom:1px solid #e7e9ef;}
+.si-account-holder {display:grid;gap:12px;padding:14px 0;border-bottom:1px solid #efece7;}
 .si-account-holder:last-child {border-bottom:0;}
 .si-account-choice {display:flex;align-items:center;gap:10px;cursor:pointer;}
-.si-account-choice input[type=checkbox] {width:18px;height:18px;accent-color:#202532;}
+.si-account-choice input[type=checkbox] {width:18px;height:18px;accent-color:#2b2927;}
 .si-handoff, .si-documents { animation:si-enter .22s ease-out; }
 @keyframes si-enter { from {opacity:0; transform:translateY(7px);} to {opacity:1; transform:translateY(0);} }
 @media(max-width:600px) { .si-document-slots {grid-template-columns:1fr;} .si-title h2 {font-size:18px;} .si-actions > button {flex:1; justify-content:center;} }
 @media(prefers-reduced-motion:reduce) { .si-handoff, .si-documents {animation:none;} }
 
 /* The declaration shares the compact contract journey visual language. */
-.si-handoff.integration-preview,.si-documents.integration-preview {min-height:0;background:transparent;--teal:#202532;--ink:#202532;--wash:#f5f6f9;}
+.si-handoff.integration-preview,.si-documents.integration-preview {min-height:0;background:transparent;--teal:#2b2927;--ink:#2b2927;--wash:#f9f7f5;}
 .si-title {align-items:flex-start;margin:8px 0 18px;}
-.si-title-icon {display:grid;place-items:center;flex:0 0 48px;height:48px;border:1px solid #e5e7ed;border-radius:15px;background:#f5f6f9;color:#202532;}
-.si-title small {display:block;font-size:10px;letter-spacing:.11em;font-weight:700;color:#788292;margin-bottom:4px;}
-.si-client-caption {display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:18px;border:1px solid #e5e7ed;border-radius:11px;font-size:12px;}
-.si-client-caption strong {overflow-wrap:anywhere;}.si-client-caption span {margin-left:auto;color:#697588;white-space:nowrap;}
+.si-title-icon {display:grid;place-items:center;flex:0 0 48px;height:48px;border:1px solid #edeae5;border-radius:15px;background:#f9f7f5;color:#2b2927;}
+.si-title small {display:block;font-size:10px;letter-spacing:.11em;font-weight:500;color:#8c867e;margin-bottom:4px;}
+.si-client-caption {display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:18px;border:1px solid #edeae5;border-radius:11px;font-size:12px;}
+.si-client-caption strong {overflow-wrap:anywhere;}.si-client-caption span {margin-left:auto;color:#807a71;white-space:nowrap;}
 .si-context-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;min-width:0;}
 .si-section,.si-handoff .ip-field,.si-documents .ip-field {min-width:0;}
 .si-handoff .ip-field>span svg {flex-shrink:0;}
 .si-handoff .ip-weather-options {grid-template-columns:repeat(5,minmax(0,1fr));min-width:0;}
 .si-handoff .ip-weather-options button {min-width:0;}
 .si-handoff .ip-field>span {display:flex;align-items:center;gap:7px;font-size:12px;}
-.si-section {display:grid;gap:12px;padding-top:16px;border-top:1px solid #e6e9ef;}
+.si-section {display:grid;gap:12px;padding-top:16px;border-top:1px solid #efebe6;}
 .si-section-title {display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:10px 0;}
-.si-section-title h3 {font-size:14px;}.si-section-title>span {font-size:11px;color:#7a8391;margin-left:auto;}
+.si-section-title h3 {font-size:14px;}.si-section-title>span {font-size:11px;color:#8d877e;margin-left:auto;}
 .si-section>p {font-size:12px;}.si-handoff .ip-weather-options button {min-height:82px;border-radius:13px;}
-.si-handoff .ip-weather-options button[aria-pressed=true] {border-color:#262c39;background:#f1f2f6;color:#202532;box-shadow:0 0 0 1px #262c39;}
-.si-missions {display:grid;gap:8px;}.si-missions label {display:flex;align-items:center;border:1px solid #e1e5ed;border-radius:11px;background:#fff;transition:border-color .15s;}
-.si-missions label:focus-within {border-color:#272c38;}.si-missions label>span {padding:0 12px;color:#9197a5;font-size:11px;}
-.si-missions input {width:100%;min-width:0;border:0;background:transparent;padding:11px 12px 11px 0;outline:none;color:#202532;}
-.si-actions {position:sticky;bottom:-24px;padding:14px 0 4px;background:#fff;z-index:2;border-top:1px solid #e5e7ed;}
+.si-handoff .ip-weather-options button[aria-pressed=true] {border-color:#32302d;background:#f6f4f1;color:#2b2927;box-shadow:0 0 0 1px #32302d;}
+.si-missions {display:grid;gap:8px;}.si-missions label {display:flex;align-items:center;border:1px solid #ece8e2;border-radius:11px;background:#fff;transition:border-color .15s;}
+.si-missions label:focus-within {border-color:#32302d;}.si-missions label>span {padding:0 12px;color:#a19c95;font-size:11px;}
+.si-missions input {width:100%;min-width:0;border:0;background:transparent;padding:11px 12px 11px 0;outline:none;color:#2b2927;}
+.si-actions {position:sticky;bottom:-24px;padding:14px 0 4px;background:#fff;z-index:2;border-top:1px solid #edeae5;}
 .si-upload-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:20px;}
 .si-upload-grid article {min-width:0;}.si-upload-grid h4 {font-size:12px;margin:0 0 8px;overflow-wrap:anywhere;}
-.si-drop {position:relative;display:flex;align-items:center;flex-direction:column;justify-content:center;text-align:center;gap:7px;border:1px dashed #cbd0dc;border-radius:14px;padding:18px 12px;background:#fafbfc;cursor:pointer;transition:border-color .15s,background .15s;}
-.si-drop:hover,.si-drop:focus-within {border-color:#7066d7;background:#f6f5ff;}.si-drop strong {font-size:13px;}.si-drop span {font-size:11px;color:#747e8c;}.si-drop b {color:#5c58be;font-weight:600;}.si-drop small {font-size:10px;color:#8a91a0;}
+.si-drop {position:relative;display:flex;align-items:center;flex-direction:column;justify-content:center;text-align:center;gap:7px;border:1px dashed #d8d4cf;border-radius:14px;padding:18px 12px;background:#fcfbfa;cursor:pointer;transition:border-color .15s,background .15s;}
+.si-drop:hover,.si-drop:focus-within {border-color:#7066d7;background:#f6f5ff;}.si-drop strong {font-size:13px;}.si-drop span {font-size:11px;color:#888278;}.si-drop b {color:#928c84;font-weight:500;}.si-drop small {font-size:10px;color:#9b968f;}
 .si-drop input {position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;}.si-drop.is-busy {opacity:.6;pointer-events:none;}
-.si-other-docs {border:1px solid #e3e6ed;border-radius:12px;padding:12px;margin:12px 0;font-size:12px;}.si-other-docs summary {cursor:pointer;font-weight:600;}.si-other-docs[open] summary {margin-bottom:12px;}.si-other-docs .si-drop {margin-top:12px;}
-.si-files {margin-top:18px;border-top:1px solid #e5e7ed;padding-top:8px;}.si-files>p {font-size:12px;}
-.si-refresh {display:flex;align-items:center;gap:5px;margin-left:auto;border:0;background:none;color:#626b7b;font-size:11px!important;padding:6px;}
-.si-file {display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #eef0f4;}.si-file>div {flex:1;min-width:0;}.si-file strong {display:block;font-size:12px;overflow-wrap:anywhere;}.si-file small {display:block;color:#788293;font-size:11px;}.si-file-status {display:flex;align-items:center;gap:5px;font-size:11px;color:#647184;margin-top:3px;}.si-file-status.is-rejected {color:#b45309;}.si-file-status.is-sent {color:#202c38;}
-.si-remove {background:none;border:0;color:#7b8493;padding:7px;}.si-uploading {display:flex;align-items:center;gap:7px;overflow-wrap:anywhere;padding:10px 0;}.si-delivery-note {margin-top:10px!important;}
-.si-checklist {display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #eee;}.si-checklist small {color:#778090;}
+.si-other-docs {border:1px solid #ede9e3;border-radius:12px;padding:12px;margin:12px 0;font-size:12px;}.si-other-docs summary {cursor:pointer;font-weight:500;}.si-other-docs[open] summary {margin-bottom:12px;}.si-other-docs .si-drop {margin-top:12px;}
+.si-files {margin-top:18px;border-top:1px solid #edeae5;padding-top:8px;}.si-files>p {font-size:12px;}
+.si-refresh {display:flex;align-items:center;gap:5px;margin-left:auto;border:0;background:none;color:#757068;font-size:11px!important;padding:6px;}
+.si-file {display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #f4f2ee;}.si-file>div {flex:1;min-width:0;}.si-file strong {display:block;font-size:12px;overflow-wrap:anywhere;}.si-file small {display:block;color:#8d877e;font-size:11px;}.si-file-status {display:flex;align-items:center;gap:5px;font-size:11px;color:#7b756d;margin-top:3px;}.si-file-status.is-rejected {color:#b45309;}.si-file-status.is-sent {color:#2f2d29;}
+.si-remove {background:none;border:0;color:#8e8880;padding:7px;}.si-uploading {display:flex;align-items:center;gap:7px;overflow-wrap:anywhere;padding:10px 0;}.si-delivery-note {margin-top:10px!important;}
+.si-checklist {display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-bottom:1px solid #eee;}.si-checklist small {color:#8b857c;}
 .si-error {border:1px solid #f0cfcd;background:#fff6f5;color:#a73e35;border-radius:12px;padding:12px;font-size:12px;margin-top:14px;}.si-error button {margin-left:10px;background:#fff;border:1px solid #e8c9c6;border-radius:6px;padding:4px 8px;color:inherit;}
-.si-account-state {display:flex;gap:10px;border:1px solid #e3e6ed;border-radius:12px;padding:12px;margin:0 0 20px;background:#f7f8fb;}
-.si-account-state>svg {flex-shrink:0;margin-top:2px;}.si-account-state strong {font-size:12px;}.si-account-state p {font-size:12px;margin:4px 0 0;color:#657084;}
+.si-account-state {display:flex;gap:10px;border:1px solid #ede9e3;border-radius:12px;padding:12px;margin:0 0 20px;background:#faf9f8;}
+.si-account-state>svg {flex-shrink:0;margin-top:2px;}.si-account-state strong {font-size:12px;}.si-account-state p {font-size:12px;margin:4px 0 0;color:#7b766e;}
 @media(max-width:600px) {.si-context-grid,.si-upload-grid {grid-template-columns:minmax(0,1fr);}.si-client-caption {flex-wrap:wrap;}.si-title h2 {font-size:18px;}.si-title-icon {flex-basis:40px;height:40px;border-radius:12px;}.si-actions {bottom:-24px;}.si-handoff .ip-weather-options span {font-size:9px;overflow-wrap:anywhere;}.sj-sale-dialog .ti-journey {gap:4px;}.sj-sale-dialog .ti-journey li:not(.is-current)>span:last-child {position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);}.sj-sale-dialog .ti-journey li.is-current>span:last-child {font-size:10px;}}
 
 /* A confirmed appointment is a durable checkpoint, before sale declaration. */
-.si-reservation-date,.si-reservation-next{display:flex;align-items:flex-start;gap:14px;padding:20px;border:1px solid #dfe4e9;border-radius:16px;margin:20px 0;background:#f8fafb;color:#253b3a}
-.si-reservation-date strong,.si-reservation-date span{display:block}.si-reservation-date span{font-size:13px;margin-top:7px;color:#62716f}
-.si-reservation-next{background:transparent}.si-reservation-next p{font-size:14px;line-height:1.6;color:#62716f;margin-bottom:0}
-.sj-sale-part{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:#65746f;font-weight:700;margin:0 34px 16px 0}
+.si-reservation-date,.si-reservation-next{display:flex;align-items:flex-start;gap:14px;padding:20px;border:1px solid #e9e5df;border-radius:16px;margin:20px 0;background:#fbfaf8;color:#33312d}
+.si-reservation-date strong,.si-reservation-date span{display:block}.si-reservation-date span{font-size:13px;margin-top:7px;color:#706b63}
+.si-reservation-next{background:transparent}.si-reservation-next p{font-size:14px;line-height:1.6;color:#706b63;margin-bottom:0}
+.sj-sale-part{font-size:12px;letter-spacing:.07em;text-transform:uppercase;color:#736e66;font-weight:500;margin:0 34px 16px 0}
 /* Société en création ou trop récente : déclaration sans pièce (case + situation). */
-.si-waiver {border:1px solid #e3e6ed;border-radius:14px;padding:14px 16px;margin:16px 0 4px;background:#fafbfc;transition:border-color .15s,background .15s;}
-.si-waiver.is-on {border-color:#c9d3ea;background:#f5f7fc;}
+.si-waiver {border:1px solid #ede9e3;border-radius:14px;padding:14px 16px;margin:16px 0 4px;background:#fcfbfa;transition:border-color .15s,background .15s;}
+.si-waiver.is-on {border-color:#dddad6;background:#f5f7fc;}
 .si-waiver-check {display:flex;align-items:flex-start;gap:12px;cursor:pointer;}
-.si-waiver-check input {margin-top:3px;width:17px;height:17px;flex-shrink:0;cursor:pointer;accent-color:#1e2330;}
-.si-waiver-check>svg {flex-shrink:0;color:#657084;margin-top:1px;}
+.si-waiver-check input {margin-top:3px;width:17px;height:17px;flex-shrink:0;cursor:pointer;accent-color:#292725;}
+.si-waiver-check>svg {flex-shrink:0;color:#7b766e;margin-top:1px;}
 .si-waiver-check strong {display:block;font-size:13px;}
-.si-waiver-check small {display:block;font-size:12px;color:#657084;margin-top:3px;line-height:1.5;}
+.si-waiver-check small {display:block;font-size:12px;color:#7b766e;margin-top:3px;line-height:1.5;}
 .si-waiver-reasons {display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 0 29px;}
-.si-waiver-reasons button {display:inline-flex;align-items:center;gap:6px;border:1px solid #d6dbe6;background:#fff;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:600;color:#1e2330;cursor:pointer;transition:border-color .15s,background .15s;}
-.si-waiver-reasons button:hover {border-color:#9aa6c2;}
-.si-waiver-reasons button.is-selected {background:#1e2330;border-color:#1e2330;color:#fff;}
+.si-waiver-reasons button {display:inline-flex;align-items:center;gap:6px;border:1px solid #e5dfd7;background:#fff;border-radius:999px;padding:7px 14px;font-size:12px;font-weight:500;color:#292725;cursor:pointer;transition:border-color .15s,background .15s;}
+.si-waiver-reasons button:hover {border-color:#b3afa9;}
+.si-waiver-reasons button.is-selected {background:#292725;border-color:#292725;color:#fff;}
 @media(max-width:600px) {.si-waiver-reasons {margin-left:0;}}
 /* Déclaration anticipée sans documents (à toute échéance) : même famille que .si-waiver, teinte ambre douce (ni erreur ni alerte). */
 .si-early {border-color:#e6d3a8;background:#fffaf0;}
 .si-early-head {display:flex;align-items:flex-start;gap:12px;}
 .si-early-head>svg {flex-shrink:0;color:#a8741a;margin-top:1px;}
 .si-early-head strong {display:block;font-size:13px;}
-.si-early-head small {display:block;font-size:12px;color:#657084;margin-top:3px;line-height:1.5;}
-.si-early .si-early-ask {display:block;margin:14px 0 0 32px;font-size:12px;font-weight:600;color:#1e2330;}
+.si-early-head small {display:block;font-size:12px;color:#7b766e;margin-top:3px;line-height:1.5;}
+.si-early .si-early-ask {display:block;margin:14px 0 0 32px;font-size:12px;font-weight:500;color:#292725;}
 .si-early .si-waiver-reasons {margin:8px 0 0 32px;}
 .si-early-action {display:flex;justify-content:flex-end;margin-top:14px;}
 /* « Autre motif » : note libre de 200 caractères, alignée sur les choix ; le champ est le .ip-field des notes de la fiche d'intégration. */
 .si-early-note {margin:12px 0 0 32px;}
 .si-early-note .ip-field {margin-bottom:0;gap:6px;}
-.si-early-note .ip-field>span {font-weight:600;color:#1e2330;}
+.si-early-note .ip-field>span {font-weight:500;color:#292725;}
 .si-early-note textarea {min-height:78px;}
-.si-early-count {display:block;margin-top:5px;text-align:right;font-size:11px;color:#657084;}
-.si-early-count.is-full {color:#a8741a;font-weight:600;}
+.si-early-count {display:block;margin-top:5px;text-align:right;font-size:11px;color:#7b766e;}
+.si-early-count.is-full {color:#a8741a;font-weight:500;}
 @media(max-width:600px) {.si-early .si-early-ask,.si-early .si-waiver-reasons,.si-early-note {margin-left:0;}.si-early-action>button {width:100%;}}
 /* Reprogrammer l'onboarding depuis l'écran « Rendez-vous réservé » (avant la déclaration de la vente). */
 .si-reservation-date .si-reschedule {margin-left:auto;align-self:center;flex-shrink:0;padding:8px 12px;font-size:13px;}
 @media(max-width:600px) {.si-reservation-date {flex-wrap:wrap;}.si-reservation-date .si-reschedule {margin-left:0;width:100%;}}
+
+/* ── Parcours pilote de la déclaration de vente, épuré (11/11/2026) ─────────────────────────────────────────────────
+   Dans la fenêtre « Déclarer une vente » (.sj-sale-dialog) : même écriture que les fenêtres de qualification. Un seul
+   titre (la ligne « Partie 1 sur 2 » sert de sur-titre), blocs doux sans cadre, champs blancs à trait fin, pied sans
+   filet avec « plus tard » en texte et l'action en anthracite. Version sombre neutre, qui n'existait pas. */
+.sj-sale-dialog .sj-sale-part{margin:0 40px 14px 0;font-size:10.5px;letter-spacing:.09em;color:#a8a39b}
+.sj-sale-dialog .integration-preview{color:#1c1b19;font-feature-settings:'cv11','ss01'}
+.sj-sale-dialog .si-title{gap:0;margin:4px 0 18px}
+.sj-sale-dialog .si-title-icon,.sj-sale-dialog .si-title small{display:none}
+.sj-sale-dialog .si-title h2{margin:0 0 3px;font-size:19px;font-weight:500;letter-spacing:-.02em}
+.sj-sale-dialog .si-title p{font-size:13px;color:#9d9890}
+/* Étapes : deux repères discrets reliés par un fil, l'étape en cours en encre. */
+.sj-sale-dialog .ti-journey.is-compact{padding:0 0 18px}
+.sj-sale-dialog .ti-journey .ti-step-icon{width:30px;height:30px;border-radius:10px;border-color:#ece9e4;background:#fff;color:#9d9890;box-shadow:none}
+.sj-sale-dialog .ti-journey .is-current .ti-step-icon{background:#2b2927;border-color:#2b2927;color:#fff;box-shadow:none}
+.sj-sale-dialog .ti-journey .is-complete .ti-step-icon{background:#e2f6ea;border-color:#c3ebd3;color:#0b7a4b}
+.sj-sale-dialog .ti-journey li{color:#9d9890}.sj-sale-dialog .ti-journey .is-current{color:#1c1b19}
+.sj-sale-dialog .ti-journey li:not(:last-child)::after{background:#ece9e4}
+.sj-sale-dialog .ti-journey.is-compact li::after{top:15px}
+/* Rendez-vous réservé. */
+.sj-sale-dialog .si-reservation-date{align-items:center;gap:12px;margin:0 0 10px;padding:14px 16px;border:0;border-radius:14px;background:#f7f5f2}
+.sj-sale-dialog .si-reservation-date>svg{width:18px;height:18px;flex-shrink:0;color:#9d9890}
+.sj-sale-dialog .si-reservation-date strong{font-size:14.5px;font-weight:500;letter-spacing:-.01em}
+.sj-sale-dialog .si-reservation-date strong::first-letter{text-transform:uppercase}
+.sj-sale-dialog .si-reservation-date span{margin-top:3px;font-size:12.5px;color:#9d9890}
+.sj-sale-dialog .si-reservation-next{gap:10px;margin:14px 0 0;padding:0 2px;border:0;background:transparent}
+.sj-sale-dialog .si-reservation-next>svg{width:16px;height:16px;flex-shrink:0;margin-top:2px;color:#0b7a4b}
+.sj-sale-dialog .si-reservation-next strong{font-size:13px;font-weight:500}
+.sj-sale-dialog .si-reservation-next p{margin:3px 0 0;font-size:12.5px;line-height:1.55;color:#9d9890}
+/* Fiche d'intégration. */
+.sj-sale-dialog .si-client-caption{border:0;border-radius:12px;background:#f7f5f2}
+.sj-sale-dialog .si-section{border:0;padding-top:6px}
+.sj-sale-dialog .si-section-title{border:0}
+.sj-sale-dialog .si-section-title h3{font-size:14px;font-weight:500}
+.sj-sale-dialog .si-section-title>span{padding:2px 8px;border:1px solid #e3ded6;border-radius:7px;background:#f1eee9;color:#4a4540;font-size:11px;font-weight:500}
+.sj-sale-dialog .si-account-holder{margin-bottom:6px;padding:12px 14px;border:0;border-radius:12px;background:#f7f5f2}
+.sj-sale-dialog .si-account-choice input,.sj-sale-dialog .si-waiver-check input{accent-color:#2b2927}
+.sj-sale-dialog .ip-field>span{font-size:13px;font-weight:400;color:#9d9890}
+.sj-sale-dialog .ip-field input,.sj-sale-dialog .ip-field textarea,.sj-sale-dialog .ip-field select{border:1px solid #e3ded6;border-radius:12px;background:#fff;color:#1c1b19;transition:border-color .2s,box-shadow .2s}
+.sj-sale-dialog .ip-field input:focus,.sj-sale-dialog .ip-field textarea:focus,.sj-sale-dialog .ip-field select:focus{outline:none;border-color:#2b2927;box-shadow:0 0 0 3px rgba(43,41,39,.08)}
+.sj-sale-dialog .si-error{margin-top:14px;padding:10px 12px;border:0;border-radius:12px;background:#fde6e6;color:#c5221f;font-size:12.5px}
+.sj-sale-dialog .si-other-docs,.sj-sale-dialog .si-waiver,.sj-sale-dialog .si-account-state,.sj-sale-dialog .si-director-documents{border-color:transparent;border-radius:14px;background:#f7f5f2}
+.sj-sale-dialog .si-waiver.is-on{border-color:transparent;background:#f4f2ee}
+.sj-sale-dialog .si-early{border-color:#f0e09a;background:#fbf1c2}
+.sj-sale-dialog .si-files{border-top:0}.sj-sale-dialog .si-file{border-bottom-color:#f1eee9}
+.sj-sale-dialog .si-waiver-reasons button{border-radius:10px;border-color:#ece9e4}
+.sj-sale-dialog .si-waiver-reasons button.is-selected{background:#2b2927;border-color:#2b2927}
+/* Pied : sans filet ; « plus tard » en texte, l'action en anthracite. */
+.sj-sale-dialog .si-actions{align-items:center;gap:6px;margin-top:20px;border-top:0}
+.sj-sale-dialog .ip-secondary{height:40px;padding:0 14px;border:0;border-radius:12px;background:transparent;color:#8b867e;box-shadow:none;transition:background .15s,color .15s}
+.sj-sale-dialog .ip-secondary:hover:not(:disabled){background:#f4f2ee;color:#1c1b19}
+.sj-sale-dialog .si-reservation-date .ip-secondary{height:34px;border:1px solid #ece9e4;background:#fff;color:#1c1b19}
+.sj-sale-dialog .ip-primary{height:40px;padding:0 16px;border-radius:12px;border-color:#2b2927;background:#2b2927;color:#fff;box-shadow:none;transition:background .18s,transform .16s cubic-bezier(.2,.75,.3,1)}
+.sj-sale-dialog .ip-primary:hover:not(:disabled){background:#1c1b19}
+.sj-sale-dialog .ip-primary:active:not(:disabled){transform:scale(.97)}
+.sj-sale-dialog .ip-primary svg{transition:transform .2s cubic-bezier(.2,.75,.3,1)}.sj-sale-dialog .ip-primary:hover:not(:disabled) svg{transform:translateX(3px)}
+.sj-sale-dialog .ip-primary:disabled{border-color:#f4f2ee;background:#f4f2ee;color:#9d9890;opacity:1}
+/* Sombre neutre. */
+html.dark-mode .sj-sale-dialog .integration-preview{color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .sj-sale-part,html.dark-mode .sj-sale-dialog .si-title p,html.dark-mode .sj-sale-dialog .si-reservation-date span,html.dark-mode .sj-sale-dialog .si-reservation-next p,html.dark-mode .sj-sale-dialog .ip-field>span,html.dark-mode .sj-sale-dialog .ti-journey li{color:#7d7d7d}
+html.dark-mode .sj-sale-dialog .ti-journey .is-current{color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .ti-journey .ti-step-icon{border-color:#2e2e2e;background:#1f1f1f;color:#7d7d7d}
+html.dark-mode .sj-sale-dialog .ti-journey .is-current .ti-step-icon{background:#ededed;border-color:#ededed;color:#141414}
+html.dark-mode .sj-sale-dialog .ti-journey .is-complete .ti-step-icon{background:rgba(16,185,129,.14);border-color:rgba(16,185,129,.25);color:#7cc49b}
+html.dark-mode .sj-sale-dialog .ti-journey li:not(:last-child)::after{background:#2e2e2e}
+html.dark-mode .sj-sale-dialog .si-reservation-date,html.dark-mode .sj-sale-dialog .si-client-caption,html.dark-mode .sj-sale-dialog .si-account-holder,html.dark-mode .sj-sale-dialog .si-other-docs,html.dark-mode .sj-sale-dialog .si-waiver,html.dark-mode .sj-sale-dialog .si-account-state,html.dark-mode .sj-sale-dialog .si-director-documents{background:#262626;color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .si-reservation-next>svg{color:#7cc49b}
+html.dark-mode .sj-sale-dialog .si-section-title>span{border-color:#3a3a3a;background:#262626;color:#a3a3a3}
+html.dark-mode .sj-sale-dialog .ip-field input,html.dark-mode .sj-sale-dialog .ip-field textarea,html.dark-mode .sj-sale-dialog .ip-field select{border-color:#2e2e2e;background:#181818;color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .ip-field input:focus,html.dark-mode .sj-sale-dialog .ip-field textarea:focus{border-color:#ededed;box-shadow:0 0 0 3px rgba(255,255,255,.08)}
+html.dark-mode .sj-sale-dialog .si-error{background:#3a2020;color:#f3a6a3}
+html.dark-mode .sj-sale-dialog .ip-secondary{color:#a3a3a3}html.dark-mode .sj-sale-dialog .ip-secondary:hover:not(:disabled){background:#262626;color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .si-reservation-date .ip-secondary{border-color:#3a3a3a;background:#1f1f1f;color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .ip-primary{border-color:#ededed;background:#ededed;color:#141414}html.dark-mode .sj-sale-dialog .ip-primary:hover:not(:disabled){background:#fff}
+html.dark-mode .sj-sale-dialog .ip-primary:disabled{border-color:#262626;background:#262626;color:#7d7d7d}
+html.dark-mode .sj-sale-dialog .si-file{border-bottom-color:#2e2e2e}
+@media(prefers-reduced-motion:reduce){.sj-sale-dialog .ip-primary,.sj-sale-dialog .ip-primary svg,.sj-sale-dialog .ip-secondary{transition:none}}
+.sj-sale-dialog .integration-preview,.sj-sale-dialog .integration-preview.ip-embedded{background:transparent}
+.sj-sale-dialog .si-actions{background:#fff}
+html.dark-mode .sj-sale-dialog .si-actions{background:#1f1f1f}
+html.dark-mode .sj-sale-dialog .si-reservation-date,html.dark-mode .sj-sale-dialog .si-reservation-next,html.dark-mode .sj-sale-dialog .si-title h2,html.dark-mode .sj-sale-dialog .si-section-title h3,html.dark-mode .sj-sale-dialog .si-client-caption strong,html.dark-mode .sj-sale-dialog .si-account-choice strong{color:#f2f2f2}
+html.dark-mode .sj-sale-dialog .si-reservation-next{background:transparent}

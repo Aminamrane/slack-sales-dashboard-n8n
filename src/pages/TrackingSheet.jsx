@@ -1,4 +1,7 @@
 import SalePaymentMode from '../components/SalePaymentMode';
+import { ContractFolders } from '../components/BoardClientFiles.jsx';
+import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
+import LeadTransfer, { TransferTag } from '../components/leadTransfer/LeadTransfer.jsx';
 import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from '../utils/saleRescheduling';
 import OnboardingReschedule from '../components/integrationPreview/OnboardingReschedule';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
@@ -11,18 +14,18 @@ import InternalCalendar from "../components/calendar/InternalCalendar";
 import {hasGuidedSalesJourney} from '../utils/guidedSalesJourney';
 import FrenchDateInput from '../components/salesJourney/FrenchDateInput';
 import {parisToday,parisParts,minuteOptions} from '../utils/parisDates';
-import React, { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import React, { useEffect, useLayoutEffect, useState, useMemo, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import LeadSmsActions from "../components/LeadSmsActions";
-import { CalendarCheck2, ChevronRight, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal, Funnel, ChartNoAxesCombined } from 'lucide-react';
+import { CalendarCheck2, ChevronRight, TriangleAlert, Check, X, Building2, UserRoundCheck, ArrowRight, PhoneCall, UserSearch, ListChecks, SlidersHorizontal, Funnel, ChartNoAxesCombined } from 'lucide-react';
 import SalesProspection from "../components/setter/prospection/SalesProspection.jsx";
 import { isMobilePhone } from "../components/setter/prospection/mobilePhones.js";
 import R1QualificationDialog from '../components/salesJourney/R1QualificationDialog';
 import DailyQualificationDeck from '../components/salesJourney/DailyQualificationDeck';
 import { ownRdvsToQualify, viewedSheet } from '../utils/dailyQualification';
-import QualificationDialog from '../components/salesJourney/QualificationDialog';
+import QualificationDialog, { RESULTS as QUALIFICATION_RESULTS } from '../components/salesJourney/QualificationDialog';
 import ContactQualificationDialog from '../components/salesJourney/ContactQualificationDialog';
 import {contactQualificationPatch, recallInPast, recallNote, recallWhen, recallRuleNote, CALLBACK_NOTE_MAX, CALLBACK_RULE_HELP} from '../utils/contactQualification';
 import NotesDialog from '../components/salesJourney/NotesDialog';
@@ -67,7 +70,6 @@ import iconPrioHigh from "../assets/high.svg";
 import iconPrioMedium from "../assets/medium.svg";
 import iconPrioLow from "../assets/low.svg";
 import iconCampaigns from "../assets/tar.png";
-import iconKpis from "../assets/finance.png";
 import iconCalendrier from "../assets/calendrier.png";
 import iconSheets from "../assets/files.png";
 import iconBuilding from "../assets/building.svg";
@@ -82,7 +84,6 @@ const FunnelLeads = React.lazy(() => import("./FunnelLeads/index.jsx"));
 const MonitoringPerf = React.lazy(() => import("./MonitoringPerf.jsx"));
 import CeoSalesRecordingsView from "./CeoSalesRecordingsView.jsx";
 import iconMessage from "../assets/message.svg";
-import smsRecuIcon from "../assets/smsrecu.svg";
 import iconSiren from "../assets/siren2.svg";
 import { useLeadCreative, CreativeButton, CreativePopup } from "../components/CreativePopup.jsx";
 import iconCreaActive from "../assets/metaads.png";
@@ -95,7 +96,7 @@ import { normalizeSiren, isValidSiren, formatSiren } from "../contracts/schemas.
 // ── PARIS WALL-CLOCK PICKER (French date, exact stored hour/minute) ────
 const HOURS = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
 const MINUTES = minuteOptions();
-function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoSave = false }) {
+function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoSave = false, floating = false }) {
   const [localDate, setLocalDate] = useState(value ? value.slice(0, 10) : '');
   const [localHour, setLocalHour] = useState(value ? value.slice(11, 13) : '09');
   const [localMin, setLocalMin] = useState(() => {
@@ -112,7 +113,7 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
   const confirm = () => { if (localDate) onChange(currentFull); };
   const selectStyle = {
     padding: '7px 8px', borderRadius: 8, border: `1px solid ${C.border}`,
-    background: darkMode ? C.subtle : '#f9fafb', color: C.text,
+    background: darkMode ? C.subtle : '#faf9f7', color: C.text,
     fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', outline: 'none',
     appearance: 'none', textAlign: 'center', minWidth: 52,
     backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='8' viewBox='0 0 24 24' fill='none' stroke='${darkMode ? '%235e6273' : '%239ca3af'}' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")`,
@@ -120,32 +121,180 @@ function DateTimePicker({ value, onChange, color = '#3b82f6', C, darkMode, autoS
   };
   return (
     <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-      <FrenchDateInput aria-label="Date du rendez-vous" value={localDate} onChange={(date) => { setLocalDate(date); if ((isNew || autoSave) && date) onChange(date + 'T' + localHour + ':' + localMin); }}
+      <FrenchDateInput aria-label="Date du rendez-vous" floating={floating} value={localDate} onChange={(date) => { setLocalDate(date); if ((isNew || autoSave) && date) onChange(date + 'T' + localHour + ':' + localMin); }}
         style={{
           width: 136, flexShrink: 0, padding: '6px 4px', borderRadius: 8, border: `1px solid ${C.border}`,
-          background: darkMode ? C.subtle : '#f9fafb', color: C.text,
+          background: darkMode ? C.subtle : '#faf9f7', color: C.text,
           fontSize: 12, fontWeight: 500, fontFamily: 'inherit', outline: 'none', cursor: 'pointer',
         }}
       />
       <select value={localHour} onChange={(e) => { setLocalHour(e.target.value); if (isNew || autoSave) onChange(localDate + 'T' + e.target.value + ':' + localMin); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {HOURS.map(h => <option key={h} value={h}>{h}h</option>)}
       </select>
-      <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
+      <span style={{ color: C.muted, fontSize: 11, fontWeight: 500 }}>:</span>
       <select value={localMin} onChange={(e) => { setLocalMin(e.target.value); if (isNew || autoSave) onChange(localDate + 'T' + localHour + ':' + e.target.value); }} style={{ ...selectStyle, minWidth: 44, fontSize: 12, padding: '6px 6px 6px 6px', paddingRight: 18 }}>
         {minuteOptions(localMin).map(m => <option key={m} value={m}>{m}</option>)}
       </select>
       {hasChanged && !autoSave && (
         <button onClick={confirm} style={{
           width: 26, height: 26, borderRadius: 6, border: 'none',
-          background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 700,
+          background: '#10b981', color: '#fff', fontSize: 13, fontWeight: 500,
           cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
           flexShrink: 0, transition: 'transform 0.15s',
           animation: 'solarFadeIn 0.2s ease both',
         }}
           onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.1)'}
           onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-        >✓</button>
+        ><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
       )}
+    </div>
+  );
+}
+
+// Choix du jour et de l'heure d'un rendez-vous (12/11/2026 : la liste déroulante de 24 heures « ne facilite pas la mise
+// en place d'un rendez-vous »). Tout se choisit d'un clic : les sept prochains jours en pastilles (une autre date par le
+// calendrier), les heures de bureau en grille, les quarts d'heure en dessous. La phrase du haut redit le rendez-vous
+// tel qu'il sera enregistré. Les heures et minutes inhabituelles restent accessibles (« Autres heures », « Par 5 min »).
+function RdvEditor({ value, onChange, C, darkMode }) {
+  const today = parisToday();
+  const date = (value || '').slice(0, 10) || today;
+  const hour = (value || '').slice(11, 13) || '09';
+  const minute = (value || '').slice(14, 16) || '00';
+  const [allHours, setAllHours] = useState(() => Number(hour) < 8 || Number(hour) > 19);
+  const [allMinutes, setAllMinutes] = useState(() => !['00', '15', '30', '45'].includes(minute));
+  const set = (d, h, m) => onChange(`${d}T${h}:${m}`);
+  const pad = (n) => String(n).padStart(2, '0');
+  const days = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(`${today}T12:00:00`); d.setDate(d.getDate() + i);
+    return { iso: `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`, week: i === 0 ? 'auj.' : d.toLocaleDateString('fr-FR', { weekday: 'short' }).replace('.', ''), num: d.getDate(), weekend: [0, 6].includes(d.getDay()) };
+  });
+  const hours = allHours ? HOURS : HOURS.slice(8, 20);
+  const minutes = allMinutes ? minuteOptions(minute) : ['00', '15', '30', '45'];
+  const ink = darkMode ? '#ededed' : '#2b2927';
+  const onInk = darkMode ? '#141414' : '#ffffff';
+  const pill = (on, extra = {}) => ({ padding: '7px 0', borderRadius: 10, border: `1px solid ${on ? ink : C.border}`, background: on ? ink : C.bg, color: on ? onInk : C.text,
+    fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums', cursor: 'pointer', textAlign: 'center', minWidth: 0,
+    transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.2s cubic-bezier(0.34,1.56,0.64,1)', ...extra });
+  const label = { fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' };
+  const link = { border: 'none', background: 'transparent', padding: 0, color: C.muted, fontSize: 11, fontFamily: 'inherit', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 };
+  const press = { onMouseDown: (e) => { e.currentTarget.style.transform = 'scale(0.95)'; }, onMouseUp: (e) => { e.currentTarget.style.transform = 'none'; }, onMouseLeave: (e) => { e.currentTarget.style.transform = 'none'; } };
+  const spoken = new Date(`${date}T12:00:00`);
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: '-0.01em' }} aria-live="polite">
+        {Number.isNaN(spoken.getTime()) ? 'Choisissez un jour' : spoken.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' })}
+        <span style={{ color: C.secondary, fontWeight: 400 }}> à {hour}h{minute}</span>
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={label}>Jour</span>
+          <span style={{ display: 'inline-flex', width: 132, flex: 'none' }} title="Choisir une autre date">
+            <FrenchDateInput aria-label="Autre date" floating value={date} onChange={(d) => { if (d) set(d, hour, minute); }}
+              style={{ width: 132, flexShrink: 0, padding: '5px 4px 5px 8px', borderRadius: 9, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', outline: 'none' }} />
+          </span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 4 }}>
+          {days.map((d) => {
+            const on = d.iso === date;
+            return (
+              <button key={d.iso} type="button" aria-pressed={on} onClick={() => set(d.iso, hour, minute)} {...press}
+                style={pill(on, { padding: '5px 0 6px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1, opacity: d.weekend && !on ? 0.55 : 1 })}>
+                <span style={{ fontSize: 10, fontWeight: 400, color: on ? onInk : C.muted }}>{d.week}</span>
+                <span style={{ fontSize: 13 }}>{d.num}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={label}>Heure</span>
+          <button type="button" style={link} onClick={() => setAllHours(v => !v)}>{allHours ? 'Heures de bureau' : 'Autres heures'}</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 4 }}>
+          {hours.map((h) => <button key={h} type="button" aria-pressed={h === hour} onClick={() => set(date, h, minute)} {...press} style={pill(h === hour)}>{h}h</button>)}
+        </div>
+      </div>
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <span style={label}>Minutes</span>
+          <button type="button" style={link} onClick={() => setAllMinutes(v => !v)}>{allMinutes ? 'Par quart d’heure' : 'Par 5 min'}</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${allMinutes ? 6 : 4}, minmax(0, 1fr))`, gap: 4 }}>
+          {minutes.map((m) => <button key={m} type="button" aria-pressed={m === minute} onClick={() => set(date, hour, m)} {...press} style={pill(m === minute)}>{m}</button>)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Les rendez-vous dans la fiche, en frise (11/11/2026, d'après la référence « Timeline » du dev : un fil vertical, un point
+// par étape, le prochain rendez-vous en point plein sur une ligne légèrement teintée, les passés en retrait). Au repos la
+// ligne se lit (étape, jour en toutes lettres, heure, « demain » ou « il y a 3 j ») ; un clic la déplie sur le sélecteur de
+// date (calendrier flottant, jamais rogné), et la date ne change qu'au clic sur « Enregistrer ».
+function rdvDays(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  const now = new Date();
+  return Math.round((new Date(date.getFullYear(), date.getMonth(), date.getDate()) - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+}
+function RdvRow({ label, value, onChange, C, darkMode, first, last, next }) {
+  const [open, setOpen] = useState(false);
+  // Brouillon : la date ne change qu'au clic sur « Enregistrer » (avant : une petite coche qui pouvait sortir du cadre).
+  const [draft, setDraft] = useState(value);
+  useEffect(() => { if (!open) setDraft(value); }, [value, open]);
+  const days = rdvDays(value);
+  const valid = days != null;
+  const day = valid ? new Date(value).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }) : 'Date à poser';
+  const time = valid ? `${value.slice(11, 13)}h${value.slice(14, 16)}` : '';
+  const past = valid && days < 0;
+  const rail = darkMode ? '#3a3a3a' : '#ddd8d0';
+  const ink = darkMode ? '#ededed' : '#2b2927';
+  const lit = next || open;
+  const changed = !!draft && draft.slice(0, 16) !== (value || '').slice(0, 16);
+  // « aujourd'hui » et « demain » en étiquette pastel, le reste en texte discret.
+  const soon = days === 0 ? ['aujourd’hui', darkMode ? ['rgba(16,185,129,.14)', '#7cc49b', 'rgba(16,185,129,.25)'] : ['#e2f6ea', '#0b7a4b', '#c3ebd3']]
+    : days === 1 ? ['demain', darkMode ? ['rgba(245,200,66,.14)', '#e8d49a', 'rgba(245,200,66,.25)'] : ['#fbf1c2', '#7a5a05', '#f0e09a']] : null;
+  const when = !valid || soon ? '' : days === -1 ? 'hier' : days > 0 ? `dans ${days} j` : `il y a ${-days} j`;
+  const save = () => { if (changed) onChange(draft); setOpen(false); };
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '18px minmax(0, 1fr)', columnGap: 6 }}>
+      {/* Le fil et son point : plein et sombre pour le prochain rendez-vous, creux pour ceux à venir, effacé pour les passés. */}
+      <div style={{ position: 'relative' }}>
+        <span style={{ position: 'absolute', left: 8, top: first ? 19 : 0, bottom: last ? 'calc(100% - 19px)' : 0, width: 1, background: rail }} />
+        <span style={{ position: 'absolute', left: next ? 4 : 5, top: next ? 14 : 15, width: next ? 9 : 7, height: next ? 9 : 7, borderRadius: '50%', boxSizing: 'border-box',
+          background: next ? ink : past ? rail : C.bg, border: next || past ? 'none' : `1.5px solid ${darkMode ? '#a3a3a3' : '#8b867e'}`,
+          boxShadow: next ? `0 0 0 3px ${darkMode ? 'rgba(255,255,255,0.10)' : 'rgba(43,41,39,0.10)'}` : `0 0 0 3px ${C.bg}`,
+          transition: 'all 0.3s cubic-bezier(0.34,1.56,0.64,1)' }} />
+      </div>
+      <div style={{ minWidth: 0, borderRadius: 12, background: lit ? (darkMode ? '#262626' : '#f4f2ee') : 'transparent', transition: 'background 0.2s ease', marginBottom: last ? 0 : 2 }}>
+        <button type="button" onClick={() => setOpen(v => !v)} aria-expanded={open} title={open ? 'Refermer' : `Changer la date du ${label}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 10px', border: 'none', borderRadius: 12, background: 'transparent', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 0.15s ease' }}
+          onMouseEnter={(e) => { if (!lit) e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : '#f7f5f2'; }}
+          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+          <span style={{ fontSize: 13, fontWeight: 500, color: past ? C.muted : C.text, flexShrink: 0 }}>{label}</span>
+          <span style={{ minWidth: 0, fontSize: 13, color: past ? C.muted : C.secondary, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'tabular-nums' }}>
+            {day}{time && ` à ${time}`}
+          </span>
+          {soon && <span style={{ marginLeft: 'auto', padding: '1px 7px', borderRadius: 7, border: `1px solid ${soon[1][2]}`, background: soon[1][0], color: soon[1][1], fontSize: 10.5, fontWeight: 500, whiteSpace: 'nowrap', flexShrink: 0 }}>{soon[0]}</span>}
+          {when && <span style={{ marginLeft: 'auto', paddingLeft: 6, fontSize: 11.5, color: C.muted, whiteSpace: 'nowrap', flexShrink: 0 }}>{when}</span>}
+        </button>
+        <div style={{ display: 'grid', gridTemplateRows: open ? '1fr' : '0fr', transition: 'grid-template-rows 0.28s cubic-bezier(0.4,0,0.2,1)' }}>
+          <div style={{ overflow: 'hidden' }}>
+            <div style={{ padding: '4px 10px 10px' }}>
+              {open && <RdvEditor value={draft} onChange={setDraft} C={C} darkMode={darkMode} />}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
+                <span style={{ marginRight: 'auto', fontSize: 11, color: C.muted }}>{changed ? 'Nouvelle date à enregistrer' : 'Heure de Paris'}</span>
+                <button type="button" onClick={() => { setDraft(value); setOpen(false); }}
+                  style={{ padding: '6px 11px', borderRadius: 9, border: `1px solid ${C.border}`, background: 'transparent', color: C.secondary, fontSize: 12, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}>Annuler</button>
+                <button type="button" onClick={save} disabled={!changed}
+                  style={{ padding: '6px 12px', borderRadius: 9, border: 'none', background: ink, color: darkMode ? '#141414' : '#ffffff', fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
+                    cursor: changed ? 'pointer' : 'default', opacity: changed ? 1 : 0.4, transition: 'opacity 0.2s ease' }}>Enregistrer</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -160,7 +309,7 @@ function TimeSelect({ value, onChange, C, darkMode }) {
       <select value={h} onChange={(e) => onChange(e.target.value + ':' + roundedM)} style={{ ...ss, width: 58 }}>
         {HOURS.map(hr => <option key={hr} value={hr}>{hr}h</option>)}
       </select>
-      <span style={{ color: C.muted, fontSize: 11, fontWeight: 600 }}>:</span>
+      <span style={{ color: C.muted, fontSize: 11, fontWeight: 500 }}>:</span>
       <select value={roundedM} onChange={(e) => onChange(h + ':' + e.target.value)} style={{ ...ss, width: 58 }}>
         {minuteOptions(roundedM).map(mi => <option key={mi} value={mi}>{mi}</option>)}
       </select>
@@ -260,7 +409,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
   for (let day = 1; day <= daysInMonth; day++) cells.push(day);
 
   const navBtn = (enabled) => ({ width: 30, height: 30, borderRadius: 8, border: `1px solid ${C.border}`, background: 'transparent',
-    color: enabled ? C.text : (darkMode ? '#3a3b47' : '#cbd2e0'), cursor: enabled ? 'pointer' : 'default', fontSize: 15, fontFamily: 'inherit',
+    color: enabled ? C.text : (darkMode ? '#3a3a3a' : '#cbd2e0'), cursor: enabled ? 'pointer' : 'default', fontSize: 15, fontFamily: 'inherit',
     display: 'flex', alignItems: 'center', justifyContent: 'center' });
 
   return (
@@ -268,14 +417,14 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
       {/* Calendrier mensuel */}
       <div style={{ flex: 1.7, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: C.text }}>{MONTHS[m]} <span style={{ color: C.muted, fontWeight: 500 }}>{y}</span></div>
+          <div style={{ fontSize: 15, fontWeight: 500, color: C.text }}>{MONTHS[m]} <span style={{ color: C.muted, fontWeight: 500 }}>{y}</span></div>
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={() => canGoPrev && setViewMonth(new Date(y, m - 1, 1))} disabled={!canGoPrev} style={navBtn(canGoPrev)}>‹</button>
             <button onClick={() => setViewMonth(new Date(y, m + 1, 1))} style={navBtn(true)}>›</button>
           </div>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
-          {WD.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 9.5, fontWeight: 600, color: C.muted, padding: '4px 0' }}>{w}</div>)}
+          {WD.map(w => <div key={w} style={{ textAlign: 'center', fontSize: 9.5, fontWeight: 500, color: C.muted, padding: '4px 0' }}>{w}</div>)}
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
           {cells.map((day, idx) => {
@@ -286,9 +435,9 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
             return (
               <button key={ymd} onClick={() => clickable && setSelectedDay(ymd)} disabled={!clickable}
                 style={{ padding: '9px 0', borderRadius: 10, border: 'none', fontFamily: 'inherit', fontSize: 14,
-                  fontWeight: selected ? 700 : 500, cursor: clickable ? 'pointer' : 'default',
-                  background: selected ? '#1e2330' : (clickable ? (darkMode ? '#252636' : '#f4f5f7') : 'transparent'),
-                  color: selected ? '#fff' : (clickable ? C.text : (darkMode ? '#3a3b47' : '#c3cad6')),
+                  fontWeight: 500, cursor: clickable ? 'pointer' : 'default',
+                  background: selected ? accent : (clickable ? (darkMode ? '#262626' : '#f4f2ee') : 'transparent'),
+                  color: selected ? (C.onAccent || '#fff') : (clickable ? C.text : (darkMode ? '#3a3a3a' : '#c9c4bc')),
                   transition: 'all 0.12s' }}>{day}</button>
             );
           })}
@@ -297,7 +446,7 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
 
       {/* Liste des créneaux du jour (occupés grisés/barrés) */}
       <div style={{ width: 148, borderLeft: `1px solid ${C.border}`, paddingLeft: 16, display: 'flex', flexDirection: 'column' }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: C.text, marginBottom: 2 }}>{selLabel || '—'}</div>
+        <div style={{ fontSize: 14, fontWeight: 500, color: C.text, marginBottom: 2 }}>{selLabel || '—'}</div>
         {data.slotMinutes ? <div style={{ fontSize: 11, color: C.muted, marginBottom: 8 }}>Créneaux de {data.slotMinutes} min</div> : <div style={{ marginBottom: 8 }} />}
         <div ref={slotListRef} style={{ position: 'relative', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 300, overflowY: 'auto', paddingRight: 4 }}>
           {loading ? (
@@ -311,11 +460,11 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
             return (
               <button key={s.t} data-slot={s.t} onClick={() => !readOnly && s.free && onChange(selectedDay + 'T' + s.t)} disabled={!s.free || readOnly}
                 title={host || undefined}
-                style={{ padding: '10px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                style={{ padding: '9px 0', borderRadius: 10, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums',
                   cursor: s.free && !readOnly ? 'pointer' : 'default',
-                  border: `1px solid ${sel ? '#1e2330' : (s.free ? C.border : 'transparent')}`,
-                  background: sel ? '#1e2330' : (s.free ? (darkMode ? '#252636' : '#f9fafb') : (darkMode ? 'rgba(255,255,255,0.02)' : '#f3f4f6')),
-                  color: sel ? '#fff' : (s.free ? C.text : (darkMode ? '#4a4b57' : '#c3cad6')),
+                  border: `1px solid ${sel ? accent : (s.free ? C.border : 'transparent')}`,
+                  background: sel ? accent : (s.free ? C.bg : (darkMode ? 'rgba(255,255,255,0.02)' : '#f7f5f2')),
+                  color: sel ? (C.onAccent || '#fff') : (s.free ? C.text : (darkMode ? '#4a4a4a' : '#c9c4bc')),
                   textDecoration: s.free ? 'none' : 'line-through',
                   animation: 'solarFadeIn 0.2s ease both', animationDelay: `${Math.min(idx * 0.012, 0.25)}s`, transition: 'all 0.12s' }}>
                 {s.t}
@@ -337,12 +486,12 @@ function SaleSlotPicker({ kind, value, onChange, C, darkMode, band, readOnly = f
 }
 
 const CATEGORIES = [
-  { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#a8c8f0", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
+  { key: "new",          label: "Nouveaux leads",  color: "#6366f1", dotColor: "#b9b5ee", softBg: "#f0f1fb", softBgDark: "rgba(99,102,241,0.18)",  softText: "#7578c4", description: "Leads assignés, pas encore contactés" },
   { key: "r1",           label: "R1 Placés",       color: "#3b82f6", softBg: "#edf4fc", softBgDark: "rgba(59,130,246,0.18)",  softText: "#6a9fd8", description: "Premier rendez-vous programmé" },
   { key: "r2",           label: "R2 Placés",       color: "#fb923c", softBg: "#fdf3eb", softBgDark: "rgba(251,146,60,0.18)",  softText: "#c48a5a", description: "Rendez-vous audit programmé" },
   { key: "r3",           label: "R3 Placés",       color: "#8b5cf6", softBg: "#f3f0ff", softBgDark: "rgba(139,92,246,0.18)",  softText: "#9b8ac4", description: "Rendez-vous suivi programmé" },
-  { key: "callback",     label: "À rappeler",      color: "#94a3b8", softBg: "#f4f5f7", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospect souhaite être rappelé" },
-  { key: "voicemail",    label: "Répondeurs",      color: "#64748b", softBg: "#f0f1f4", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Pas de réponse" },
+  { key: "callback",     label: "À rappeler",      color: "#a8a39b", softBg: "#f4f2ee", softBgDark: "rgba(148,163,184,0.18)", softText: "#8993a4", description: "Prospect souhaite être rappelé" },
+  { key: "voicemail",    label: "Répondeurs",      color: "#8b867e", softBg: "#f1eee9", softBgDark: "rgba(100,116,139,0.18)", softText: "#7a8594", description: "Pas de réponse" },
   { key: "not_relevant", label: "Non-pertinents",  color: "#f87171", softBg: "#fceeed", softBgDark: "rgba(248,113,113,0.18)", softText: "#c47272", description: "Non qualifiés ou pas intéressés" },
   { key: "to_recontact", label: "À relancer",      color: "#14b8a6", softBg: "#e6faf6", softBgDark: "rgba(20,184,166,0.18)",  softText: "#0f9b8e", description: "Pas pour nous maintenant, à recontacter plus tard" },
   { key: "signed",       label: "Signés",          color: "#34d399", softBg: "#edfbf3", softBgDark: "rgba(52,211,153,0.18)",  softText: "#5ab896", description: "Clients signés" },
@@ -400,12 +549,31 @@ const EMPLOYEE_RANGES = [
   '150-199', '200-249', '250-299', '300-349', '350-400'
 ];
 
+// Les animateurs d'onboarding du moment, tels que le serveur les donne avec les réglages d'agenda (dev 12/11/2026 :
+// « que ce soit automatique »). Aucun prénom n'est écrit dans cette page ; sans liste (serveur plus ancien), les
+// phrases se disent sans prénom.
+const onboardingHostNames = (hosts) => (Array.isArray(hosts) ? hosts : []).map(name => String(name || '').trim()).filter(Boolean);
+// « A ou B » : qui anime un onboarding.
+function onboardingHostsChoice(hosts) {
+  const names = onboardingHostNames(hosts);
+  if (!names.length) return 'L’équipe d’onboarding';
+  return names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} ou ${names[names.length - 1]}`;
+}
+// « Voir les créneaux de A et B ».
+function onboardingHostsLabel(hosts) {
+  const names = onboardingHostNames(hosts);
+  if (!names.length) return 'Voir les créneaux d’onboarding';
+  const of = (name) => (/^[aeiouyàâäéèêëîïôöùûüh]/i.test(name) ? `d’${name}` : `de ${name}`);
+  const list = names.length === 1 ? of(names[0]) : `${of(names[0])}${names.slice(1, -1).map(name => `, ${name}`).join('')} et ${names[names.length - 1]}`;
+  return `Voir les créneaux ${list}`;
+}
+
 // ── ORIGIN BADGE COLORS ───────────────────────────────────────────────────────
 const ORIGIN_COLORS = {
   Ads: { bg: "rgba(245,158,11,0.12)", text: "#f59e0b" },
   CC:  { bg: "rgba(99,102,241,0.12)", text: "#6366f1" },
 };
-const DEFAULT_ORIGIN = { bg: "rgba(107,114,128,0.12)", text: "#6b7280" };
+const DEFAULT_ORIGIN = { bg: "rgba(107,114,128,0.12)", text: "#8b867e" };
 
 // ══════════════════════════════════════════════════════════════════════════════
 // COMPONENT
@@ -447,19 +615,30 @@ export default function TrackingSheet() {
   }, [darkMode]);
 
   // ── CARD COLORS ───────────────────────────────────────────────────────────
+  // Mode clair au style Owner (docs/STYLE-OWNER.md, 11/11/2026) : toile grège, cartes blanches à trait fin, encre et
+  // gris chauds, anthracite à la place du bleu. Mode sombre (références du dev, 11/11/2026) : noirs et gris neutres,
+  // plus de bleu nuit ; l'accent y est le clair, donc le texte posé dessus est sombre (onAccent). Peau seulement.
   const C = {
-    bg:        darkMode ? '#1e1f28' : '#ffffff',
-    border:    darkMode ? '#2a2b36' : '#e2e6ef',
-    surface:   darkMode ? '#13141b' : '#f6f7f9',
-    text:      darkMode ? '#eef0f6' : '#1e2330',
-    muted:     darkMode ? '#5e6273' : '#9ca3af',
-    subtle:    darkMode ? '#252636' : '#f4f6fb',
-    secondary: darkMode ? '#8b8fa0' : '#6b7280',
-    accent:    darkMode ? '#7c8adb' : '#5b6abf',
+    bg:        darkMode ? '#1f1f1f' : '#ffffff',
+    border:    darkMode ? '#2e2e2e' : '#ece9e4',
+    surface:   darkMode ? '#141414' : '#f4f2ef',
+    text:      darkMode ? '#f2f2f2' : '#1c1b19',
+    muted:     darkMode ? '#7d7d7d' : '#9d9890',
+    subtle:    darkMode ? '#262626' : '#f7f5f2',
+    secondary: darkMode ? '#a3a3a3' : '#55514b',
+    accent:    darkMode ? '#ededed' : '#2b2927',
+    onAccent:  darkMode ? '#141414' : '#ffffff',
+    // Fenêtres et menus (STYLE-OWNER §4) : voile chaud sans flou, feuille rayon 22, ombre longue ; menus rayon 14.
+    veil:      darkMode ? 'rgba(0,0,0,0.6)' : 'rgba(28,27,25,0.22)',
+    sheetShadow: darkMode ? '0 24px 64px rgba(0,0,0,0.55)' : '0 24px 60px rgba(28,27,25,0.14)',
+    popShadow: darkMode ? '0 14px 34px rgba(0,0,0,0.5)' : '0 14px 34px rgba(28,27,25,0.10), 0 2px 6px rgba(28,27,25,0.04)',
     shadow:    darkMode
       ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)'
-      : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+      : 'none',
   };
+  // Images dessinées pour le fond clair (note, portrait, étiquettes de qualification et de priorité, enveloppe) :
+  // en mode sombre on inverse la luminosité en gardant les teintes.
+  const imgDark = darkMode ? 'invert(0.88) hue-rotate(180deg)' : undefined;
 
   // ── AUTH ───────────────────────────────────────────────────────────────────
   const [session, setSession] = useState(null);
@@ -486,9 +665,11 @@ export default function TrackingSheet() {
   const qualifyDeckChecked = useRef(false);
   const [contactDialog, setContactDialog] = useState(null);
   const [commentLeadId, setCommentLeadId] = useState(null);
+  // Fiche de droite en trois volets (11/11/2026) : Infos, Documents, Commentaire. Retenu par lead.
+  const [panelTab, setPanelTab] = useState({ leadId: null, tab: 'infos' });
   const [notesError, setNotesError] = useState(null);
   const isSignedPilot = lead => !!intakeJourneys[lead?.id]?.onboarding_only;
-  const isGuidedLead = lead => hasGuidedSalesJourney(intakeRollout, lead, intakeContexts[lead?.id]);
+  const isGuidedLead = lead => hasGuidedSalesJourney(intakeRollout, lead, intakeContexts[lead?.id], apiClient.getUser()?.email);
   // Qualification depuis le calendrier (06/10/2026) : même fenêtre et même enregistrement que dans la sheet.
   const openCalendarQualification = async (ev) => {
     const stage = ['r1', 'r2', 'r3'].includes(ev?.rdv_type) ? ev.rdv_type : null;
@@ -1041,6 +1222,10 @@ export default function TrackingSheet() {
   const [noteJustSaved, setNoteJustSaved] = useState(null); // lead.id — triggers mynote sticker appear animation
   const [flyingCard, setFlyingCard] = useState(null); // { lead, sourceRect, dx, dy, catColor, destCatIndex }
   const [glowingTab, setGlowingTab] = useState(null); // category index receiving a card
+  // Onglets en rail (11/11/2026, « bien refaire les onglets, vraiment clean ») : un pouce blanc glisse sous l'onglet
+  // actif. Sa place est mesurée sur l'onglet lui-même, remesurée quand le rail change de largeur ou de contenu.
+  const tabRailRef = useRef(null);
+  const [tabThumb, setTabThumb] = useState(null);
   const flyCleanupRef = useRef([]);
   const prevTabRef = useRef(0); // track previous tab for tabDrop animation
   const [droppingTab, setDroppingTab] = useState(null); // index of tab that just became inactive
@@ -1073,6 +1258,32 @@ export default function TrackingSheet() {
   const [micError, setMicError] = useState(null); // flash error message
   const micRecorderRef = useRef(null);
   const micChunksRef = useRef([]);
+  // Dictée en direct (11/11/2026) : la reconnaissance vocale du navigateur montre le texte pendant qu'on parle. La
+  // transcription du serveur reste le texte final ; si elle échoue ou revient vide, le texte en direct est gardé.
+  const [micLive, setMicLive] = useState('');
+  const micLiveRef = useRef('');
+  const micRecognitionRef = useRef(null);
+  const micLiveStart = () => {
+    micLiveRef.current = ''; setMicLive('');
+    const Recognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
+    if (!Recognition) return;
+    try {
+      const recognition = new Recognition();
+      recognition.lang = 'fr-FR'; recognition.continuous = true; recognition.interimResults = true;
+      recognition.onresult = (event) => {
+        let text = '';
+        for (let i = 0; i < event.results.length; i++) text += event.results[i][0].transcript;
+        micLiveRef.current = text.trim(); setMicLive(micLiveRef.current);
+      };
+      recognition.onerror = () => {};
+      recognition.start();
+      micRecognitionRef.current = recognition;
+    } catch { micRecognitionRef.current = null; }
+  };
+  const micLiveStop = () => {
+    try { micRecognitionRef.current?.stop(); } catch { /* déjà arrêtée */ }
+    micRecognitionRef.current = null;
+  };
   const getMicMimeType = () => {
     for (const t of ['audio/webm;codecs=opus', 'audio/webm', 'audio/ogg;codecs=opus', 'audio/mp4', '']) {
       if (!t || MediaRecorder.isTypeSupported(t)) return t || undefined;
@@ -1090,6 +1301,7 @@ export default function TrackingSheet() {
       micRecorderRef.current = mr;
       setMicRecording(true);
       setMicError(null);
+      micLiveStart();
     } catch (err) {
       console.warn('Microphone error:', err);
       setMicError('Micro non autorisé');
@@ -1099,9 +1311,11 @@ export default function TrackingSheet() {
   const micStopAndTranscribe = (onText) => {
     const mr = micRecorderRef.current;
     if (!mr || mr.state === 'inactive') return;
+    micLiveStop();
     mr.onstop = async () => {
       setMicRecording(false);
       setMicTranscribing(true);
+      const live = micLiveRef.current;
       const ext = (mr.mimeType || '').includes('mp4') ? 'recording.mp4' : (mr.mimeType || '').includes('ogg') ? 'recording.ogg' : 'recording.webm';
       const blob = new Blob(micChunksRef.current, { type: mr.mimeType || 'audio/webm' });
       try {
@@ -1116,19 +1330,22 @@ export default function TrackingSheet() {
           console.error(`Transcription HTTP ${resp.status}:`, errBody);
           let errDetail = '';
           try { const j = JSON.parse(errBody); errDetail = j.detail || j.message || j.error || ''; } catch { errDetail = errBody.slice(0, 80); }
+          if (live) { onText(live); return; }
           setMicError(`Erreur ${resp.status}${errDetail ? ' : ' + errDetail : resp.status === 401 ? ' (non autorisé)' : resp.status === 413 ? ' (fichier trop gros)' : resp.status === 404 ? ' (endpoint introuvable)' : ''}`);
           setTimeout(() => setMicError(null), 5000);
           return;
         }
         const data = await resp.json();
         if (data.text) { onText(data.text); }
+        else if (live) { onText(live); }
         else { setMicError('Aucun texte détecté'); setTimeout(() => setMicError(null), 3000); }
       } catch (err) {
         console.error('Transcription error:', err);
+        if (live) { onText(live); return; }
         setMicError(err.message === 'Failed to fetch' ? 'Erreur réseau' : 'Erreur de transcription');
         setTimeout(() => setMicError(null), 4000);
       }
-      finally { setMicTranscribing(false); }
+      finally { setMicTranscribing(false); micLiveRef.current = ''; setMicLive(''); }
       mr.stream.getTracks().forEach(t => t.stop());
     };
     mr.stop();
@@ -1136,6 +1353,7 @@ export default function TrackingSheet() {
   };
   const micCleanup = () => {
     if (micRecorderRef.current?.state === 'recording') { micRecorderRef.current.stream.getTracks().forEach(t => t.stop()); micRecorderRef.current.stop(); }
+    micLiveStop(); micLiveRef.current = ''; setMicLive('');
     setMicRecording(false); setMicTranscribing(false);
   };
   const [prioDropdownPos, setPrioDropdownPos] = useState({ x: 0, y: 0 });
@@ -2041,6 +2259,25 @@ export default function TrackingSheet() {
   }, [activeTab, spotlightOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── HANDLERS ──────────────────────────────────────────────────────────────
+  // Place du pouce des onglets. `ready` : pas de glissement à la première mesure (il apparaît à sa place).
+  useLayoutEffect(() => {
+    const rail = tabRailRef.current;
+    if (!rail) { setTabThumb(null); return undefined; }
+    const place = () => {
+      const el = rail.querySelector('[data-tab-active="true"]');
+      setTabThumb((prev) => {
+        if (!el) return null;
+        const next = { left: el.offsetLeft, width: el.offsetWidth, ready: !!prev };
+        return prev && prev.left === next.left && prev.width === next.width && prev.ready ? prev : next;
+      });
+    };
+    place();
+    rail.querySelector('[data-tab-active="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    const observer = new ResizeObserver(place);
+    observer.observe(rail);
+    return () => observer.disconnect();
+  }, [activeTab, sidebarView, tabCounts, calSettings?.r3_enabled]);
+
   const handleTabChange = (idx) => {
     if (idx === activeTab) return;
     setDroppingTab(activeTab);
@@ -2074,7 +2311,9 @@ export default function TrackingSheet() {
   };
 
   const triggerLeadMovedNotif = (lead, newStatus) => {
-    const destCat = CATEGORIES.find(c => c.key === newStatus);
+    // « Injoignable » sort le lead de la feuille (aucun onglet, c'est voulu) : on le dit au lieu de le laisser disparaître en silence.
+    const destCat = CATEGORIES.find(c => c.key === (EXTRA_STATUS_MAP[newStatus] || newStatus))
+      || (newStatus === 'unreachable' ? { label: 'Injoignable, sorti de votre feuille', color: '#8b867e' } : null);
     if (!destCat || !lead) return;
     const firstName = (lead.full_name || '').split(' ')[0];
     if (newStatus === 'r1' || newStatus === 'r2' || newStatus === 'r3') {
@@ -2142,19 +2381,28 @@ export default function TrackingSheet() {
   };
 
   const dateChangeTimers = useRef({}); // debounce per lead+field
+  const dateChangeBefore = useRef({}); // valeur avant modification, par lead+champ
   const handleDateChange = async (leadId, field, value) => {
     const backendField = field === 'r1' ? 'r1_date' : field === 'r2' ? 'r2_date' : field === 'r3' ? 'r3_date' : field;
+    const key = `${leadId}-${field}`;
+    // La date d'avant, gardée pour y revenir si le serveur refuse (audit 11/11/2026 : un refus restait invisible).
+    if (!(key in dateChangeBefore.current)) dateChangeBefore.current[key] = leads.find(l => l.id === leadId)?.[field];
     // Optimistic update immediately
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
     // Debounce the PATCH — cancel previous timer for same lead+field
-    const key = `${leadId}-${field}`;
     if (dateChangeTimers.current[key]) clearTimeout(dateChangeTimers.current[key]);
     dateChangeTimers.current[key] = setTimeout(async () => {
       delete dateChangeTimers.current[key];
+      const before = dateChangeBefore.current[key];
+      delete dateChangeBefore.current[key];
       try {
-        await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: value || null });
+        const response = await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [backendField]: value || null });
+        if (response?.calendar_conflict) setCalendarError({ leadId, message: response.calendar_conflict.message || 'La date est enregistrée, mais un autre rendez-vous occupe ce créneau dans votre agenda.' });
+        else setCalendarError(prev => (prev?.leadId === leadId ? null : prev));
       } catch (err) {
         console.error("Erreur mise à jour date:", err);
+        setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: before } : l));
+        setCalendarError({ leadId, message: err?.status === 409 ? 'Ce créneau est indisponible. La date n’a pas été changée.' : 'La date n’a pas pu être enregistrée. Elle est revenue à sa valeur précédente.' });
       }
     }, 500);
   };
@@ -2432,6 +2680,20 @@ export default function TrackingSheet() {
     setEditingField(null);
   };
   const cancelFieldEdit = () => { setEditingField(null); setSirenEditError(''); };
+  // Rendre prioritaire un autre numéro ou un autre e-mail du lead (12/11/2026) : c'est le téléphone / l'e-mail du lead
+  // qui sert aux SMS, aux relances et au contrat, donc on l'enregistre par la même route que la modification du champ
+  // (mêmes contrôles, même pop-up anti-doublon). Rend vrai si le lead porte bien la nouvelle valeur.
+  const promoteLeadContact = (leadId) => async (field, value) => {
+    try {
+      await apiClient.patch(`/api/v1/tracking/leads/${leadId}`, { [field]: value });
+      setLeads(prev => prev.map(l => l.id === leadId ? { ...l, [field]: value } : l));
+      return true;
+    } catch (err) {
+      if (err?.status === 409 && err?.data?.detail?.code === 'duplicate_lead') setDuplicateLeadModal(true);
+      console.error('Erreur changement de contact prioritaire:', err);
+      return false;
+    }
+  };
 
   // ── SIREN INLINE EDIT (dedicated path: digit-only, ""-clear, 422-aware) ──
   // Generic saveFieldEdit sends `null` to clear, but the backend SIREN field
@@ -2675,13 +2937,51 @@ export default function TrackingSheet() {
 
   // ── RENDER ────────────────────────────────────────────────────────────────
   return (
-    <div style={{
+    <div className="ts-owner" style={{
       padding: 0,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
+      fontFeatureSettings: "'cv11','ss01'",
       background: C.surface,
     }}>
       {/* Keyframe animations */}
       <style>{`
+        html:not(.dark-mode), body:not(.dark-mode) { background: #f4f2ef !important; }
+        html.dark-mode, body.dark-mode { background: #141414 !important; }
+        /* Calendrier du sélecteur de date en mode sombre (il est rendu dans le body). */
+        html.dark-mode .fr-calendar { background: #262626; color: #f2f2f2; border-color: #3a3a3a; box-shadow: 0 14px 34px rgba(0,0,0,.5); }
+        html.dark-mode .fr-calendar button:hover { background: #3a3a3a; }
+        html.dark-mode .fr-calendar-grid button[aria-pressed=true] { background: #ededed; color: #141414; }
+        html.dark-mode .fr-calendar-grid small { color: #7d7d7d; }
+        html.dark-mode .fr-date-control .fr-date-trigger:hover { background: #3a3a3a; }
+        /* Dossier du contrat dans la fiche (composant du board) : textes et survol en mode sombre. */
+        html.dark-mode .ts-contract .cf-title, html.dark-mode .ts-contract .cf-status { color: #f2f2f2; }
+        html.dark-mode .ts-contract .cf-sub { color: #7d7d7d; }
+        html.dark-mode .ts-contract .cf.is-clickable:hover { background: #262626; }
+        html.dark-mode body:has(.ts-owner) *::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
+        html.dark-mode body:has(.ts-owner) *::-webkit-scrollbar-track,
+        html.dark-mode body:has(.ts-owner) *::-webkit-scrollbar-corner { background: transparent !important; }
+        html.dark-mode body:has(.ts-owner) *::-webkit-scrollbar-thumb {
+          background: #3a3a3a !important; border: 3px solid transparent !important;
+          border-radius: 999px !important; background-clip: padding-box !important;
+        }
+        html.dark-mode body:has(.ts-owner) *:hover::-webkit-scrollbar-thumb { background-color: #4a4a4a !important; }
+        html.dark-mode body:has(.ts-owner) *::-webkit-scrollbar-thumb:hover { background-color: #6b6b6b !important; }
+        @supports not selector(::-webkit-scrollbar) {
+          html.dark-mode body:has(.ts-owner) * { scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+        }
+        /* Barres de défilement en pilule (STYLE-OWNER §8), mode clair, fenêtres et menus du body compris. */
+        html:not(.dark-mode) body:has(.ts-owner) *::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
+        html:not(.dark-mode) body:has(.ts-owner) *::-webkit-scrollbar-track,
+        html:not(.dark-mode) body:has(.ts-owner) *::-webkit-scrollbar-corner { background: transparent !important; }
+        html:not(.dark-mode) body:has(.ts-owner) *::-webkit-scrollbar-thumb {
+          background: #e3ded6 !important; border: 3px solid transparent !important;
+          border-radius: 999px !important; background-clip: padding-box !important;
+        }
+        html:not(.dark-mode) body:has(.ts-owner) *:hover::-webkit-scrollbar-thumb { background-color: #cfc9c0 !important; }
+        html:not(.dark-mode) body:has(.ts-owner) *::-webkit-scrollbar-thumb:hover { background-color: #a8a39b !important; }
+        @supports not selector(::-webkit-scrollbar) {
+          html:not(.dark-mode) body:has(.ts-owner) * { scrollbar-width: thin; scrollbar-color: #d8d3cb transparent; }
+        }
         @keyframes pageReveal {
           from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: none; }
@@ -2821,6 +3121,14 @@ export default function TrackingSheet() {
           30%  { box-shadow: 0 0 0 4px rgba(52,211,153,0.25); }
           100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); }
         }
+        /* Cartes arrondies qui défilent (fiche du lead, fenêtres) : la barre s'arrête avant les coins au lieu de les traverser
+           (dev 11/11/2026 : « le scroll est mal placé »). */
+        body:has(.ts-owner) .pc-scroll::-webkit-scrollbar-track,
+        body:has(.ts-owner) .ts-scroll-card::-webkit-scrollbar-track,
+        body:has(.ts-owner) .sj-dialog::-webkit-scrollbar-track,
+        body:has(.ts-owner) .sj-nda-dialog::-webkit-scrollbar-track { margin: 20px 0 !important; }
+        .ts-tabrail { scrollbar-width: none; }
+        .ts-tabrail::-webkit-scrollbar { display: none !important; }
         @keyframes tabReceive {
           0%   { transform: translateY(0); }
           30%  { transform: translateY(3px); }
@@ -2896,9 +3204,9 @@ export default function TrackingSheet() {
           to   { opacity: 0; transform: translateX(30px) scale(0.97); }
         }
         @keyframes avatarPulse {
-          0%   { box-shadow: 0 0 0 0 rgba(91,106,191,0.2); }
-          70%  { box-shadow: 0 0 0 10px rgba(91,106,191,0); }
-          100% { box-shadow: 0 0 0 0 rgba(91,106,191,0); }
+          0%   { box-shadow: 0 0 0 0 rgba(43,41,39,0.2); }
+          70%  { box-shadow: 0 0 0 10px rgba(43,41,39,0); }
+          100% { box-shadow: 0 0 0 0 rgba(43,41,39,0); }
         }
         @keyframes campaignOpen {
           0% {
@@ -2967,7 +3275,7 @@ export default function TrackingSheet() {
           }}>
             <div style={{ width: 8, height: 8, borderRadius: '50%', background: flyingCard.catColor, flexShrink: 0 }} />
             <span style={{
-              fontSize: flyingCard.wasExpanded ? '15px' : '14px', fontWeight: 600, color: C.text,
+              fontSize: flyingCard.wasExpanded ? '15px' : '14px', fontWeight: 500, color: C.text,
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
               {flyingCard.lead.full_name}
@@ -2975,7 +3283,7 @@ export default function TrackingSheet() {
             <span style={{
               display: 'inline-flex', alignItems: 'center',
               padding: '2px 8px', borderRadius: '50px',
-              fontSize: '10px', fontWeight: 600,
+              fontSize: '10px', fontWeight: 500,
               background: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).bg,
               color: (ORIGIN_COLORS[flyingCard.lead.origin] || DEFAULT_ORIGIN).text,
               flexShrink: 0,
@@ -3016,40 +3324,37 @@ export default function TrackingSheet() {
               views={[
               { key: 'leads', label: 'Mes leads', iconSrc: iconMyLead, accent: C.accent, keepColor: true },
               { key: 'common_pool', label: 'Barrage répondeur', accent: '#06b6d4', iconNode: (active) => (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
               ) },
               { key: 'calendar', label: 'Calendrier', iconSrc: iconCalendrier, accent: '#3b82f6' },
               // Prospection (06/10/2026) : l'outil des setters, sur la sheet du commercial lui-même seulement.
               ...(isAdminView ? [] : [
                 { key: 'prospect_search', label: 'Trouver des contacts', accent: C.accent, iconNode: (active) => (
-                  <UserSearch size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                  <UserSearch size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
                 ) },
                 { key: 'prospect_lists', label: 'Mes listes', accent: C.accent, iconNode: (active) => (
-                  <ListChecks size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                  <ListChecks size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
                 ) },
               ]),
               { key: 'email', label: 'Relance', iconSrc: iconEmail, accent: C.accent },
               { key: 'ai_bilan', label: 'Bilan IA', accent: '#E8A317', iconNode: (active) => (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
               ) },
-              { key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' },
+              // « KPIs & Stats » et « Mes préférences » retirés du menu (dev 11/11/2026). Les chiffres restent dans le bandeau du haut.
               // Préférences de secteur (06/10/2026) : le dev les voit et les modifie toutes, chaque sales les siennes.
               ...(currentUser?.role === 'admin' ? [{ key: 'sales_prefs', label: 'Préférences sales', accent: C.accent, iconNode: (active) => (
-                <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
-              ) }] : []),
-              ...(!isAdminView && ['sales', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) ? [{ key: 'my_prefs', label: 'Mes préférences', accent: C.accent, iconNode: (active) => (
-                <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
               ) }] : []),
               ...(['head_of_sales_manager', 'admin'].includes(currentUser?.role) ? [
                 { key: 'funnel_leads', label: 'Funnel Leads', accent: '#8b5cf6', iconNode: (active) => (
-                  <Funnel size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                  <Funnel size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
                 ) },
                 { key: 'perf_sales', label: 'Perf Sales', accent: '#2563eb', iconNode: (active) => (
-                  <ChartNoAxesCombined size={19} strokeWidth={2} color={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
+                  <ChartNoAxesCombined size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
                 ) },
               ] : []),
               ...(['head_of_sales_manager', 'head_of_sales', 'admin'].includes(currentUser?.role) ? [{ key: 'recordings', label: 'Enregistrements sales', accent: '#0891b2', iconNode: (active) => (
-                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#1e2330' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8z" /><rect x="2" y="6" width="14" height="12" rx="2" ry="2" /></svg>
+                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m22 8-6 4 6 4V8z" /><rect x="2" y="6" width="14" height="12" rx="2" ry="2" /></svg>
               ) }] : []),
               ...(canManageLeads ? [{ key: 'leads_management', label: 'Gestion des leads', iconSrc: iconFuse, accent: '#6366f1', keepColor: true, iconSize: 19 }] : []),
               ...(canManageSheets ? [{ key: 'sheets', label: 'Tracking Sheets', iconSrc: iconSheets, accent: '#8b5cf6' }] : []),
@@ -3070,7 +3375,7 @@ export default function TrackingSheet() {
         <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', padding: embedMode ? '8px 8px 8px 8px' : '8px 8px 8px 0', gap: 12 }}>
 
           {/* ── KPI HEADER CARD : les 7 indicateurs répartis sur toute la largeur (09/11/2026, plus de navbar au milieu) ── */}
-          <div style={{ height: 76, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
+          <div style={{ height: 76, background: C.bg, borderRadius: 18, flexShrink: 0, border: `1px solid ${isAdminView ? '#8b5cf640' : C.border}`, marginLeft: 8, display: 'flex', alignItems: 'center', padding: '0 24px' }}>
             {isAdminView && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginRight: 'auto' }}>
                 <button onClick={() => { window.location.href = embedMode ? '/ceo' : '/tracking-sheet'; }} style={{
@@ -3084,11 +3389,11 @@ export default function TrackingSheet() {
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="m15 18-6-6 6-6"/></svg>
                   Retour
                 </button>
-                <span style={{ fontSize: 12, color: '#8b5cf6', fontWeight: 600 }}>
+                <span style={{ fontSize: 12, color: '#8b5cf6', fontWeight: 500 }}>
                   {viewingSheetId}
                 </span>
                 {new URLSearchParams(window.location.search).get('ghost') === 'true' && (
-                  <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 7px', borderRadius: 6, background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>GHOST</span>
+                  <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 7px', borderRadius: 6, background: 'rgba(139,92,246,0.1)', color: '#8b5cf6' }}>GHOST</span>
                 )}
               </div>
             )}
@@ -3109,8 +3414,8 @@ export default function TrackingSheet() {
                 const fs = valStr.length > 8 ? 15 : valStr.length > 5 ? 17 : 20;
                 return (
                 <div key={kpi.label} style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, borderRight: i < arr.length - 1 ? `1px solid ${C.border}` : 'none', padding: '0 12px', whiteSpace: 'nowrap' }}>
-                  <span style={{ fontSize: fs, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>{kpi.value}</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.04em' }}>{kpi.label}</span>
+                  <span style={{ fontSize: fs, fontWeight: 500, color: C.text, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>{kpi.value}</span>
+                  <span style={{ fontSize: 10.5, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{kpi.label}</span>
                 </div>
                 );
               };
@@ -3128,19 +3433,31 @@ export default function TrackingSheet() {
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
 
           {/* ── MAIN CONTENT CARD ────────────────────────────────────────────── */}
-          <div style={{ flex: 1, background: darkMode ? C.bg : '#f6f7f9', borderRadius: 8, border: `1px solid ${C.border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ flex: 1, background: C.bg, borderRadius: 18, border: `1px solid ${C.border}`, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-          {/* ── FOLDER TABS (top bar, classic site style) ────────────────────── */}
+          {/* ── ONGLETS : un rail d'une seule ligne, pouce blanc sous l'onglet actif, compteurs en chiffres discrets ── */}
           {sidebarView === 'leads' && (
             <div style={{
-              display: 'flex', gap: 6,
-              padding: '10px 20px',
+              display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 14px',
               borderBottom: `1px solid ${C.border}`,
               background: 'transparent',
               zIndex: 3,
-              overflow: 'visible',
-              flexWrap: 'wrap',
+              minWidth: 0,
             }}>
+              <div ref={tabRailRef} className="ts-tabrail" role="tablist" aria-label="Catégories de leads" style={{
+                position: 'relative', display: 'flex', gap: 2, padding: 3, borderRadius: 12, minWidth: 0,
+                background: darkMode ? '#181818' : '#f4f2ee', overflowX: 'auto',
+              }}>
+              {tabThumb && (
+                <span aria-hidden="true" style={{
+                  position: 'absolute', top: 3, bottom: 3, left: 0, width: tabThumb.width, transform: `translateX(${tabThumb.left}px)`,
+                  borderRadius: 9, background: darkMode ? '#343434' : '#ffffff',
+                  boxShadow: darkMode ? 'none' : '0 1px 2px rgba(28,27,25,0.10), 0 0 0 1px rgba(28,27,25,0.03)',
+                  transition: tabThumb.ready ? 'transform 0.32s cubic-bezier(0.2,0.75,0.3,1), width 0.32s cubic-bezier(0.2,0.75,0.3,1)' : 'none',
+                  pointerEvents: 'none',
+                }} />
+              )}
               {CATEGORIES.filter(cat => cat.key !== 'r3' || calSettings?.r3_enabled === true).map((cat, idx) => {
                 const realIdx = CATEGORIES.indexOf(cat);
                 const isActive = realIdx === activeTab;
@@ -3150,40 +3467,39 @@ export default function TrackingSheet() {
                   <button
                     key={cat.key}
                     data-tab-key={cat.key}
+                    data-tab-active={isActive ? 'true' : undefined}
+                    role="tab"
+                    aria-selected={isActive}
                     onClick={() => handleTabChange(realIdx)}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      gap: '6px',
-                      padding: '7px 14px',
-                      borderRadius: 8,
-                      border: `1px solid ${isActive ? C.border : 'transparent'}`,
-                      background: isActive ? (darkMode ? 'rgba(255,255,255,0.06)' : '#ffffff') : 'transparent',
+                      alignItems: 'baseline',
+                      gap: 6,
+                      flexShrink: 0,
+                      padding: '7px 12px',
+                      borderRadius: 9,
+                      border: 'none',
+                      background: 'transparent',
                       color: isActive ? C.text : C.muted,
-                      fontSize: '12.5px',
-                      fontWeight: isActive ? 650 : 500,
+                      fontSize: 13,
+                      fontWeight: 500,
                       cursor: 'pointer',
-                      transition: 'all 0.2s ease',
+                      transition: 'color 0.2s ease',
                       whiteSpace: 'nowrap',
                       position: 'relative',
+                      zIndex: 1,
                       fontFamily: 'inherit',
                       letterSpacing: '-0.01em',
-                      boxShadow: isActive ? (darkMode ? 'none' : '0 1px 3px rgba(0,0,0,0.04)') : 'none',
                       animation: glowingTab === realIdx ? 'tabReceive 0.35s cubic-bezier(0.34,1.56,0.64,1) forwards' : 'none',
                     }}
-                    onMouseEnter={(e) => {
-                      if (!isActive) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.color = C.text; }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!isActive) { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }
-                    }}
+                    onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.color = C.text; }}
+                    onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.color = C.muted; }}
                   >
                     <span>{cat.label}</span>
                     <span data-tab-badge="" style={{
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                      minWidth: '18px', height: '18px', padding: '0 5px', borderRadius: '9px',
-                      fontSize: '10.5px', fontWeight: 700,
-                      background: `${cat.color}20`, color: cat.color,
+                      display: 'inline-block', fontSize: 11.5, fontWeight: 500, fontVariantNumeric: 'tabular-nums',
+                      color: isActive ? C.secondary : (darkMode ? '#5c5c5c' : '#b5aea4'),
+                      transition: 'color 0.2s ease',
                       animation: badgeBounce ? 'badgePop 0.3s ease both' : (glowingTab === idx ? 'badgeReceive 0.45s cubic-bezier(0.34,1.56,0.64,1) both' : 'none'),
                       fontFamily: 'inherit',
                     }}>
@@ -3192,6 +3508,29 @@ export default function TrackingSheet() {
                   </button>
                 );
               })}
+              </div>
+              {/* Qui regarde la feuille en ce moment : au bout des onglets, là où l'on travaille les leads (avant le 11/11/2026,
+                  une pastille flottait en bas de l'écran sans lien avec rien). */}
+              {presenceUsers.length > 0 && (
+                <div title={`${presenceUsers.length} en ligne sur cette feuille : ${presenceUsers.map(u => u.full_name || u.email).join(', ')}`}
+                  style={{ marginLeft: 'auto', flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ display: 'flex', alignItems: 'center' }}>
+                    {presenceUsers.slice(0, 3).map((u, i) => (
+                      <span key={u.email} style={{
+                        width: 24, height: 24, borderRadius: '50%', border: `2px solid ${C.bg}`, boxSizing: 'border-box',
+                        background: getCursorColor(u.email), display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 10, fontWeight: 500, color: '#fff', marginLeft: i > 0 ? -7 : 0,
+                      }}>
+                        {(u.full_name || u.email).charAt(0).toUpperCase()}
+                      </span>
+                    ))}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, color: C.muted, fontWeight: 500, whiteSpace: 'nowrap' }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
+                    {presenceUsers.length} en ligne
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -3262,7 +3601,7 @@ export default function TrackingSheet() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '28px 32px 48px', animation: 'tabFadeIn 0.3s ease-out both' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <span style={{ width: 10, height: 10, borderRadius: '50%', background: '#06b6d4', flexShrink: 0 }} />
-                <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Barrage répondeur commun</h2>
+                <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Barrage répondeur commun</h2>
               </div>
               <CommonVoicemailPool
                 leads={shown}
@@ -3278,7 +3617,7 @@ export default function TrackingSheet() {
         })()}
         {sidebarView === 'kpis' && !['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) && (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
               KPIs & Statistiques
             </h2>
             <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
@@ -3294,13 +3633,13 @@ export default function TrackingSheet() {
                 { label: 'Non pertinents', value: tabCounts.not_relevant || 0, color: '#f87171' },
               ].map(kpi => (
                 <div key={kpi.label} style={{
-                  background: darkMode ? '#16171e' : '#fff', borderRadius: 12,
+                  background: darkMode ? '#181818' : '#fff', borderRadius: 12,
                   border: `1px solid ${C.border}`, padding: '18px 20px',
                 }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
                     {kpi.label}
                   </div>
-                  <div style={{ fontSize: 28, fontWeight: 700, color: kpi.color, letterSpacing: '-0.02em' }}>
+                  <div style={{ fontSize: 28, fontWeight: 500, color: kpi.color, letterSpacing: '-0.02em' }}>
                     {kpi.value}
                   </div>
                 </div>
@@ -3329,7 +3668,7 @@ export default function TrackingSheet() {
           const MOCK_CAMPAIGNS = [];
           return (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+            <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
               Campagnes marketing
             </h2>
             <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
@@ -3379,7 +3718,7 @@ export default function TrackingSheet() {
                   <div style={{
                     position: 'absolute', top: 10, right: 10,
                     padding: '3px 10px', borderRadius: 20,
-                    fontSize: 10, fontWeight: 700,
+                    fontSize: 10, fontWeight: 500,
                     background: '#10b981', color: '#fff',
                     boxShadow: '0 2px 6px rgba(16,185,129,0.35)',
                   }}>
@@ -3396,7 +3735,7 @@ export default function TrackingSheet() {
                     borderTop: darkMode ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.4)',
                   }}>
                     <div style={{
-                      fontSize: 14, fontWeight: 700, color: darkMode ? '#eef0f6' : '#1e2330',
+                      fontSize: 14, fontWeight: 500, color: darkMode ? '#f2f2f2' : '#1c1b19',
                       letterSpacing: '-0.01em', lineHeight: 1.25,
                     }}>
                       {camp.niche}
@@ -3503,9 +3842,7 @@ export default function TrackingSheet() {
                     }}
                     onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.55)'; }}
                     onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(0,0,0,0.35)'; }}
-                  >
-                    ✕
-                  </button>
+                  ><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                   {/* Glass title overlay */}
                   <div style={{
                     position: 'absolute', left: 0, right: 0, bottom: 0,
@@ -3514,7 +3851,7 @@ export default function TrackingSheet() {
                     backdropFilter: 'blur(16px) saturate(1.4)', WebkitBackdropFilter: 'blur(16px) saturate(1.4)',
                     borderTop: darkMode ? '1px solid rgba(255,255,255,0.06)' : '1px solid rgba(255,255,255,0.4)',
                   }}>
-                    <div style={{ fontSize: 26, fontWeight: 700, color: darkMode ? '#eef0f6' : '#1e2330', letterSpacing: '-0.02em' }}>
+                    <div style={{ fontSize: 26, fontWeight: 500, color: darkMode ? '#f2f2f2' : '#1c1b19', letterSpacing: '-0.02em' }}>
                       Campagne — {camp.niche}
                     </div>
                     <div style={{ fontSize: 12, color: darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.4)', marginTop: 3 }}>
@@ -3537,7 +3874,7 @@ export default function TrackingSheet() {
                       marginBottom: 18,
                       opacity: 0, animation: `tabFadeIn 0.35s ease ${0.15 + idx * 0.05}s forwards`,
                     }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>
                         {row.label}
                       </div>
                       <div style={{ fontSize: 14, fontWeight: 500, color: C.text, lineHeight: 1.55 }}>
@@ -3567,7 +3904,7 @@ export default function TrackingSheet() {
               onQualify={isAdminView ? undefined : (ev) => openCalendarQualification(ev)}
               toolbarExtra={(
                 <button onClick={() => setShowVacationModal(true)}
-                  style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 600, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
+                  style={{ padding: '6px 12px', borderRadius: 8, border: `1px solid ${C.border}`, background: myUnavailability.length > 0 ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)') : 'transparent', color: C.text, cursor: 'pointer', fontSize: 12, fontWeight: 500, fontFamily: 'inherit', display: 'flex', alignItems: 'center', gap: 6 }}
                   title="Déclarer mes absences"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
@@ -3579,7 +3916,7 @@ export default function TrackingSheet() {
                     <line x1="14" y1="14" x2="10" y2="18" />
                   </svg>
                   <span>Mes absences</span>
-                  {myUnavailability.length > 0 && <span style={{ background: darkMode ? '#eef0f6' : '#1e2330', color: darkMode ? '#1e2330' : '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 700 }}>{myUnavailability.length}</span>}
+                  {myUnavailability.length > 0 && <span style={{ background: darkMode ? '#f2f2f2' : '#1c1b19', color: darkMode ? '#141414' : '#fff', borderRadius: 8, padding: '0 6px', fontSize: 10, fontWeight: 500 }}>{myUnavailability.length}</span>}
                 </button>
               )}
             />
@@ -3619,7 +3956,7 @@ export default function TrackingSheet() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 16, lineHeight: 1, flexShrink: 0 }}>{alert.icon === '✓' ? '✅' : '⚠️'}</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 650, color: isRead ? C.muted : C.text }}>{alert.title}</div>
+                  <div style={{ fontSize: 13, fontWeight: 500, color: isRead ? C.muted : C.text }}>{alert.title}</div>
                 </div>
                 {!isRead && (
                   <span style={{ width: 8, height: 8, borderRadius: '50%', background: alert.color, flexShrink: 0, boxShadow: `0 0 6px ${alert.color}50` }} />
@@ -3629,7 +3966,7 @@ export default function TrackingSheet() {
                 {alert.desc}
               </div>
               {!isRead && (
-                <div style={{ fontSize: 10, color: C.accent, marginTop: 8, paddingLeft: 26, fontWeight: 600 }}>
+                <div style={{ fontSize: 10, color: C.accent, marginTop: 8, paddingLeft: 26, fontWeight: 500 }}>
                   Cliquer pour marquer comme lu
                 </div>
               )}
@@ -3638,7 +3975,7 @@ export default function TrackingSheet() {
 
           return (
             <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both' }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 6px', letterSpacing: '-0.01em' }}>
                 Rappels et alertes
               </h2>
               <p style={{ fontSize: 13, color: C.muted, margin: '0 0 24px' }}>Rendez-vous du jour et alertes performance</p>
@@ -3648,7 +3985,7 @@ export default function TrackingSheet() {
                 {/* ══ NOUVELLES ══ */}
                 {hasNew && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: C.accent, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 7, height: 7, borderRadius: '50%', background: C.accent, animation: 'notifPulse 2s ease-in-out infinite' }} />
                       Nouvelles
                     </div>
@@ -3670,13 +4007,13 @@ export default function TrackingSheet() {
                           >
                             <div style={{ width: 9, height: 9, borderRadius: '50%', background: notif.color, flexShrink: 0, boxShadow: `0 0 8px ${notif.color}60`, animation: 'notifPulse 2s ease-in-out infinite' }} />
                             <div style={{ flex: 1, minWidth: 0 }}>
-                              <div style={{ fontSize: 13, fontWeight: 650, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{notif.full_name}</div>
+                              <div style={{ fontSize: 13, fontWeight: 500, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{notif.full_name}</div>
                               <div style={{ fontSize: 11, color: C.muted, marginTop: 1 }}>{notif.company || 'Entreprise non renseignée'}</div>
                             </div>
-                            <span style={{ padding: '3px 9px', borderRadius: 50, fontSize: 10.5, fontWeight: 650, background: `${notif.color}12`, color: notif.color, border: `1.5px solid ${notif.color}30`, flexShrink: 0 }}>
+                            <span style={{ padding: '3px 9px', borderRadius: 50, fontSize: 10.5, fontWeight: 500, background: `${notif.color}12`, color: notif.color, border: `1.5px solid ${notif.color}30`, flexShrink: 0 }}>
                               {notif.notifType === 'r1' ? 'R1' : 'R2'}
                             </span>
-                            {notif.time && <span style={{ fontSize: 12, fontWeight: 600, color: notif.color, flexShrink: 0 }}>{notif.time}</span>}
+                            {notif.time && <span style={{ fontSize: 12, fontWeight: 500, color: notif.color, flexShrink: 0 }}>{notif.time}</span>}
                           </div>
                         );
                       })}
@@ -3702,7 +4039,7 @@ export default function TrackingSheet() {
                   if (myInvitations.length === 0) return null;
                   return (
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                         </svg>
@@ -3724,7 +4061,7 @@ export default function TrackingSheet() {
                                 <span style={{ fontSize: 15 }}>📋</span>
                               </div>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 14, fontWeight: 650, color: C.text }}>Invitation à réaffecter</div>
+                                <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Invitation à réaffecter</div>
                                 <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
                                   Sheet de <strong>{inv.sheet_email}</strong>
                                   {inv.inviter_name && <> — invité par {inv.inviter_name}</>}
@@ -3735,7 +4072,7 @@ export default function TrackingSheet() {
                               <button onClick={() => {
                                 window.location.href = `/tracking-sheet?sheet_id=${encodeURIComponent(inv.sheet_email)}`;
                               }} style={{
-                                flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600,
+                                flex: 1, padding: '9px 0', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 500,
                                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
                                 background: darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)',
                                 color: C.secondary, transition: 'all 0.15s',
@@ -3750,7 +4087,7 @@ export default function TrackingSheet() {
                                   await fetchMyInvitations();
                                 } catch (e) { console.warn('Complete invitation failed:', e); }
                               }} style={{
-                                padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 600,
+                                padding: '9px 16px', borderRadius: 10, fontSize: 13, fontWeight: 500,
                                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
                                 border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
                                 transition: 'all 0.15s',
@@ -3769,7 +4106,7 @@ export default function TrackingSheet() {
                 {/* ══ HISTORIQUE ══ */}
                 {historyPerf.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 10 }}>
                       Historique
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -3806,18 +4143,18 @@ export default function TrackingSheet() {
           };
           const inputStyle = {
             width: '100%', padding: '10px 14px', borderRadius: 10,
-            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
+            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#faf9f7',
             color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
             transition: 'border-color 0.2s',
           };
           const textareaStyle = { ...inputStyle, minHeight: 200, resize: 'vertical', lineHeight: 1.5 };
-          const labelStyle = { fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' };
+          const labelStyle = { fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6, display: 'block' };
           return (
           <div style={{ flex: 1, padding: '32px 32px', overflowY: 'auto', animation: 'tabFadeIn 0.3s ease-out both',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
           }}>
             <div style={{ maxWidth: 1100 }}>
-              <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+              <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
                 Paramètres Calendar
               </h2>
               <p style={{ fontSize: 13, color: C.muted, margin: '0 0 28px' }}>
@@ -3835,7 +4172,7 @@ export default function TrackingSheet() {
                     padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
                   }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Google Calendar</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Google Calendar</div>
                       <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Créer automatiquement des événements pour les R1/R2</div>
                     </div>
                     <button onClick={async () => {
@@ -3844,7 +4181,7 @@ export default function TrackingSheet() {
                       try { await apiClient.put('/api/v1/tracking/calendar-settings', { calendar_enabled: newVal }); } catch {}
                     }} style={{
                       width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                      background: calSettings.calendar_enabled ? '#10b981' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                      background: calSettings.calendar_enabled ? (darkMode ? '#10b981' : '#2b2927') : (darkMode ? '#3a3a3a' : '#ddd8d0'),
                       position: 'relative', transition: 'background 0.2s',
                     }}>
                       <div style={{
@@ -3863,7 +4200,7 @@ export default function TrackingSheet() {
                     padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
                   }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Rendez-vous R3</div>
+                      <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Rendez-vous R3</div>
                       <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Activer les R3 (troisième rendez-vous de suivi)</div>
                     </div>
                     <button onClick={async () => {
@@ -3872,7 +4209,7 @@ export default function TrackingSheet() {
                       try { await apiClient.put('/api/v1/tracking/calendar-settings', { r3_enabled: newVal }); } catch {}
                     }} style={{
                       width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                      background: calSettings.r3_enabled ? '#8b5cf6' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                      background: calSettings.r3_enabled ? (darkMode ? '#8b5cf6' : '#2b2927') : (darkMode ? '#3a3a3a' : '#ddd8d0'),
                       position: 'relative', transition: 'background 0.2s',
                     }}>
                       <div style={{
@@ -3892,14 +4229,14 @@ export default function TrackingSheet() {
                     padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Premier rendez-vous</span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Premier rendez-vous</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       <div>
                         <label style={labelStyle}>Titre de l'événement</label>
                         <input value={calSettings.r1_title_template} onChange={(e) => updateField('r1_title_template', e.target.value)}
                           placeholder="OWNER – Pré-audit : échange initial ({name})" style={inputStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                          onFocus={(e) => e.currentTarget.style.borderColor = C.accent}
                           onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                         />
                       </div>
@@ -3907,7 +4244,7 @@ export default function TrackingSheet() {
                         <label style={labelStyle}>Description</label>
                         <textarea value={calSettings.r1_description_template} onChange={(e) => updateField('r1_description_template', e.target.value)}
                           placeholder="Réservé par&#10;{name}&#10;{email}&#10;{phone}" style={textareaStyle}
-                          onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                          onFocus={(e) => e.currentTarget.style.borderColor = C.accent}
                           onBlur={(e) => e.currentTarget.style.borderColor = C.border}
                         />
                       </div>
@@ -3916,10 +4253,10 @@ export default function TrackingSheet() {
                         <div style={{ display: 'flex', gap: 8 }}>
                           {[15, 30].map(d => (
                             <button key={d} onClick={() => updateField('r1_duration', d)} style={{
-                              padding: '8px 20px', borderRadius: 8, border: `1px solid ${calSettings.r1_duration === d ? '#3b82f6' : C.border}`,
+                              padding: '8px 20px', borderRadius: 8, border: `1px solid ${calSettings.r1_duration === d ? C.accent : C.border}`,
                               background: calSettings.r1_duration === d ? 'rgba(59,130,246,0.08)' : 'transparent',
-                              color: calSettings.r1_duration === d ? '#3b82f6' : C.secondary,
-                              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                              color: calSettings.r1_duration === d ? C.accent : C.secondary,
+                              fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                             }}>{d} min</button>
                           ))}
                         </div>
@@ -3932,7 +4269,7 @@ export default function TrackingSheet() {
                     padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
                   }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Audit</span>
+                      <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Audit</span>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                       <div>
@@ -3959,7 +4296,7 @@ export default function TrackingSheet() {
                               padding: '8px 20px', borderRadius: 8, border: `1px solid ${calSettings.r2_duration === d ? '#fb923c' : C.border}`,
                               background: calSettings.r2_duration === d ? 'rgba(251,146,60,0.08)' : 'transparent',
                               color: calSettings.r2_duration === d ? '#fb923c' : C.secondary,
-                              fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                              fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                             }}>{d} min</button>
                           ))}
                         </div>
@@ -3968,11 +4305,11 @@ export default function TrackingSheet() {
                   </div>
                   {/* Variables — third column */}
                   <div style={{ padding: '20px 16px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`, alignSelf: 'start' }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Variables</div>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 12 }}>Variables</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       {['{name}', '{email}', '{phone}'].map(v => (
                         <button key={v} onClick={() => { navigator.clipboard.writeText(v); setCopiedField('calvar-' + v); setTimeout(() => setCopiedField(null), 1500); }}
-                          style={{ fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 6, background: copiedField === 'calvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'calvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
+                          style={{ fontSize: 12, fontWeight: 500, padding: '4px 10px', borderRadius: 6, background: copiedField === 'calvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'calvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
                         >{copiedField === 'calvar-' + v ? 'Copié ✓' : v}</button>
                       ))}
                     </div>
@@ -3984,7 +4321,7 @@ export default function TrackingSheet() {
                       opacity: calSettings.calendar_enabled ? 1 : 0.4, pointerEvents: calSettings.calendar_enabled ? 'auto' : 'none',
                     }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Suivi R3</span>
+                        <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Suivi R3</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                         <div>
@@ -4009,7 +4346,7 @@ export default function TrackingSheet() {
                                 padding: '8px 20px', borderRadius: 8, border: `1px solid ${(calSettings.r3_duration || 15) === d ? '#8b5cf6' : C.border}`,
                                 background: (calSettings.r3_duration || 15) === d ? 'rgba(139,92,246,0.08)' : 'transparent',
                                 color: (calSettings.r3_duration || 15) === d ? '#8b5cf6' : C.secondary,
-                                fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
+                                fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                               }}>{d} min</button>
                             ))}
                           </div>
@@ -4024,7 +4361,7 @@ export default function TrackingSheet() {
                     padding: '12px 24px', borderRadius: 10, border: 'none',
                     background: calSettingsSaved ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
                     color: calSettingsSaved ? '#fff' : C.text,
-                    fontSize: 14, fontWeight: 600, cursor: calSettingsSaving ? 'wait' : 'pointer',
+                    fontSize: 14, fontWeight: 500, cursor: calSettingsSaving ? 'wait' : 'pointer',
                     fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-start',
                   }}
                     onMouseEnter={(e) => { if (!calSettingsSaved) { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.09)'; } }}
@@ -4033,7 +4370,7 @@ export default function TrackingSheet() {
 
                   {/* ═══ RELANCES EMAIL ═══ */}
                   <div style={{ marginTop: 32 }}>
-                    <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
+                    <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
                       Relances email
                     </h2>
                     <p style={{ fontSize: 13, color: C.muted, margin: '0 0 20px' }}>
@@ -4078,7 +4415,7 @@ export default function TrackingSheet() {
                             padding: '16px 20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}`,
                           }}>
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: C.text }}>Relances automatiques</div>
+                              <div style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Relances automatiques</div>
                               <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Envoyer des emails de relance après le R1 et avant le R2</div>
                             </div>
                             <button onClick={async () => {
@@ -4087,7 +4424,7 @@ export default function TrackingSheet() {
                               try { await apiClient.put('/api/v1/tracking/relance-settings', { relances_enabled: newVal }); } catch {}
                             }} style={{
                               width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
-                              background: relanceSettings.relances_enabled ? '#3b82f6' : (darkMode ? '#3a3b46' : '#d1d5db'),
+                              background: relanceSettings.relances_enabled ? (darkMode ? '#3b82f6' : '#2b2927') : (darkMode ? '#3a3a3a' : '#ddd8d0'),
                               position: 'relative', transition: 'background 0.2s',
                             }}>
                               <div style={{
@@ -4110,22 +4447,22 @@ export default function TrackingSheet() {
                             {/* Relance 1 */}
                             <div style={{ padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}` }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Relance 1</span>
-                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50, background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>Au placement du R2</span>
+                                <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Relance 1</span>
+                                <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 50, background: 'rgba(59,130,246,0.08)', color: '#3b82f6' }}>Au placement du R2</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                 <div>
                                   <label style={labelStyle}>Objet</label>
                                   <input value={relanceSettings.relance1_subject || ''} onChange={(e) => updateRelance('relance1_subject', e.target.value)}
                                     placeholder="OWNER - Préparation de votre Audit" style={inputStyle}
-                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = C.accent}
                                     onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
                                 </div>
                                 <div>
                                   <label style={labelStyle}>Corps de l'email</label>
                                   <textarea value={relanceSettings.relance1_body || ''} onChange={(e) => updateRelance('relance1_body', e.target.value)}
                                     placeholder="Bonjour {lead_name},&#10;&#10;Suite à notre échange..." style={textareaStyle}
-                                    onFocus={(e) => e.currentTarget.style.borderColor = '#3b82f6'}
+                                    onFocus={(e) => e.currentTarget.style.borderColor = C.accent}
                                     onBlur={(e) => e.currentTarget.style.borderColor = C.border} />
                                 </div>
                               </div>
@@ -4134,8 +4471,8 @@ export default function TrackingSheet() {
                             {/* Relance 2 */}
                             <div style={{ padding: '20px', borderRadius: 12, background: C.bg, border: `1px solid ${C.border}` }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                                <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Relance 2</span>
-                                <span style={{ fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50, background: 'rgba(251,146,60,0.08)', color: '#fb923c' }}>48h avant R2</span>
+                                <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>Relance 2</span>
+                                <span style={{ fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 50, background: 'rgba(251,146,60,0.08)', color: '#fb923c' }}>48h avant R2</span>
                               </div>
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                                 <div>
@@ -4158,11 +4495,11 @@ export default function TrackingSheet() {
 
                           {/* Variables info */}
                           <div style={{ padding: '14px 16px', borderRadius: 10, background: darkMode ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.015)', border: `1px solid ${C.border}` }}>
-                            <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, marginBottom: 6 }}>Variables disponibles</div>
+                            <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, marginBottom: 6 }}>Variables disponibles</div>
                             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                               {['{lead_name}', '{commercial_last_name}', '{commercial_email}', '{r2_date_formatted}', '{r2_time}', '{rdv_date}', '{rdv_time}'].map(v => (
                                 <button key={v} onClick={() => { navigator.clipboard.writeText(v); setCopiedField('relvar-' + v); setTimeout(() => setCopiedField(null), 1500); }}
-                                  style={{ fontSize: 12, fontWeight: 600, padding: '2px 8px', borderRadius: 6, background: copiedField === 'relvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'relvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
+                                  style={{ fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 6, background: copiedField === 'relvar-' + v ? 'rgba(16,185,129,0.12)' : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'), color: copiedField === 'relvar-' + v ? '#10b981' : C.accent, fontFamily: 'monospace', textAlign: 'center', border: 'none', cursor: 'pointer', transition: 'all 0.15s' }}
                                 >{copiedField === 'relvar-' + v ? 'Copié ✓' : v}</button>
                               ))}
                             </div>
@@ -4174,13 +4511,13 @@ export default function TrackingSheet() {
                               padding: '12px 16px', borderRadius: 10,
                               background: darkMode ? 'rgba(239,68,68,0.10)' : 'rgba(239,68,68,0.06)',
                               border: '1px solid rgba(239,68,68,0.30)',
-                              color: '#ef4444', fontSize: 13, fontWeight: 600,
+                              color: '#ef4444', fontSize: 13, fontWeight: 500,
                               display: 'flex', alignItems: 'center', gap: 10,
                               animation: 'toastSlideIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
                             }}>
                               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
                               <span style={{ flex: 1 }}>{relanceError}</span>
-                              <button onClick={() => setRelanceError(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}>✕</button>
+                              <button onClick={() => setRelanceError(null)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', fontSize: 16, padding: 0, lineHeight: 1 }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                             </div>
                           )}
 
@@ -4189,7 +4526,7 @@ export default function TrackingSheet() {
                             padding: '12px 24px', borderRadius: 10, border: 'none',
                             background: relanceSaved ? '#10b981' : (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)'),
                             color: relanceSaved ? '#fff' : C.text,
-                            fontSize: 14, fontWeight: 600, cursor: relanceSaving ? 'wait' : 'pointer',
+                            fontSize: 14, fontWeight: 500, cursor: relanceSaving ? 'wait' : 'pointer',
                             fontFamily: 'inherit', transition: 'all 0.2s', alignSelf: 'flex-start',
                           }}>{relanceSaving ? 'Enregistrement...' : relanceSaved ? 'Enregistré ✓' : 'Enregistrer les relances'}</button>
 
@@ -4233,29 +4570,29 @@ export default function TrackingSheet() {
                 background: isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff'),
                 transition: 'all 0.2s', cursor: 'pointer',
               }}
-                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#fafafb'}
+                onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : '#faf9f7'}
                 onMouseLeave={(e) => e.currentTarget.style.background = isKilled ? (darkMode ? 'rgba(239,68,68,0.04)' : 'rgba(239,68,68,0.02)') : (darkMode ? 'rgba(255,255,255,0.02)' : '#fff')}
                 onClick={() => enterSheet(sheet.email)}
               >
                 {sheet.avatar_url ? (
                   <img src={sheet.avatar_url} alt="" style={{ width: 38, height: 38, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, filter: isKilled ? 'grayscale(1)' : 'none', opacity: isKilled ? 0.5 : 1, transition: 'all 0.3s' }} />
                 ) : (
-                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: isKilled ? '#94a3b8' : '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0 }}>
+                  <div style={{ width: 38, height: 38, borderRadius: '50%', background: isKilled ? '#a8a39b' : (darkMode ? '#6366f1' : '#2b2927'), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 500, flexShrink: 0 }}>
                     {(sheet.full_name || '?').slice(0, 2).toUpperCase()}
                   </div>
                 )}
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13.5, fontWeight: 600, color: isKilled ? C.muted : C.text }}>{sheet.full_name || sheet.email}</span>
-                    {isCaptain && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted }}>CHEF</span>}
-                    {isKilled && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>KILLED</span>}
+                    <span style={{ fontSize: 13.5, fontWeight: 500, color: isKilled ? C.muted : C.text }}>{sheet.full_name || sheet.email}</span>
+                    {isCaptain && <span style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted }}>CHEF</span>}
+                    {isKilled && <span style={{ fontSize: 9, fontWeight: 500, padding: '1px 6px', borderRadius: 4, background: 'rgba(239,68,68,0.1)', color: '#ef4444' }}>KILLED</span>}
                   </div>
                   <div style={{ fontSize: 11, color: C.muted }}>{sheet.lead_count || 0} leads</div>
                 </div>
                 <div style={{ display: 'flex', gap: 4 }} onClick={(e) => e.stopPropagation()}>
                   {isAdmin && !isKilled && (
                     <button onClick={() => handleKillSheet(sheet.email)} style={{
-                      padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
+                      padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 500,
                       background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', color: '#ef4444',
                       cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                     }}
@@ -4266,7 +4603,7 @@ export default function TrackingSheet() {
                   {isAdmin && isKilled && (
                     <>
                       <button onClick={() => handleRestoreSheet(sheet.email)} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
+                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 500,
                         background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', color: '#10b981',
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                       }}
@@ -4277,7 +4614,7 @@ export default function TrackingSheet() {
                         setInviteModal({ sheetEmail: sheet.email }); setInviteSearch('');
                         if (assignableUsers.length === 0) { try { const r = await apiClient.getAssignableUsers(); setAssignableUsers(Array.isArray(r) ? r : (r?.users || [])); } catch {} }
                       }} style={{
-                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 600,
+                        padding: '5px 10px', borderRadius: 8, border: 'none', fontSize: 10.5, fontWeight: 500,
                         background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.06)', color: '#8b5cf6',
                         cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                       }}
@@ -4296,7 +4633,7 @@ export default function TrackingSheet() {
             <div style={{ padding: 24, overflowY: 'auto' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
                 <div>
-                  <h2 style={{ fontSize: 20, fontWeight: 700, color: C.text, margin: 0 }}>Tracking Sheets</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 500, color: C.text, margin: 0 }}>Tracking Sheets</h2>
                   <p style={{ fontSize: 13, color: C.muted, margin: '4px 0 0' }}>Équipes commerciales</p>
                 </div>
                 {isAdmin && (
@@ -4304,7 +4641,7 @@ export default function TrackingSheet() {
                     display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 10,
                     border: `1px solid ${ghostMode ? '#8b5cf6' : C.border}`,
                     background: ghostMode ? 'rgba(139,92,246,0.1)' : 'transparent',
-                    color: ghostMode ? '#8b5cf6' : C.muted, fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    color: ghostMode ? '#8b5cf6' : C.muted, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                   }}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                       {ghostMode ? <><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></> : <><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></>}
@@ -4328,7 +4665,7 @@ export default function TrackingSheet() {
                     <div key={team.id || team.label}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                         <div style={{ width: 10, height: 10, borderRadius: '50%', background: team.color || C.accent }} />
-                        <span style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{team.label}</span>
+                        <span style={{ fontSize: 14, fontWeight: 500, color: C.text }}>{team.label}</span>
                       </div>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
                         {renderSheetRow(findSheet(team.captain?.name, team.captain?.email), true)}
@@ -4351,7 +4688,7 @@ export default function TrackingSheet() {
                       <div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
                           <div style={{ width: 10, height: 10, borderRadius: '50%', background: C.muted }} />
-                          <span style={{ fontSize: 14, fontWeight: 700, color: C.muted }}>Autres</span>
+                          <span style={{ fontSize: 14, fontWeight: 500, color: C.muted }}>Autres</span>
                         </div>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 18 }}>
                           {orphans.map(s => renderSheetRow(s, false))}
@@ -4377,26 +4714,26 @@ export default function TrackingSheet() {
         {showFilters && (() => {
           const catKey = CATEGORIES[activeTab].key;
           const R1_TAGS = [
-            { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+            { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
             { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
-            { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
+            { value: 'to_reschedule', label: 'À reprogrammer', color: '#8b867e' },
             { value: 'done', label: 'R1 effectué', color: '#10b981' },
             { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
           ];
           const R2_TAGS = [
-            { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+            { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
             { value: 'done', label: 'R2 effectué', color: '#10b981' },
-            { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
-            { value: 'associe', label: 'Associé', color: '#6366f1' },
-            { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
-            { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
+            { value: 'comptable', label: 'Avis du comptable', color: '#8b5cf6' },
+            { value: 'associe', label: 'Avis d’un associé', color: '#6366f1' },
+            { value: 'reflexion', label: 'Temps de réflexion', color: '#3b82f6' },
+            { value: 'tresorerie', label: 'Trésorerie à prévoir', color: '#f59e0b' },
             { value: 'reporte', label: 'Reporté', color: '#fb923c' },
-            { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
+            { value: 'a_reporter', label: 'À reprogrammer', color: '#8b867e' },
             { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
             { value: 'annule', label: 'Annulé', color: '#ef4444' },
           ];
           const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done' && t.value !== 'no_show')];
-          const prioOptions = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
+          const prioOptions = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#a8a39b' }];
           const statusOptions = catKey === 'new'
             ? prioOptions
             : catKey === 'r1'
@@ -4408,8 +4745,8 @@ export default function TrackingSheet() {
                   : prioOptions;
 
           // Shared colors
-          const greyBorder = darkMode ? '#3a3b46' : '#d4d4d8';
-          const accentDot = darkMode ? '#818cf8' : '#6366f1';
+          const greyBorder = darkMode ? '#3a3a3a' : '#d4d4d8';
+          const accentDot = darkMode ? '#ededed' : '#2b2927';
           const optionsBg = darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)';
 
           // Toggle a filter section open/closed (stable state, survives re-renders)
@@ -4473,7 +4810,7 @@ export default function TrackingSheet() {
           return (
               <div style={{
                 width: 220, flexShrink: 0, alignSelf: 'flex-start',
-                background: darkMode ? C.bg : '#fafafb',
+                background: darkMode ? C.bg : '#faf9f7',
                 border: `1px solid ${C.border}`,
                 borderRadius: 10,
                 marginTop: 10, marginLeft: 4,
@@ -4484,13 +4821,13 @@ export default function TrackingSheet() {
 
               {/* ── "Filtres" title ── */}
               <div style={{ padding: '16px 16px 12px', borderBottom: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 15, fontWeight: 700, color: C.text }}>Filtres</span>
+                <span style={{ fontSize: 15, fontWeight: 500, color: C.text }}>Filtres</span>
               </div>
 
               {/* ═══ GROUP: PROPRIÉTÉS DU LEAD ═══ */}
               <div style={{ borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Propriétés du lead</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Propriétés du lead</span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
 
@@ -4543,7 +4880,7 @@ export default function TrackingSheet() {
               {/* ═══ GROUP: TRI & DATES ═══ */}
               <div style={{ borderBottom: `1px solid ${C.border}` }}>
                 <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tri & dates</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tri & dates</span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
 
@@ -4575,7 +4912,7 @@ export default function TrackingSheet() {
               {/* ═══ GROUP: AUTRES ═══ */}
               <div>
                 <div style={{ padding: '14px 14px 8px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Autres</span>
+                  <span style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Autres</span>
                   <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
                 </div>
 
@@ -4588,7 +4925,7 @@ export default function TrackingSheet() {
               {(filterTags.length > 0 || filterStatuses.length > 0 || filterOrigins.length > 0 || filterMobileOnly || filterCallTime.length > 0 || sortOrder !== 'newest') && (
                 <div style={{ padding: '12px 16px', borderTop: `1px solid ${C.border}` }}>
                   <button onClick={() => { setFilterTags([]); setFilterStatuses([]); setFilterOrigins([]); setFilterMobileOnly(false); setFilterCallTime([]); setSortOrder('newest'); }} style={{
-                    width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 600,
+                    width: '100%', padding: '8px 12px', borderRadius: 6, fontSize: 12, fontWeight: 500,
                     border: `1px solid ${C.accent}40`, background: `${C.accent}08`, color: C.accent,
                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                   }}
@@ -4630,7 +4967,7 @@ export default function TrackingSheet() {
               <h2 style={{
                 margin: 0,
                 fontSize: '18px',
-                fontWeight: 700,
+                fontWeight: 500,
                 color: C.text,
                 letterSpacing: '-0.01em',
               }}>
@@ -4736,26 +5073,26 @@ export default function TrackingSheet() {
               {(() => {
                 const catKey = CATEGORIES[activeTab].key;
                 const R1_TAGS = [
-                  { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+                  { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
                   { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
-                  { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
+                  { value: 'to_reschedule', label: 'À reprogrammer', color: '#8b867e' },
                   { value: 'done', label: 'R1 effectué', color: '#10b981' },
                   { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
                 ];
                 const R2_TAGS = [
-                  { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+                  { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
                   { value: 'done', label: 'R2 effectué', color: '#10b981' },
-                  { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
-                  { value: 'associe', label: 'Associé', color: '#6366f1' },
-                  { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
-                  { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
+                  { value: 'comptable', label: 'Avis du comptable', color: '#8b5cf6' },
+                  { value: 'associe', label: 'Avis d’un associé', color: '#6366f1' },
+                  { value: 'reflexion', label: 'Temps de réflexion', color: '#3b82f6' },
+                  { value: 'tresorerie', label: 'Trésorerie à prévoir', color: '#f59e0b' },
                   { value: 'reporte', label: 'Reporté', color: '#fb923c' },
-                  { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
+                  { value: 'a_reporter', label: 'À reprogrammer', color: '#8b867e' },
                   { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                   { value: 'annule', label: 'Annulé', color: '#ef4444' },
                 ];
                 const tagOptions = catKey === 'r1' ? R1_TAGS : catKey === 'r2' ? R2_TAGS : catKey === 'new' ? [] : [...R1_TAGS, ...R2_TAGS.filter(t => t.value !== 'done' && t.value !== 'no_show')];
-                const prioOpts = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#94a3b8' }];
+                const prioOpts = [{ value: 'prio_high', label: 'High', color: '#ef4444' }, { value: 'prio_medium', label: 'Medium', color: '#f59e0b' }, { value: 'prio_low', label: 'Low', color: '#a8a39b' }];
                 const statusOptions = catKey === 'new'
                   ? prioOpts
                   : catKey === 'r1'
@@ -4785,7 +5122,7 @@ export default function TrackingSheet() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z" /><line x1="7" y1="7" x2="7.01" y2="7" />
                         </svg>
-                        {filterTags.length > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: C.accent, color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{filterTags.length}</span>}
+                        {filterTags.length > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: C.accent, color: C.onAccent, fontSize: 9, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{filterTags.length}</span>}
                       </button>
                     )}
                     {hasStatusFilter && (
@@ -4801,7 +5138,7 @@ export default function TrackingSheet() {
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
                         </svg>
-                        {filterStatuses.length > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: C.accent, color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{filterStatuses.length}</span>}
+                        {filterStatuses.length > 0 && <span style={{ position: 'absolute', top: -4, right: -4, width: 14, height: 14, borderRadius: '50%', background: C.accent, color: C.onAccent, fontSize: 9, fontWeight: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{filterStatuses.length}</span>}
                       </button>
                     )}
                     <button onClick={() => setOpenFilter(prev => prev === 'sort' ? '' : 'sort')} style={{
@@ -4826,21 +5163,21 @@ export default function TrackingSheet() {
             {openFilter === 'tag' && (() => {
               const catKey = CATEGORIES[activeTab].key;
               const R1_TAGS = [
-                { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+                { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
                 { value: 'rescheduled', label: 'Reporté', color: '#3b82f6' },
-                { value: 'to_reschedule', label: 'À reporter', color: '#64748b' },
+                { value: 'to_reschedule', label: 'À reprogrammer', color: '#8b867e' },
                 { value: 'done', label: 'R1 effectué', color: '#10b981' },
                 { value: 'cancelled', label: 'Annulé', color: '#ef4444' },
               ];
               const R2_TAGS = [
-                { value: 'no_show', label: 'Lapin', color: '#f59e0b' },
+                { value: 'no_show', label: 'Client absent', color: '#f59e0b' },
                 { value: 'done', label: 'R2 effectué', color: '#10b981' },
-                { value: 'comptable', label: 'Comptable', color: '#8b5cf6' },
-                { value: 'associe', label: 'Associé', color: '#6366f1' },
-                { value: 'reflexion', label: 'Réflexion', color: '#3b82f6' },
-                { value: 'tresorerie', label: 'Trésorerie', color: '#f59e0b' },
+                { value: 'comptable', label: 'Avis du comptable', color: '#8b5cf6' },
+                { value: 'associe', label: 'Avis d’un associé', color: '#6366f1' },
+                { value: 'reflexion', label: 'Temps de réflexion', color: '#3b82f6' },
+                { value: 'tresorerie', label: 'Trésorerie à prévoir', color: '#f59e0b' },
                 { value: 'reporte', label: 'Reporté', color: '#fb923c' },
-                { value: 'a_reporter', label: 'À reporter', color: '#64748b' },
+                { value: 'a_reporter', label: 'À reprogrammer', color: '#8b867e' },
                 { value: 'pas_interesse', label: 'Pas intéressé', color: '#ef4444' },
                 { value: 'annule', label: 'Annulé', color: '#ef4444' },
               ];
@@ -4857,7 +5194,7 @@ export default function TrackingSheet() {
                       <button key={opt.value} onClick={() => setFilterTags(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value])} style={{
                         padding: '4px 10px', borderRadius: 50, border: `1.5px solid ${sel ? opt.color : 'transparent'}`,
                         background: sel ? `${opt.color}18` : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
-                        color: sel ? opt.color : C.text, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        color: sel ? opt.color : C.text, fontSize: 11, fontWeight: 500, cursor: 'pointer',
                         fontFamily: 'inherit', transition: 'all 0.12s',
                       }}>{opt.label}</button>
                     );
@@ -4865,7 +5202,7 @@ export default function TrackingSheet() {
                   {filterTags.length > 0 && (
                     <button onClick={() => setFilterTags([])} style={{
                       padding: '3px 8px', borderRadius: 50, border: 'none',
-                      background: 'none', color: C.muted, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      background: 'none', color: C.muted, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                       fontFamily: 'inherit', textDecoration: 'underline',
                     }}>Effacer</button>
                   )}
@@ -4877,12 +5214,12 @@ export default function TrackingSheet() {
             {openFilter === 'status' && (() => {
               const catKey = CATEGORIES[activeTab].key;
               const opts = catKey === 'new'
-                ? [{ value: 'contacted', label: 'Contacté', color: '#10b981' }, { value: 'not_contacted', label: 'Pas contacté', color: '#94a3b8' }]
+                ? [{ value: 'contacted', label: 'Contacté', color: '#10b981' }, { value: 'not_contacted', label: 'Pas contacté', color: '#a8a39b' }]
                 : catKey === 'r1'
-                  ? [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }]
+                  ? [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#a8a39b' }]
                   : catKey === 'r2'
                     ? [{ value: 'r2_scheduled', label: 'Planifiés', color: '#fb923c' }, { value: 'r2_pending', label: 'En attente', color: '#f59e0b' }, { value: 'r2_done', label: 'Effectués', color: '#10b981' }, { value: 'r2_cancelled', label: 'Annulés', color: '#ef4444' }]
-                    : [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#94a3b8' }, { value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#94a3b8' }];
+                    : [{ value: 'r1_done', label: 'R1 qualifié', color: '#3b82f6' }, { value: 'r1_not_done', label: 'R1 non qualifié', color: '#a8a39b' }, { value: 'r2_done', label: 'R2 qualifié', color: '#fb923c' }, { value: 'r2_not_done', label: 'R2 non qualifié', color: '#a8a39b' }];
               return (
                 <div style={{
                   display: 'flex', flexWrap: 'wrap', gap: 6, padding: '10px 12px',
@@ -4895,7 +5232,7 @@ export default function TrackingSheet() {
                       <button key={opt.value} onClick={() => setFilterStatuses(prev => prev.includes(opt.value) ? prev.filter(v => v !== opt.value) : [...prev, opt.value])} style={{
                         padding: '4px 10px', borderRadius: 50, border: `1.5px solid ${sel ? opt.color : 'transparent'}`,
                         background: sel ? `${opt.color}18` : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
-                        color: sel ? opt.color : C.text, fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                        color: sel ? opt.color : C.text, fontSize: 11, fontWeight: 500, cursor: 'pointer',
                         fontFamily: 'inherit', transition: 'all 0.12s',
                       }}>{opt.label}</button>
                     );
@@ -4903,7 +5240,7 @@ export default function TrackingSheet() {
                   {filterStatuses.length > 0 && (
                     <button onClick={() => setFilterStatuses([])} style={{
                       padding: '3px 8px', borderRadius: 50, border: 'none',
-                      background: 'none', color: C.muted, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      background: 'none', color: C.muted, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                       fontFamily: 'inherit', textDecoration: 'underline',
                     }}>Effacer</button>
                   )}
@@ -4927,7 +5264,7 @@ export default function TrackingSheet() {
                     <button key={opt.value} onClick={() => { setSortOrder(opt.value); setOpenFilter(''); }} style={{
                       flex: 1, padding: '6px 12px', borderRadius: 50, border: `1.5px solid ${sel ? C.accent : 'transparent'}`,
                       background: sel ? `${C.accent}15` : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)'),
-                      color: sel ? C.accent : C.text, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                      color: sel ? C.accent : C.text, fontSize: 11.5, fontWeight: 500, cursor: 'pointer',
                       fontFamily: 'inherit', transition: 'all 0.12s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
                     }}>
                       <span style={{ fontSize: 13 }}>{opt.icon}</span>{opt.label}
@@ -4941,10 +5278,10 @@ export default function TrackingSheet() {
             {(filterTags.length > 0 || filterStatuses.length > 0) && (
               <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', alignItems: 'center' }}>
                 {filterTags.map(tag => {
-                  const label = tag === 'no_show' ? 'Lapin' : tag === 'rescheduled' ? 'Reporté' : (tag === 'to_reschedule' || tag === 'a_reporter') ? 'À reporter' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
+                  const label = tag === 'no_show' ? 'Client absent' : tag === 'rescheduled' ? 'Reporté' : (tag === 'to_reschedule' || tag === 'a_reporter') ? 'À reprogrammer' : tag === 'done' ? 'Effectué' : tag === 'cancelled' ? 'Annulé' : tag === 'comptable' ? 'Comptable' : tag === 'associe' ? 'Associé' : tag === 'reflexion' ? 'Réflexion' : tag === 'tresorerie' ? 'Trésorerie' : tag === 'reporte' ? 'Reporté R2' : tag === 'pas_interesse' ? 'Pas intéressé' : tag === 'annule' ? 'Annulé R2' : tag;
                   return (
                     <span key={`tag-${tag}`} onClick={() => setFilterTags(prev => prev.filter(v => v !== tag))} style={{
-                      padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                       background: `${C.accent}12`, color: C.accent, border: `1px solid ${C.accent}30`,
                       display: 'inline-flex', alignItems: 'center', gap: 3,
                     }}>
@@ -4956,7 +5293,7 @@ export default function TrackingSheet() {
                   const label = s === 'r1_done' ? 'R1 qualifié' : s === 'r1_not_done' ? 'R1 non qualifié' : s === 'r2_done' ? 'R2 qualifié' : s === 'r2_not_done' ? 'R2 non qualifié' : s === 'contacted' ? 'Contacté' : s === 'not_contacted' ? 'Pas contacté' : s;
                   return (
                     <span key={`st-${s}`} onClick={() => setFilterStatuses(prev => prev.filter(v => v !== s))} style={{
-                      padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                      padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                       background: `${C.accent}12`, color: C.accent, border: `1px solid ${C.accent}30`,
                       display: 'inline-flex', alignItems: 'center', gap: 3,
                     }}>
@@ -4966,7 +5303,7 @@ export default function TrackingSheet() {
                 })}
                 {(filterTags.length + filterStatuses.length > 1) && (
                   <span onClick={() => { setFilterTags([]); setFilterStatuses([]); }} style={{
-                    padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, cursor: 'pointer',
+                    padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 500, cursor: 'pointer',
                     color: C.muted, textDecoration: 'underline',
                   }}>
                     Tout effacer
@@ -5120,14 +5457,14 @@ export default function TrackingSheet() {
                       position: 'relative',
                       borderRadius: '14px',
                       overflow: 'hidden',
-                      border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isRemoteFocused ? focusColor : isSelected ? (C.accent + '50') : (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)')}`,
+                      border: `1px solid ${highlightedLeadId === String(lead.id) ? '#f59e0b' : isRemoteFocused ? focusColor : isSelected ? (darkMode ? C.accent + '50' : '#cfc9c0') : (darkMode ? 'rgba(255,255,255,0.06)' : '#ece9e4')}`,
                       background: highlightedLeadId === String(lead.id)
                         ? (darkMode ? 'rgba(245,158,11,0.12)' : 'rgba(245,158,11,0.08)')
                         : isRemoteFocused
                         ? `${focusColor}15`
                         : isSelected
-                        ? (darkMode ? `${C.accent}12` : `${C.accent}08`)
-                        : (darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)'),
+                        ? (darkMode ? `${C.accent}12` : '#f4f2ee')
+                        : (darkMode ? 'rgba(255,255,255,0.04)' : '#faf9f7'),
                       boxShadow: highlightedLeadId === String(lead.id)
                         ? '0 0 0 2px rgba(245,158,11,0.3), 0 4px 12px rgba(245,158,11,0.15)'
                         : isRemoteFocused
@@ -5144,14 +5481,14 @@ export default function TrackingSheet() {
                     }}
                     onMouseEnter={(e) => {
                       if (!isExiting && !isSelected) {
-                        e.currentTarget.style.borderColor = darkMode ? 'rgba(124,138,219,0.3)' : 'rgba(91,106,191,0.25)';
-                        e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)';
+                        e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.3)' : '#ddd8d0';
+                        e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : '#f4f2ee';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!isSelected) {
-                        e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)';
-                        e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.025)';
+                        e.currentTarget.style.borderColor = darkMode ? 'rgba(255,255,255,0.06)' : '#ece9e4';
+                        e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.04)' : '#faf9f7';
                       }
                     }}
                     onClick={() => {
@@ -5180,13 +5517,24 @@ export default function TrackingSheet() {
                           objectFit: 'contain',
                           pointerEvents: 'auto',
                           zIndex: 2,
-                          filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.12))',
+                          filter: darkMode ? `${imgDark} drop-shadow(0 1px 3px rgba(0,0,0,0.4))` : 'drop-shadow(0 1px 3px rgba(0,0,0,0.12))',
                           transition: 'transform 0.2s ease',
-                          cursor: 'default',
+                          cursor: 'pointer',
                           ...(noteJustSaved === lead.id ? { animation: 'noteStickIn 0.6s cubic-bezier(0.34,1.56,0.64,1) both' } : {}),
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.08)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                        // Le commentaire à un clic depuis la ligne (11/11/2026) : sur un lead du parcours guidé, la note ouvre
+                        // directement la fenêtre de commentaire ; sinon le clic ouvre la fiche, où la note se lit et se modifie.
+                        title="Ouvrir le commentaire"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          if (isAdminView || !isGuidedLead(lead)) return;
+                          e.stopPropagation();
+                          setNotesError(null);
+                          setEditingNotes(prev => ({ ...prev, [lead.id]: prev[lead.id] ?? lead.notes ?? '' }));
+                          setCommentLeadId(lead.id);
+                        }}
                       />
                     )}
 
@@ -5212,29 +5560,39 @@ export default function TrackingSheet() {
                       {/* Name */}
                       <span style={{
                         fontSize: '14px',
-                        fontWeight: 600,
+                        fontWeight: 500,
                         color: isSelected ? C.accent : C.text,
                         whiteSpace: 'nowrap',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         minWidth: '60px',
-                        flexShrink: 1,
+                        maxWidth: 240,
+                        flexShrink: 0,
                         letterSpacing: '-0.01em',
                         transition: 'color 0.2s ease',
                       }}>
                         {lead.full_name}
                       </span>
+                      {/* Ligne allégée (dev 11/11/2026) : nom, société, origine, téléphone ; effectif et secteur se lisent dans la
+                          fiche de droite, la date perd son année, le SMS reçu n'est plus qu'une pastille à compteur. */}
+                      {lead.company_name && (
+                        <span style={{ fontSize: 12.5, color: C.muted, minWidth: 0, flexShrink: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {lead.company_name}
+                        </span>
+                      )}
 
                       {/* Origin badge */}
                       <span style={{
                         display: 'inline-flex', alignItems: 'center',
                         padding: '2px 8px', borderRadius: '50px',
-                        fontSize: '10px', fontWeight: 600,
+                        fontSize: '10px', fontWeight: 500,
                         background: origin.bg, color: origin.text,
                         flexShrink: 0,
                       }}>
                         {originDisplay(lead.origin, lead.cc_sector)}
                       </span>
+                      {/* Lead reçu d'un collègue : la mention, discrète. */}
+                      <TransferTag lead={lead} darkMode={darkMode} compact />
 
                       {/* Compact info pills */}
                       <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
@@ -5255,34 +5613,9 @@ export default function TrackingSheet() {
                           </svg>
                         )}
                         {copiedField === `phone-card-${lead.id}` ? (
-                          <span style={{ fontSize: 10, fontWeight: 700, color: '#10b981', fontFamily: 'inherit', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
+                          <span style={{ fontSize: 10, fontWeight: 500, color: '#10b981', fontFamily: 'inherit', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
                         ) : lead.phone}
                       </span>
-                      {lead.headcount && (
-                        <>
-                          <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                          <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
-                            <span style={{ fontWeight: 600, color: C.text }}>{lead.headcount}</span> sal.
-                          </span>
-                        </>
-                      )}
-                      {lead.company_name && (
-                        <>
-                          <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                          <span style={{ fontSize: '11px', color: C.secondary, fontWeight: 500, flexShrink: 0, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {lead.company_name}
-                          </span>
-                        </>
-                      )}
-                      {lead.sector && (
-                        <>
-                          <span style={{ width: '1px', height: '14px', background: C.border, flexShrink: 0 }} />
-                          <span style={{ fontSize: '11px', fontWeight: 600, color: C.accent, flexShrink: 0 }}>
-                            {lead.sector}
-                          </span>
-                        </>
-                      )}
-
                       {/* Google Meet link */}
                       {(lead.r1_meet_link || lead.r2_meet_link) && (
                         <>
@@ -5302,11 +5635,6 @@ export default function TrackingSheet() {
                         </>
                       )}
 
-                      {/* SMS reçu indicator */}
-                      {lead.sms_count > 0 && (
-                        <img src={smsRecuIcon} alt="SMS reçu" title={`${lead.sms_count} SMS envoyé${lead.sms_count > 1 ? 's' : ''}`} style={{ width: 72, height: 72, objectFit: 'contain', flexShrink: 0, marginLeft: 2, marginTop: -24, marginBottom: -24 }} />
-                      )}
-
                       {/* Spacer */}
                       <div style={{ flex: 1 }} />
 
@@ -5314,9 +5642,9 @@ export default function TrackingSheet() {
                       {lead.sms_count > 0 && (
                         <span title={`${lead.sms_count} SMS envoyé${lead.sms_count > 1 ? 's' : ''}`} style={{
                           display: 'inline-flex', alignItems: 'center', gap: 3,
-                          padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 650, flexShrink: 0,
-                          background: darkMode ? 'rgba(16,185,129,0.15)' : 'rgba(16,185,129,0.08)',
-                          color: '#10b981', border: `1px solid rgba(16,185,129,0.2)`,
+                          padding: '2px 7px', borderRadius: 7, fontSize: 10.5, fontWeight: 500, flexShrink: 0,
+                          background: darkMode ? 'rgba(16,185,129,0.15)' : '#e2f6ea',
+                          color: darkMode ? '#10b981' : '#0b7a4b', border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : '#c3ebd3'}`,
                         }}>
                           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                           {lead.sms_count}
@@ -5327,67 +5655,34 @@ export default function TrackingSheet() {
                       {lead.from_common_pool && (
                         <span title="Récupéré depuis le pool des répondeurs communs" style={{
                           display: 'inline-flex', alignItems: 'center', flexShrink: 0,
-                          padding: '2px 9px', borderRadius: 50, fontSize: 10, fontWeight: 700,
+                          padding: '2px 9px', borderRadius: 50, fontSize: 10, fontWeight: 500,
                           background: darkMode ? 'rgba(6,182,212,0.16)' : 'rgba(6,182,212,0.1)',
                           color: '#0891b2', border: '1px solid rgba(6,182,212,0.25)',
                         }}>issu des répondeurs</span>
                       )}
 
-                      {/* R1 qualification badge */}
-                      {activeCat.key === 'r1' && lead.r1_result && (() => {
-                        const R1_BADGES = {
-                          no_show:     { icon: 'rabbit', label: 'Lapin',   color: '#f59e0b' },
-                          rescheduled: { icon: '↻',  label: 'Reporté',     color: '#3b82f6' },
-                          to_reschedule: { icon: '↻',  label: 'À reporter',  color: '#64748b' },
-                          done:        { icon: '✓',  label: 'R1 effectué', color: '#10b981' },
-                          cancelled:   { icon: '✕',  label: 'Annulé',      color: '#ef4444' },
+                      {/* Résultat du rendez-vous : une étiquette pastel à point, aux mots des fenêtres de qualification, R3 compris
+                          (audit 11/11/2026 : plus d'emoji ni de pilule vive, et le même vocabulaire que la fenêtre). */}
+                      {['r1', 'r2', 'r3'].includes(activeCat.key) && lead[`${activeCat.key}_result`] && (() => {
+                        const stage = activeCat.key.toUpperCase();
+                        const RESULT_TAGS = {
+                          done: ['vert', `${stage} effectué`], no_show: ['jaune', 'Client absent'],
+                          rescheduled: ['peche', 'Reporté'], reporte: ['peche', 'Reporté'], to_reschedule: ['beige', 'À reprogrammer'], a_reporter: ['beige', 'À reprogrammer'],
+                          cancelled: ['rouge', 'Annulé'], annule: ['rouge', 'Annulé'], pas_interesse: ['rouge', 'Pas intéressé'],
+                          comptable: ['bleu', 'Avis du comptable'], associe: ['bleu', 'Avis d’un associé'], reflexion: ['bleu', 'Temps de réflexion'],
+                          relire_contrat: ['bleu', 'Relire le contrat'], pas_decision_jour: ['beige', 'Décision en attente'], tresorerie: ['jaune', 'Trésorerie à prévoir'],
                         };
-                        const badge = R1_BADGES[lead.r1_result];
-                        if (!badge) return null;
+                        const tag = RESULT_TAGS[lead[`${activeCat.key}_result`]];
+                        if (!tag) return null;
+                        const tone = (darkMode
+                          ? { vert: ['rgba(16,185,129,.14)', '#7cc49b', 'rgba(16,185,129,.25)'], rouge: ['rgba(239,68,68,.14)', '#f3a6a3', 'rgba(239,68,68,.26)'], jaune: ['rgba(234,179,8,.14)', '#e3c76a', 'rgba(234,179,8,.26)'],
+                              peche: ['rgba(251,146,60,.14)', '#e8a877', 'rgba(251,146,60,.26)'], bleu: ['rgba(59,130,246,.14)', '#8fb8ee', 'rgba(59,130,246,.26)'], beige: ['#262626', '#a3a3a3', '#3a3a3a'] }
+                          : { vert: ['#e2f6ea', '#0b7a4b', '#c3ebd3'], rouge: ['#fde6e6', '#c5221f', '#f6caca'], jaune: ['#fbf1c2', '#7a5a05', '#f0e09a'],
+                              peche: ['#fde9da', '#c2500e', '#f8d4ba'], bleu: ['#e4f0fd', '#1b6fd0', '#c9e0fa'], beige: ['#f1eee9', '#4a4540', '#e3ded6'] })[tag[0]];
                         return (
-                          <span title={badge.label} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 0,
-                            padding: '3px 10px', borderRadius: 50, fontSize: 11.5, fontWeight: 650, flexShrink: 0,
-                            background: `${badge.color}${darkMode ? '22' : '12'}`, color: badge.color,
-                            border: `2px solid ${badge.color}40`,
-                          }}>
-                            {badge.icon === 'rabbit' ? (
-                              <span style={{ width: 20, height: 20, display: 'inline-block', flexShrink: 0, position: 'relative', top: 0.5, backgroundColor: badge.color, WebkitMaskImage: `url(${rabbitIcon})`, WebkitMaskSize: 'contain', WebkitMaskRepeat: 'no-repeat', WebkitMaskPosition: 'center', maskImage: `url(${rabbitIcon})`, maskSize: 'contain', maskRepeat: 'no-repeat', maskPosition: 'center' }} />
-                            ) : (
-                              <span style={{ fontSize: 13, lineHeight: 1 }}>{badge.icon}</span>
-                            )}
-                            {badge.label}
-                          </span>
-                        );
-                      })()}
-
-                      {/* R2 qualification badge */}
-                      {activeCat.key === 'r2' && lead.r2_result && (() => {
-                        const R2_BADGES = {
-                          done:            { icon: '✓',  label: 'R2 effectué',  color: '#10b981' },
-                          comptable:       { icon: '🧮', label: 'Comptable',     color: '#8b5cf6' },
-                          associe:         { icon: '🤝', label: 'Associé',       color: '#6366f1' },
-                          reflexion:       { icon: '💭', label: 'Réflexion',     color: '#3b82f6' },
-                          relire_contrat:  { icon: '📄', label: 'Relire contrat', color: '#0ea5e9' },
-                          pas_decision_jour: { icon: '⏸', label: 'Pas de décision', color: '#94a3b8' },
-                          tresorerie:      { icon: '💰', label: 'Trésorerie',    color: '#f59e0b' },
-                          no_show:         { icon: '🐇', label: 'Lapin',         color: '#f59e0b' },
-                          reporte:         { icon: '↻',  label: 'Reporté',       color: '#fb923c' },
-                          a_reporter:      { icon: '↻',  label: 'À reporter',    color: '#64748b' },
-                          pas_interesse:   { icon: '✕',  label: 'Pas intéressé', color: '#ef4444' },
-                          annule:          { icon: '🚫', label: 'Annulé',        color: '#ef4444' },
-                        };
-                        const badge = R2_BADGES[lead.r2_result];
-                        if (!badge) return null;
-                        return (
-                          <span title={badge.label} style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '3px 10px', borderRadius: 50, fontSize: 11.5, fontWeight: 650, flexShrink: 0,
-                            background: `${badge.color}${darkMode ? '22' : '12'}`, color: badge.color,
-                            border: `2px solid ${badge.color}40`,
-                          }}>
-                            <span style={{ fontSize: 13, lineHeight: 1 }}>{badge.icon}</span>
-                            {badge.label}
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, flexShrink: 0, padding: '2px 8px', borderRadius: 7, fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap',
+                            background: tone[0], color: tone[1], border: `1px solid ${tone[2]}` }}>
+                            <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />{tag[1]}
                           </span>
                         );
                       })()}
@@ -5405,7 +5700,7 @@ export default function TrackingSheet() {
                         return (
                           <span title={`Premier appel : ${d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 500, flexShrink: 0,
                             background: darkMode ? 'rgba(99,102,241,0.12)' : 'rgba(99,102,241,0.06)',
                             color: '#6366f1',
                           }}>
@@ -5427,7 +5722,7 @@ export default function TrackingSheet() {
                         return (
                           <span title={`Dernier appel : ${d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' })} à ${hh}h${mi}`} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 4,
-                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 600, flexShrink: 0,
+                            padding: '2px 8px', borderRadius: 50, fontSize: 10, fontWeight: 500, flexShrink: 0,
                             background: darkMode ? 'rgba(20,184,166,0.14)' : 'rgba(20,184,166,0.08)',
                             color: '#14b8a6',
                           }}>
@@ -5500,7 +5795,7 @@ export default function TrackingSheet() {
                         return (
                           <span title={tooltipParts.join(' • ')} style={{
                             display: 'inline-flex', alignItems: 'center', gap: 5,
-                            padding: '3px 10px', borderRadius: 50, fontSize: 10.5, fontWeight: 700, flexShrink: 0,
+                            padding: '3px 10px', borderRadius: 50, fontSize: 10.5, fontWeight: 500, flexShrink: 0,
                             background: darkMode ? 'rgba(245,158,11,0.20)' : 'rgba(245,158,11,0.13)',
                             color: '#d97706',
                             border: `1.5px solid ${darkMode ? 'rgba(245,158,11,0.45)' : 'rgba(245,158,11,0.35)'}`,
@@ -5516,29 +5811,22 @@ export default function TrackingSheet() {
                         );
                       })()}
 
-                      {/* Right side indicators */}
-                      {lead.notes && (
-                        <span style={{ fontSize: '11px', color: C.muted, flexShrink: 0 }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ verticalAlign: '-1px' }}>
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-                          </svg>
-                        </span>
-                      )}
+                      {/* Right side indicators (la note a déjà son papier collé sur la ligne) */}
                       {(lead.r1 || lead.r2) && (
                         <span style={{
-                          fontSize: '10px', fontWeight: 600,
-                          padding: '2px 8px', borderRadius: '4px',
+                          fontSize: '10px', fontWeight: 500,
+                          padding: '2px 7px', borderRadius: 7,
                           background: lead.r2 ? (darkMode ? 'rgba(251,146,60,0.12)' : 'rgba(251,146,60,0.08)') : (darkMode ? 'rgba(59,130,246,0.12)' : 'rgba(59,130,246,0.08)'),
                           color: lead.r2 ? '#fb923c' : '#3b82f6',
                           flexShrink: 0, whiteSpace: 'nowrap',
                         }}>
-                          {lead.r2 ? 'R2' : 'R1'} {formatDate(lead.r2 || lead.r1)}
+                          {lead.r2 ? 'R2' : 'R1'} {String(formatDate(lead.r2 || lead.r1) || '').replace(/ \d{4}$/, '')}
                         </span>
                       )}
                       <span style={{
-                        fontSize: '10px', color: C.muted, flexShrink: 0, whiteSpace: 'nowrap',
-                      }}>
-                        {formatDate(lead.created_at)}
+                        fontSize: '11px', color: C.muted, flexShrink: 0, whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums',
+                      }} title={formatDate(lead.created_at)}>
+                        {String(formatDate(lead.created_at) || '').replace(/ \d{4}$/, '')}
                       </span>
 
                       {/* Selection chevron */}
@@ -5618,9 +5906,9 @@ export default function TrackingSheet() {
                           const isCollapsed = isCollapsible && !isExpanded;
                           return (
                             <div key={grp.key} style={{
-                              border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                              border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#e3ded6'}`,
                               borderRadius: 14,
-                              background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                              background: darkMode ? 'rgba(255,255,255,0.04)' : '#faf9f7',
                               padding: isCollapsed ? '14px 10px' : '14px 10px 10px',
                               marginBottom: 8,
                               cursor: isCollapsible ? 'pointer' : undefined,
@@ -5633,9 +5921,9 @@ export default function TrackingSheet() {
                                   padding: grp.key === 'completed' ? '4px 4px 4px 14px' : '4px 14px', borderRadius: 50,
                                   border: `1.5px solid ${grp.color}35`,
                                   background: `${grp.color}10`,
-                                  fontSize: 12.5, fontWeight: 600, color: grp.color,
+                                  fontSize: 12.5, fontWeight: 500, color: grp.color,
                                 }}>{grp.label}{grp.key === 'completed' && <span style={{ width: 28, height: 28, overflow: 'hidden', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginLeft: -1 }}><img src={completedIcon} alt="" style={{ width: 84, height: 84 }} /></span>}</span>
-                                <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{grp.leads.length}</span>
+                                <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>{grp.leads.length}</span>
                                 <div style={{ flex: 1 }} />
                                 {grp.canBulkMove && (
                                   <button onClick={(e) => {
@@ -5646,7 +5934,7 @@ export default function TrackingSheet() {
                                       apiClient.patch(`/api/v1/tracking/leads/${l.id}`, { notes: (l.notes ? l.notes + '\n' : '') + "N'a jamais répondu" }).catch(() => {});
                                     });
                                   }} style={{
-                                    padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 600,
+                                    padding: '3px 8px', borderRadius: 6, border: 'none', fontSize: 10, fontWeight: 500,
                                     background: 'rgba(239,68,68,0.08)', color: '#ef4444',
                                     cursor: 'pointer', fontFamily: 'inherit', transition: 'all 0.15s',
                                   }}
@@ -5715,15 +6003,15 @@ export default function TrackingSheet() {
                       const label = g.nodate ? 'Sans date' : `${MONTHS_FR[g.m]} ${g.y}`;
                       return (
                         <div key={g.key} style={{
-                          border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                          border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#e3ded6'}`,
                           borderRadius: 14,
-                          background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                          background: darkMode ? 'rgba(255,255,255,0.04)' : '#faf9f7',
                           padding: isOpen ? '14px 10px 10px' : '14px 10px',
                           marginBottom: 8, cursor: 'pointer',
                         }} onClick={() => setSignedMonthOpen((prev) => ({ ...prev, [g.key]: !isOpen }))}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: isOpen ? 10 : 0, padding: '0 6px' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, border: `1.5px solid ${activeCat.color}35`, background: `${activeCat.color}10`, color: activeCat.color, textTransform: 'capitalize' }}>{label}</span>
-                            <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{g.leads.length}</span>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 500, border: `1.5px solid ${activeCat.color}35`, background: `${activeCat.color}10`, color: activeCat.color, textTransform: 'capitalize' }}>{label}</span>
+                            <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>{g.leads.length}</span>
                             <div style={{ flex: 1 }} />
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.25s ease', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}><path d="m6 9 6 6 6-6" /></svg>
                           </div>
@@ -5752,15 +6040,15 @@ export default function TrackingSheet() {
                         {toProcess.map((lead, i) => renderLeadCard(lead, i))}
                         {given.length > 0 && (
                           <div style={{
-                            border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#dfe1e6'}`,
+                            border: `1.5px solid ${darkMode ? 'rgba(255,255,255,0.06)' : '#e3ded6'}`,
                             borderRadius: 14,
-                            background: darkMode ? 'rgba(255,255,255,0.04)' : '#fafafb',
+                            background: darkMode ? 'rgba(255,255,255,0.04)' : '#faf9f7',
                             padding: givenLeadsOpen ? '14px 10px 10px' : '14px 10px',
                             marginTop: 8, marginBottom: 8, cursor: 'pointer',
                           }} onClick={() => setGivenLeadsOpen((o) => !o)}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: givenLeadsOpen ? 10 : 0, padding: '0 6px' }}>
-                              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 700, border: `1.5px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f1f3', color: C.muted }}>Donnés</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: C.muted }}>{given.length}</span>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', padding: '3px 12px', borderRadius: 20, fontSize: 12.5, fontWeight: 500, border: `1.5px solid ${C.border}`, background: darkMode ? 'rgba(255,255,255,0.05)' : '#f0f1f3', color: C.muted }}>Donnés</span>
+                              <span style={{ fontSize: 13, fontWeight: 500, color: C.muted }}>{given.length}</span>
                               <div style={{ flex: 1 }} />
                               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ transition: 'transform 0.25s ease', transform: givenLeadsOpen ? 'rotate(180deg)' : 'rotate(0deg)', opacity: 0.5 }}><path d="m6 9 6 6 6-6" /></svg>
                             </div>
@@ -5794,9 +6082,10 @@ export default function TrackingSheet() {
           // La description d'un rappel daté (onglets « À rappeler » et « Répondeurs ») est une note : elle va dans la carte « Note », pas dans l'en-tête.
           const recallText = (activeCat.key === 'callback' || activeCat.key === 'voicemail') ? recallNote(lead) : '';
           const notesShown = !!lead.notes && (isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id));
+          const leadTab = panelTab.leadId === lead.id ? panelTab.tab : 'infos';
           const selectStyle = {
             padding: '7px 28px 7px 12px', borderRadius: '10px', border: `1px solid ${C.border}`,
-            background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: '13px', fontWeight: 500, cursor: 'pointer',
+            background: darkMode ? '#181818' : '#fff', color: C.text, fontSize: '13px', fontWeight: 500, cursor: 'pointer',
             appearance: 'none', WebkitAppearance: 'none', fontFamily: 'inherit', outline: 'none', width: '100%',
             backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
             backgroundRepeat: 'no-repeat', backgroundPosition: 'right 10px center',
@@ -5806,14 +6095,12 @@ export default function TrackingSheet() {
             key={`detail-${lead.id}`}
             className="pc-scroll"
             style={{
-              width: 380,
+              width: '100%',
+              boxSizing: 'border-box',
               overflowY: 'auto',
               overflowX: 'hidden',
               animation: 'detailSlideIn 0.4s cubic-bezier(0.4,0,0.2,1) both',
-              background: darkMode ? C.bg : '#fafafb',
-              borderRadius: 8,
-              border: `1px solid ${C.border}`,
-              boxShadow: C.shadow,
+              background: C.bg,
               height: '100%',
               maxHeight: 'calc(100vh - 120px)',
             }}
@@ -5861,13 +6148,13 @@ export default function TrackingSheet() {
                    poussée à droite (demande dev 02/09). L'image couvre les 3 lignes. ─── */}
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
               <img src={leadAvatar(lead.full_name, lead.id, lead.origin, lead.campaign_name)} alt="" width={64} height={64}
-                style={{ width: 64, height: 64, borderRadius: 16, flexShrink: 0, objectFit: 'cover', marginTop: 4 }} />
+                style={{ width: 64, height: 64, borderRadius: 16, flexShrink: 0, objectFit: 'cover', marginTop: 4, filter: imgDark }} />
               <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', flexDirection: 'column', marginBottom: '12px' }}>
                 {/* Origin badge above name — rendu aussi pendant l'édition du nom,
                     sinon le bloc remonte d'une ligne (retour dev 02/09). */}
                 <span style={{
-                  padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 600,
+                  padding: '1px 7px', borderRadius: 50, fontSize: 10, fontWeight: 500,
                   background: origin.bg, color: origin.text, marginBottom: 3, alignSelf: 'flex-start',
                 }}>
                   {originDisplay(lead.origin, lead.cc_sector)}
@@ -5879,15 +6166,15 @@ export default function TrackingSheet() {
                         tampon Meta (position absolue au coin), sinon il les recouvre. */}
                     <input aria-label="Nom et prénom du lead" ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
-                      style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '3px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
+                      style={{ flex: 1, minWidth: 0, fontSize: 15, fontWeight: 500, color: C.text, letterSpacing: '-0.02em', border: `1px solid ${C.accent}`, borderRadius: 8, padding: '3px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
                     />
-                    <button aria-label="Enregistrer le nom" title="Enregistrer le nom" onClick={saveFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: 'none', background: C.accent, color: '#fff', fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                    <button aria-label="Annuler la modification du nom" title="Annuler la modification du nom" onClick={cancelFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    <button aria-label="Enregistrer le nom" title="Enregistrer le nom" onClick={saveFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: 'none', background: C.accent, color: C.onAccent, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
+                    <button aria-label="Annuler la modification du nom" title="Annuler la modification du nom" onClick={cancelFieldEdit} style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 6, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 13, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                   </div>
                 ) : (
                   <>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 3, paddingRight: 52 }}>
-                    <h3 style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere', fontSize: 15, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>
+                    <h3 style={{ margin: 0, minWidth: 0, overflowWrap: 'anywhere', fontSize: 17, fontWeight: 500, color: C.text, letterSpacing: '-0.02em' }}>
                       {lead.full_name}
                     </h3>
                     <button onClick={() => startFieldEdit(lead.id, 'full_name', lead.full_name)} title="Modifier le nom"
@@ -5909,8 +6196,8 @@ export default function TrackingSheet() {
                         placeholder="Nom de la société"
                         style={{ width: 160, fontSize: 12, color: C.text, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '2px 7px', background: C.bg, fontFamily: 'inherit', outline: 'none', fontWeight: 500 }}
                       />
-                      <button onClick={saveFieldEdit} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: C.accent, color: '#fff', fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                      <button onClick={cancelFieldEdit} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                      <button onClick={saveFieldEdit} style={{ width: 20, height: 20, borderRadius: 4, border: 'none', background: C.accent, color: C.onAccent, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
+                      <button onClick={cancelFieldEdit} style={{ width: 20, height: 20, borderRadius: 4, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 11, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                     </div>
                   ) : (
                     <span
@@ -5920,7 +6207,7 @@ export default function TrackingSheet() {
                         fontSize: 12, fontWeight: 500, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 3,
                         color: '#949293',
                         fontStyle: lead.company_name ? 'normal' : 'italic',
-                        fontSize: 13, fontWeight: 600,
+                        fontSize: 13, fontWeight: 500,
                         borderRadius: 6, padding: '1px 5px', margin: '-1px -5px',
                         transition: 'background 0.15s',
                       }}
@@ -5933,34 +6220,13 @@ export default function TrackingSheet() {
                     </span>
                   )}
                 </div>
-                {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at || lead.last_call_at) && (
-                  <div style={{ fontSize: 12, color: C.muted, fontStyle: 'italic', marginTop: 2, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                    {lead.call_attempts > 0 && <span>Appelé {lead.call_attempts} fois</span>}
-                    {lead.first_call_at && (() => {
-                      const d = new Date(lead.first_call_at);
-                      const dateLabel = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
-                      const hh = parisParts(d).hour;
-                      const mi = parisParts(d).minute;
-                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#6366f1', fontSize: 11 }}>1er appel : {dateLabel} à {hh}h{mi}</span>;
-                    })()}
-                    {lead.last_call_at && lead.last_call_at !== lead.first_call_at && (() => {
-                      // See note on the compact badge: hide when equal to first_call_at
-                      // (single-call leads or backfilled historical rows).
-                      const d = new Date(lead.last_call_at);
-                      const dateLabel = d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'long', day: 'numeric', month: 'long' });
-                      const hh = parisParts(d).hour;
-                      const mi = parisParts(d).minute;
-                      return <span style={{ fontStyle: 'normal', fontWeight: 600, color: '#14b8a6', fontSize: 11 }}>Dernier appel : {dateLabel} à {hh}h{mi}</span>;
-                    })()}
-                  </div>
-                )}
                 {/* Rappel daté (16/10/2026) : quand le sales a convenu de rappeler le prospect (callback_at est l'heure de Paris, lue telle quelle) ; ce qui a été dit est dans la carte « Note ».
                     NON rétroactif : seuls les rappels posés avec la nouvelle fenêtre ont une description enregistrée (même vide) ; les anciens rappels (setters, ancien parcours) n'en ont pas et ne changent pas. */}
                 {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && lead.callback_description != null && recallWhen(lead.callback_at) && (() => {
                   const late = recallInPast(String(lead.callback_at).slice(0, 16));
                   return (
                     <div style={{ marginTop: 3, display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <span style={{ fontSize: 12, fontWeight: 600, color: late ? (darkMode ? '#f87171' : '#b91c1c') : (darkMode ? '#fbbf24' : '#b45309') }}>Rappel prévu : {recallWhen(lead.callback_at)}{late ? ' (dépassé)' : ''}</span>
+                      <span style={{ fontSize: 12, fontWeight: 500, color: late ? (darkMode ? '#f87171' : '#b91c1c') : (darkMode ? '#fbbf24' : '#b45309') }}>Rappel prévu : {recallWhen(lead.callback_at)}{late ? ' (dépassé)' : ''}</span>
                     </div>
                   );
                 })()}
@@ -5986,14 +6252,14 @@ export default function TrackingSheet() {
                         inputMode="numeric"
                         maxLength={9}
                         style={{
-                          flex: 1, fontSize: 13, fontWeight: 600, color: C.text,
+                          flex: 1, fontSize: 13, fontWeight: 500, color: C.text,
                           border: `1px solid ${C.accent}`, borderRadius: 6,
                           padding: '3px 8px', background: C.bg, fontFamily: 'inherit',
                           outline: 'none', letterSpacing: '0.02em',
                         }}
                       />
-                      <button onClick={saveSirenEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                      <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                      <button onClick={saveSirenEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: C.onAccent, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
+                      <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                     </div>
                     {/* Discreet hint while typing 1-8 chars; only show if no backend error */}
                     {!sirenEditError && editingField.value.length > 0 && editingField.value.length < 9 && (
@@ -6002,7 +6268,7 @@ export default function TrackingSheet() {
                       </div>
                     )}
                     {sirenEditError && (
-                      <div style={{ fontSize: 10, color: '#ef4444', fontWeight: 600, marginLeft: 27 }}>
+                      <div style={{ fontSize: 10, color: '#ef4444', fontWeight: 500, marginLeft: 27 }}>
                         {sirenEditError}
                       </div>
                     )}
@@ -6011,7 +6277,7 @@ export default function TrackingSheet() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <img src={iconSiren} alt="" style={{ width: 23, height: 13, opacity: 0.85, flexShrink: 0 }} />
                     <span style={{
-                      fontSize: 12, fontWeight: 600,
+                      fontSize: 12, fontWeight: 500,
                       color: '#949293',
                       fontStyle: lead.siren ? 'normal' : 'italic',
                       letterSpacing: lead.siren ? '0.02em' : 'normal',
@@ -6036,8 +6302,8 @@ export default function TrackingSheet() {
               {/* ─── STATS ROW ─── */}
               <div style={{
                 display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 1,
-                borderRadius: 10, overflow: 'hidden', marginBottom: 14,
-                background: C.border,
+                borderRadius: 14, overflow: 'hidden', marginBottom: 16,
+                background: C.border, border: `1px solid ${C.border}`,
                 animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.08s both',
               }}>
                 {[
@@ -6050,20 +6316,99 @@ export default function TrackingSheet() {
                 ].map(stat => (
                   <div key={stat.label} style={{
                     padding: '10px 6px', textAlign: 'center',
-                    background: darkMode ? '#16171e' : '#fafbfd',
+                    background: darkMode ? '#181818' : '#faf9f7',
                   }}>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: C.text, letterSpacing: '-0.01em' }}>{stat.value}</div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginTop: 2 }}>{stat.label}</div>
+                    <div style={{ fontSize: 13, fontWeight: 500, color: C.text, letterSpacing: '-0.01em' }}>{stat.value}</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em', marginTop: 2 }}>{stat.label}</div>
                   </div>
                 ))}
               </div>
 
+              {/* ─── VOLETS DE LA FICHE : l'essentiel d'abord, les documents et le commentaire chacun dans le leur (dev 11/11/2026 :
+                   « bien prioriser les informations, quitte à avoir plusieurs slides »). Les trois volets restent montés : on
+                   ne fait que les montrer ou les cacher, aucune saisie en cours n'est perdue. ─── */}
+              {(() => {
+                const tabs = [['infos', 'Infos'], ['documents', 'Documents'], ['commentaire', 'Commentaire']];
+                return (
+                  <div role="tablist" aria-label="Volets de la fiche" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, padding: 3, marginBottom: 16, borderRadius: 12, background: darkMode ? '#181818' : '#f1eee9' }}>
+                    {tabs.map(([key, label]) => {
+                      const on = leadTab === key;
+                      return (
+                        <button key={key} type="button" role="tab" aria-selected={on} onClick={() => { setPanelTab({ leadId: lead.id, tab: key }); if (key === 'documents' && !leadContracts[lead.id]) fetchLeadContracts(lead.id); }}
+                          style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '7px 6px', border: 'none', borderRadius: 9, cursor: 'pointer', fontFamily: 'inherit',
+                            fontSize: 12.5, fontWeight: 500, color: on ? C.text : C.muted, background: on ? (darkMode ? '#3a3a3a' : '#ffffff') : 'transparent',
+                            boxShadow: on && !darkMode ? '0 1px 2px rgba(28,27,25,0.06)' : 'none', transition: 'background 0.2s ease, color 0.2s ease' }}>
+                          {label}
+                          {key === 'commentaire' && !!(lead.notes && lead.notes.trim()) && <span style={{ width: 5, height: 5, borderRadius: '50%', background: on ? C.text : C.muted }} title="Un commentaire est enregistré" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              <div style={{ display: leadTab === 'documents' ? 'block' : 'none', animation: 'contentReveal 0.3s cubic-bezier(0.4,0,0.2,1) both' }}>
+                {/* Contrat envoyé au client : même dossier que dans le board Owner Opti'Lex et la fiche Finance (clic = lecture du PDF).
+                    Lecture seule ; l'envoi, la relance et l'annulation restent dans le volet Infos, inchangés. */}
+                {(() => {
+                  const contract = (leadContracts[lead.id] || []).find(c => ['done', 'ongoing'].includes(c.yousign_status)) || (leadContracts[lead.id] || [])[0];
+                  if (!contract) return null;
+                  const TONES = { done: ['Signé', '#0b7a4b'], ongoing: ['En signature', '#1b6fd0'], expired: ['Expiré', '#c2500e'], canceled: ['Annulé', '#8b867e'], failed: ['Échec', '#c5221f'] };
+                  const folder = (key, label, title, status, signedAt) => {
+                    const tone = TONES[status];
+                    if (!tone) return { key, label, title, empty: true, available: false,
+                      status: <span style={{ fontWeight: 400, color: '#a8a39b' }}>Pas de contrat</span> };
+                    const when = status === 'done' ? signedAt : contract.sent_at;
+                    const date = when ? `le ${formatDate(when)}` : '';
+                    return { key, label, title, openLabel: `Ouvrir : ${title}`, signed: status === 'done', available: ['done', 'ongoing'].includes(status),
+                      statusText: [tone[0], date].filter(Boolean).join(' '),
+                      status: <><b style={{ color: tone[1] }}>{tone[0]}</b>{date}</>,
+                      sub: status === 'ongoing' ? 'en attente de signature' : '' };
+                  };
+                  return (
+                    <div style={{ marginBottom: 18 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10, fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                        Contrat
+                      </div>
+                      {/* Le sales ne consulte que le contrat Owner (dev 11/11/2026) : la convention Opti'Lex n'est pas proposée ici. */}
+                      <div className="ts-contract">
+                        <ContractFolders contractId={contract.id} group={`lead-${lead.id}`} items={[
+                          folder('owner', 'Owner', 'Contrat Owner', contract.yousign_status, contract.signed_at),
+                        ]} />
+                      </div>
+                    </div>
+                  );
+                })()}
+                {intakeRollout?.available
+                  ? <LeadDocuments key={`docs-${lead.id}`} leadId={lead.id} lead={lead} revision={portalRevision} dark={darkMode}
+                      fallback={<p style={{ margin: '4px 2px 16px', fontSize: 12.5, lineHeight: 1.55, color: C.muted }}>Le dépôt de documents s’ouvre une fois le NDA rempli pour ce lead.</p>} />
+                  : <p style={{ margin: '4px 2px 16px', fontSize: 12.5, lineHeight: 1.55, color: C.muted }}>Le dépôt de documents n’est pas encore activé pour ce dossier.</p>}
+              </div>
+
+              <div style={{ display: leadTab === 'infos' ? 'block' : 'none' }}>
               {intakeSaved[lead.id]?.available && <div style={{ marginBottom: 14 }}>
                 <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
               </div>}
 
               {intakeRollout?.available && <PortalAccess key={lead.id} leadId={lead.id} revision={portalRevision} />}
-              {intakeRollout?.available && <LeadDocuments key={`docs-${lead.id}`} leadId={lead.id} revision={portalRevision} dark={darkMode} />}
+              {/* ─── APPELS : combien de fois, quand pour la dernière fois, et le premier en retrait. Une seule ligne discrète sous
+                   les chiffres (dev 11/11/2026 : l'identité d'abord, l'historique d'appels « plus subtil, mais présent »). ─── */}
+              {(activeCat.key === 'callback' || activeCat.key === 'voicemail') && (lead.call_attempts > 0 || lead.first_call_at || lead.last_call_at) && (() => {
+                const when = (iso) => { const d = new Date(iso); return `${d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', weekday: 'short', day: 'numeric', month: 'short' })} à ${parisParts(d).hour}h${parisParts(d).minute}`; };
+                // Dernier appel masqué s'il est égal au premier (lead appelé une fois, ou lignes historiques reprises).
+                const last = lead.last_call_at && lead.last_call_at !== lead.first_call_at ? lead.last_call_at : null;
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', padding: '8px 12px', marginTop: -6, marginBottom: 16, borderRadius: 12,
+                    background: darkMode ? '#181818' : '#f7f5f2', fontSize: 12, color: C.secondary, fontVariantNumeric: 'tabular-nums' }}>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.7 }}><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                    {lead.call_attempts > 0 && <span style={{ fontWeight: 500, color: C.text }}>{lead.call_attempts} appel{lead.call_attempts > 1 ? 's' : ''}</span>}
+                    {last && <span><span style={{ color: C.muted }}>Dernier</span> {when(last)}</span>}
+                    {lead.first_call_at && <span style={{ marginLeft: 'auto', color: C.muted }}>{last ? '1er' : 'Appelé'} {when(lead.first_call_at)}</span>}
+                  </div>
+                );
+              })()}
+
               {/* ─── INFO DETAILS ─── */}
               <div style={{
                 display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14,
@@ -6079,8 +6424,8 @@ export default function TrackingSheet() {
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
                       style={{ flex: 1, fontSize: 12, color: C.text, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '5px 8px', background: C.bg, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500, outline: 'none' }}
                     />
-                    <button onClick={saveFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                    <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    <button onClick={saveFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: C.onAccent, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
+                    <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                   </div>
                 ) : (
                 <div
@@ -6097,13 +6442,14 @@ export default function TrackingSheet() {
                     </svg>
                   </div>
                   <div onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`, lead.id)} style={{ flex: 1, minWidth: 0, cursor: lead.phone ? 'pointer' : 'default' }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Téléphone</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Téléphone<PriorityTag leadId={lead.id} kind="phone" darkMode={darkMode} /></div>
                     <div style={{ fontSize: 12, color: C.text, fontFamily: "'SF Mono', 'Fira Code', monospace", fontWeight: 500 }}>{lead.phone || '—'}</div>
                   </div>
                   {copiedField === `phone-detail-${lead.id}` ? (
-                    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#10b981', padding: '2px 10px', borderRadius: 50, background: darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
+                    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 500, color: '#10b981', padding: '2px 10px', borderRadius: 50, background: darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
                   ) : (
                     <>
+                      <ContactsToggle leadId={lead.id} kind="phone" C={C} darkMode={darkMode} readOnly={isAdminView} />
                       {lead.phone && (
                         <svg onClick={() => copyToClipboard(lead.phone, `phone-detail-${lead.id}`, lead.id)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -6118,18 +6464,20 @@ export default function TrackingSheet() {
                   )}
                 </div>
                 )}
+                {/* Autres numéros du lead : cachés au repos, dépliés par le « +2 » du champ (le numéro du champ est le prioritaire) */}
+                <LeadContactRows leadId={lead.id} kind="phone" mainValue={lead.phone} onPromote={promoteLeadContact(lead.id)} C={C} darkMode={darkMode} readOnly={isAdminView} />
                 {/* Email */}
                 {editingField?.leadId === lead.id && editingField?.field === 'email' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain' }} />
+                      <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain', filter: imgDark }} />
                     </div>
                     <input ref={editInputRef} value={editingField.value} onChange={(e) => setEditingField(prev => ({ ...prev, value: e.target.value }))}
                       onKeyDown={(e) => { if (e.key === 'Enter') saveFieldEdit(); if (e.key === 'Escape') cancelFieldEdit(); }}
                       style={{ flex: 1, fontSize: 12, color: C.text, border: `1px solid ${C.accent}`, borderRadius: 6, padding: '5px 8px', background: C.bg, fontFamily: 'inherit', outline: 'none' }}
                     />
-                    <button onClick={saveFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: '#fff', fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</button>
-                    <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                    <button onClick={saveFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: 'none', background: C.accent, color: C.onAccent, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Check size={14} strokeWidth={2.2} aria-hidden="true" /></button>
+                    <button onClick={cancelFieldEdit} style={{ width: 24, height: 24, borderRadius: 5, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
                   </div>
                 ) : (
                 <div
@@ -6141,16 +6489,17 @@ export default function TrackingSheet() {
                     width: 22, height: 22, flexShrink: 0,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
-                    <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain' }} />
+                    <img src={iconEmailDetail} alt="" style={{ width: 17, height: 17, objectFit: 'contain', filter: imgDark }} />
                   </div>
                   <div onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`, lead.id)} style={{ flex: 1, minWidth: 0, cursor: lead.email ? 'pointer' : 'default' }}>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Email</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Email<PriorityTag leadId={lead.id} kind="email" darkMode={darkMode} /></div>
                     <div style={{ fontSize: 12, color: C.secondary, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{lead.email || '—'}</div>
                   </div>
                   {copiedField === `email-detail-${lead.id}` ? (
-                    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 700, color: '#10b981', padding: '2px 10px', borderRadius: 50, background: darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
+                    <span style={{ flexShrink: 0, fontSize: 10, fontWeight: 500, color: '#10b981', padding: '2px 10px', borderRadius: 50, background: darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.08)', animation: 'copiedToastIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>Copié</span>
                   ) : (
                     <>
+                      <ContactsToggle leadId={lead.id} kind="email" C={C} darkMode={darkMode} readOnly={isAdminView} />
                       {lead.email && (
                         <svg onClick={() => copyToClipboard(lead.email, `email-detail-${lead.id}`, lead.id)} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, opacity: 0.5, cursor: 'pointer' }} title="Copier">
                           <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
@@ -6165,6 +6514,8 @@ export default function TrackingSheet() {
                   )}
                 </div>
                 )}
+                {/* Autres e-mails du lead : cachés au repos, dépliés par le « +2 » du champ (l'e-mail du champ est le prioritaire) */}
+                <LeadContactRows leadId={lead.id} kind="email" mainValue={lead.email} onPromote={promoteLeadContact(lead.id)} C={C} darkMode={darkMode} readOnly={isAdminView} />
                 {/* Sales Qualification */}
                 {(() => {
                   const QUAL_OPTIONS = [
@@ -6185,7 +6536,7 @@ export default function TrackingSheet() {
                         <img src={iconScalier} alt="" style={{ width: 18, height: 18 }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Qualification</div>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Qualification</div>
                         <button ref={el => { if (el) el._qualBtn = true; }} onClick={(e) => {
                           if (isQualOpen) { setQualDropdown(null); return; }
                           const rect = e.currentTarget.getBoundingClientRect();
@@ -6195,7 +6546,7 @@ export default function TrackingSheet() {
                           display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0',
                           border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
                         }}>
-                          <img src={currentOpt.icon} alt="" style={{ height: 18, objectFit: 'contain' }} />
+                          <img src={currentOpt.icon} alt="" style={{ height: 18, objectFit: 'contain', filter: imgDark }} />
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
                       </div>
@@ -6219,7 +6570,7 @@ export default function TrackingSheet() {
                         <img src={iconPrio} alt="" style={{ width: 18, height: 18 }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Priorité</div>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Priorité</div>
                         <button onClick={(e) => {
                           if (isPrioOpen) { setPrioDropdown(null); return; }
                           const rect = e.currentTarget.getBoundingClientRect();
@@ -6229,7 +6580,7 @@ export default function TrackingSheet() {
                           display: 'flex', alignItems: 'center', gap: 5, padding: '2px 0',
                           border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
                         }}>
-                          <img src={currentPrioOpt.icon} alt="" style={{ height: 18, objectFit: 'contain' }} />
+                          <img src={currentPrioOpt.icon} alt="" style={{ height: 18, objectFit: 'contain', filter: imgDark }} />
                           <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2.5" strokeLinecap="round"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
                       </div>
@@ -6249,8 +6600,8 @@ export default function TrackingSheet() {
                       </svg>
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Secteur</div>
-                      <div style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>{lead.sector}</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Secteur</div>
+                      <div style={{ fontSize: 12, color: C.accent, fontWeight: 500 }}>{lead.sector}</div>
                     </div>
                   </div>
                 )}
@@ -6274,8 +6625,8 @@ export default function TrackingSheet() {
                       <img src={meetIcon} alt="Meet" style={{ width: 16, height: 16, objectFit: 'contain' }} />
                     </div>
                     <div>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Google Meet</div>
-                      <div style={{ fontSize: 12, color: '#1a73e8', fontWeight: 600 }}>Rejoindre le meeting</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Google Meet</div>
+                      <div style={{ fontSize: 12, color: '#1a73e8', fontWeight: 500 }}>Rejoindre le meeting</div>
                     </div>
                   </a>
                 )}
@@ -6294,11 +6645,11 @@ export default function TrackingSheet() {
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                       </div>
                       <div style={{ minWidth: 0 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{r.label}</div>
-                        <div style={{ fontSize: 12, color: C.text, fontWeight: 600 }}>{r.name}</div>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{r.label}</div>
+                        <div style={{ fontSize: 12, color: C.text, fontWeight: 500 }}>{r.name}</div>
                         {r.email && (
                           <a href={`mailto:${r.email}`} title={`Écrire à ${r.name}`}
-                            style={{ fontSize: 11.5, color: C.accent, fontWeight: 600, textDecoration: 'none', overflowWrap: 'anywhere' }}>{r.email}</a>
+                            style={{ fontSize: 11.5, color: C.accent, fontWeight: 500, textDecoration: 'none', overflowWrap: 'anywhere' }}>{r.email}</a>
                         )}
                       </div>
                     </div>
@@ -6318,8 +6669,9 @@ export default function TrackingSheet() {
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><path d="m9 16 2 2 4-4"/></svg>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Dispos onboarding</div>
-                    <div style={{ fontSize: 12, color: C.accent, fontWeight: 600 }}>Voir les créneaux de Vincent et Paul</div>
+                    <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>Dispos onboarding</div>
+                    {/* Les prénoms viennent du serveur (réglages d'agenda, liste des animateurs du moment) : aucun n'est écrit ici. */}
+                    <div style={{ fontSize: 12, color: C.accent, fontWeight: 500 }}>{onboardingHostsLabel(calSettings?.onboarding_hosts)}</div>
                   </div>
                 </button>
                 {/* Mode MANUEL — donner ce lead à un setter (visible seulement si le sales
@@ -6330,7 +6682,7 @@ export default function TrackingSheet() {
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke={C.accent} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
                     </div>
                     <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 5 }}>Donner à un setter</div>
+                      <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 5 }}>Donner à un setter</div>
                       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                         {myManualSetters.map((s) => {
                           const active = String(lead.manual_setter_id || '') === String(s.setter_id);
@@ -6340,7 +6692,7 @@ export default function TrackingSheet() {
                               onClick={() => giveLeadToSetter(lead.id, active ? null : s.setter_id)}
                               title={active ? 'Donné à ce setter — cliquer pour retirer' : `Donner ce lead à ${s.full_name}`}
                               style={{
-                                fontSize: 11.5, fontWeight: 600, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
+                                fontSize: 11.5, fontWeight: 500, padding: '4px 10px', borderRadius: 8, cursor: 'pointer',
                                 fontFamily: 'inherit', transition: 'all 0.15s',
                                 border: `1px solid ${active ? C.accent : C.border}`,
                                 background: active ? `${C.accent}1a` : 'transparent',
@@ -6356,19 +6708,24 @@ export default function TrackingSheet() {
                   </div>
                 )}
                 <ReproLinkRow lead={lead} C={C} darkMode={darkMode} />
+                {/* Transfert à un autre sales (dev 11/11/2026, « dans la partie Infos ») : de qui il a été reçu, le geste, l'historique replié. */}
+                <LeadTransfer lead={lead} C={C} darkMode={darkMode} canGive={!isAdminView && activeCat.key !== 'signed'} onDone={() => {
+                  // Le lead n'est plus à soi : il quitte la liste, la fiche se ferme (la confirmation s'est lue dans la ligne).
+                  setLeads(prev => prev.filter(l => l.id !== lead.id));
+                  setSelectedLead(null);
+                }} />
               </div>
 
               {/* ─── CALENDAR ERROR ─── */}
               {calendarError?.leadId === lead.id && (
                 <div style={{
-                  padding: '8px 14px', borderRadius: 10, marginBottom: 10,
-                  background: darkMode ? 'rgba(239,68,68,0.12)' : 'rgba(239,68,68,0.08)',
-                  border: `1px solid ${darkMode ? 'rgba(239,68,68,0.25)' : 'rgba(239,68,68,0.2)'}`,
-                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 12px', borderRadius: 12, marginBottom: 10,
+                  background: darkMode ? 'rgba(239,68,68,.14)' : '#fde6e6', color: darkMode ? '#f3a6a3' : '#c5221f',
+                  display: 'flex', alignItems: 'flex-start', gap: 8,
                   animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
                 }}>
-                  <span style={{ fontSize: 14 }}>⚠</span>
-                  <span style={{ fontSize: 11.5, fontWeight: 600, color: '#ef4444' }}>{calendarError.message}</span>
+                  <TriangleAlert size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+                  <span style={{ fontSize: 12.5, lineHeight: 1.45 }}>{calendarError.message}</span>
                 </div>
               )}
 
@@ -6376,7 +6733,7 @@ export default function TrackingSheet() {
               {activeCat.key === 'new' && (
                 <div style={{ marginBottom: 10, animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.14s both' }}>
                   {lead.first_contact_date ? (
-                    <span style={{ fontSize: 11, color: C.accent, fontWeight: 600 }}>
+                    <span style={{ fontSize: 11, color: C.accent, fontWeight: 500 }}>
                       Contacté le {formatDate(lead.first_contact_date)}
                     </span>
                   ) : (
@@ -6387,50 +6744,35 @@ export default function TrackingSheet() {
                 </div>
               )}
 
-              {/* ─── DATE CHIPS ─── */}
-              {(lead.r1 || lead.r2) && (
-                <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.16s both' }}>
-                  {lead.r1 && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8,
-                      background: darkMode ? 'rgba(59,130,246,0.1)' : 'rgba(59,130,246,0.06)',
-                      border: `1px solid ${darkMode ? 'rgba(59,130,246,0.2)' : 'rgba(59,130,246,0.12)'}`,
-                    }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#3b82f6', textTransform: 'uppercase' }}>R1</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r1)} onChange={(val) => handleDateChange(lead.id, 'r1', val)} color="#3b82f6" C={C} darkMode={darkMode} />
-                    </div>
-                  )}
-                  {lead.r2 && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 5, padding: '4px 10px', borderRadius: 8,
-                      background: darkMode ? 'rgba(251,146,60,0.1)' : 'rgba(251,146,60,0.06)',
-                      border: `1px solid ${darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.12)'}`,
-                    }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#fb923c', textTransform: 'uppercase' }}>R2</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r2)} onChange={(val) => handleDateChange(lead.id, 'r2', val)} color="#fb923c" C={C} darkMode={darkMode} />
-                    </div>
-                  )}
-                  {lead.r3 && (
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', borderRadius: 10,
-                      background: darkMode ? 'rgba(139,92,246,0.1)' : 'rgba(139,92,246,0.06)',
-                      border: `1px solid ${darkMode ? 'rgba(139,92,246,0.2)' : 'rgba(139,92,246,0.12)'}`,
-                    }}>
-                      <span style={{ fontSize: 9, fontWeight: 700, color: '#8b5cf6', textTransform: 'uppercase' }}>R3</span>
-                      <DateTimePicker value={toDatetimeLocal(lead.r3)} onChange={(val) => handleDateChange(lead.id, 'r3', val)} color="#8b5cf6" C={C} darkMode={darkMode} />
-                    </div>
-                  )}
-                </div>
-              )}
+              {/* ─── RENDEZ-VOUS (dev 11/11/2026 : « simple, épuré, rassurant », d'après sa référence de frise) : un fil, un point par
+                   rendez-vous, le prochain en point plein ; chaque ligne se déplie pour changer la date. ─── */}
+              {(lead.r1 || lead.r2 || lead.r3) && (() => {
+                const rows = [['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']].filter(([field]) => lead[field]).map(([field, label]) => ({ field, label, value: toDatetimeLocal(lead[field]) }));
+                const upcoming = rows.filter(r => { const d = rdvDays(r.value); return d != null && d >= 0; }).sort((a, b) => a.value.localeCompare(b.value))[0];
+                return (
+                  <div style={{ marginBottom: 14, animation: 'contentReveal 0.35s cubic-bezier(0.34,1.56,0.64,1) 0.16s both' }}>
+                    <div style={{ marginBottom: 6, fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>Rendez-vous</div>
+                    {rows.map((r, index) => (
+                      <RdvRow key={r.field} first={index === 0} last={index === rows.length - 1} next={upcoming?.field === r.field} label={r.label} value={r.value}
+                        onChange={(val) => handleDateChange(lead.id, r.field, val)} C={C} darkMode={darkMode} />
+                    ))}
+                  </div>
+                );
+              })()}
 
+              </div>{/* fin du volet Infos, 1re partie */}
+
+              <div style={{ display: leadTab === 'commentaire' ? 'block' : 'none', animation: 'contentReveal 0.3s cubic-bezier(0.4,0,0.2,1) both' }}>
               {/* ─── NOTES ─── (la note du rappel daté d'abord, puis les notes du lead ; pendant la saisie en ligne d'une note, la note du rappel reste visible) */}
+              {!(recallText || notesShown) && !(lead.id in editingNotes) && (
+                <p style={{ margin: '4px 2px 12px', fontSize: 12.5, lineHeight: 1.55, color: C.muted }}>Aucun commentaire pour l’instant. Notez les points clés de l’échange, les décisions et la prochaine étape.</p>
+              )}
               {(recallText || notesShown) && (
                 <div style={{
-                  marginBottom: 10, padding: '8px 12px', borderRadius: 8,
-                  background: darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
-                  border: `1px solid ${darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.03)'}`,
+                  marginBottom: 12, padding: '14px 16px', borderRadius: 14, fontSize: 13.5,
+                  background: darkMode ? '#181818' : '#f7f5f2',
                 }}>
-                  <span style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Note</span>
+                  <span style={{ display: 'block', marginBottom: 6, fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{recallText && !notesShown ? 'Note du rappel' : 'Commentaire'}</span>
                   {recallText && <SalesNotesView value={recallText}/>}
                   {recallText && notesShown && <div style={{ height: 1, margin: '8px 0', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }} />}
                   {notesShown && <SalesNotesView value={lead.notes}/>}
@@ -6450,7 +6792,7 @@ export default function TrackingSheet() {
                       placeholder="Ajouter un commentaire..."
                       style={{
                         width: '100%', minHeight: 60, padding: '8px 40px 8px 10px', borderRadius: 8,
-                        border: `1px solid ${C.border}`, background: darkMode ? '#252636' : '#f8f9fc',
+                        border: `1px solid ${C.border}`, background: darkMode ? '#262626' : '#f8f9fc',
                         color: C.text, fontSize: 13, fontFamily: 'inherit', resize: 'vertical',
                         outline: 'none', transition: 'border-color 0.2s', boxSizing: 'border-box',
                       }}
@@ -6487,7 +6829,7 @@ export default function TrackingSheet() {
                       )}
                     </button>
                     {micError && (
-                      <div style={{ position: 'absolute', right: 40, bottom: 8, padding: '3px 10px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
+                      <div style={{ position: 'absolute', right: 40, bottom: 8, padding: '3px 10px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
                     )}
                   </div>
                   <div style={{ display: 'flex', gap: 8, marginTop: 8, justifyContent: 'flex-end' }}>
@@ -6497,13 +6839,25 @@ export default function TrackingSheet() {
                     >Annuler</button>
                     <button
                       onClick={() => handleNotesSave(lead.id)}
-                      style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: C.accent, color: '#fff', fontSize: 12, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                      style={{ padding: '6px 14px', borderRadius: 8, border: 'none', background: C.accent, color: C.onAccent, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
                     >Sauvegarder</button>
                   </div>
                 </div>
               )}
 
               {notesError?.leadId===lead.id && <p className="sj-error" role="alert">{notesError.message}</p>}
+              {(isGuidedLead(lead) || !(lead.id in editingNotes)) && !isAdminView && (
+                <button type="button"
+                  onClick={() => { setNotesError(null); setEditingNotes(prev => ({ ...prev, [lead.id]: prev[lead.id] ?? lead.notes ?? '' })); if (isGuidedLead(lead)) setCommentLeadId(lead.id); }}
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, width: '100%', marginBottom: 16, padding: '10px 14px', borderRadius: 12, border: 'none',
+                    background: darkMode ? '#ededed' : '#2b2927', color: darkMode ? '#141414' : '#ffffff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
+                  {lead.notes && lead.notes.trim() ? 'Modifier le commentaire' : 'Écrire un commentaire'}
+                </button>
+              )}
+              </div>{/* fin du volet Commentaire */}
+
+              <div style={{ display: leadTab === 'infos' ? 'block' : 'none' }}>
               {/* ─── SEPARATOR ─── */}
               <div style={{ height: 1, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', margin: '2px 0 12px' }} />
 
@@ -6527,6 +6881,10 @@ export default function TrackingSheet() {
                   { value: 'pas_interesse',    label: 'Pas intéressé',    icon: '✕' },
                   { value: 'annule',           label: 'R2 annulé',        icon: '🚫' },
                 ];
+                // Parcours guidé (audit 11/11/2026) : le bouton parle comme la fenêtre, et n'annonce le contrat que lorsqu'elle le propose.
+                const guidedResultLabel = { ...Object.fromEntries(QUALIFICATION_RESULTS.map(([value, label]) => [value, label])),
+                  no_show: 'Client absent', reporte: 'Reporté', a_reporter: 'À reprogrammer', annule: 'Annulé' }[currentResult] || 'Résultat enregistré';
+                const guidedToContract = ['done', 'relire_contrat'].includes(currentResult) && !['ongoing', 'done'].includes(leadContracts[lead.id]?.[0]?.yousign_status);
                 const handleR2Select = (val) => {
                   if (!val) return;
                   if (val === 'done') return handleWorkflowSubmit(lead.id, { [resultField]: 'done', [completedField]: new Date().toISOString() });
@@ -6537,7 +6895,7 @@ export default function TrackingSheet() {
                 };
                 return (
                   <>
-                    {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={()=>setQualificationDialog({lead,stage:isR3?'r3':'r2'})}><CalendarCheck2 size={22}/><span>{currentResult ? `Qualification du ${isR3?'R3':'R2'}` : `Qualifier le ${isR3?'R3':'R2'}`}<small>{currentResult ? `${r2Options.find(o=>o.value===currentResult)?.label || 'Modifier le résultat'} · Continuer vers le contrat` : 'Qualifiez le rendez-vous, puis préparez et envoyez le contrat'}</small></span><ChevronRight size={18}/></button> : <>
+                    {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={()=>setQualificationDialog({lead,stage:isR3?'r3':'r2'})}><CalendarCheck2 size={22}/><span>{currentResult ? `Qualification du ${isR3?'R3':'R2'}` : `Qualifier le ${isR3?'R3':'R2'}`}<small>{currentResult ? `${guidedResultLabel} · ${guidedToContract ? 'Continuer vers le contrat' : 'Modifier'}` : 'Qualifiez le rendez-vous, puis préparez et envoyez le contrat'}</small></span><ChevronRight size={18}/></button> : <>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12, flexWrap: 'wrap' }}>
                       {/* Docs received toggle */}
                       <button
@@ -6550,7 +6908,7 @@ export default function TrackingSheet() {
                             ? (darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)')
                             : (darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.015)'),
                           color: lead.docs_received ? '#10b981' : C.muted,
-                          fontSize: 11, fontWeight: 600, cursor: 'pointer',
+                          fontSize: 11, fontWeight: 500, cursor: 'pointer',
                           transition: 'all 0.2s cubic-bezier(0.25,0.1,0.25,1)', fontFamily: 'inherit',
                         }}
                         onMouseEnter={(e) => {
@@ -6618,24 +6976,24 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>↻</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c' }}>Reporter le R2</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#fb923c' }}>Reporter le R2</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date" value={wfLocal.newDate ? wfLocal.newDate.slice(0, 10) : ''}
                               onChange={(e) => { const time = wfLocal.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
                               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wfLocal.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfLocal.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wfLocal.newDate && wfLocal.newDate.length >= 10 && (
                           <button onClick={() => handleWorkflowSubmit(lead.id, { r2_result: 'reporte', r2_date: wfLocal.newDate })}
-                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(251,146,60,0.35)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                           >Confirmer nouvelle date</button>
@@ -6646,10 +7004,12 @@ export default function TrackingSheet() {
                       </div>
                     )}
 
-                    {/* Employee range (only after qualification) */}
-                    {lead.r2_result && !intakeContexts[lead.id]?.required && (
+                    {/* Tranche salariale dans la fiche : seulement hors parcours guidé (audit dev 11/11/2026). Dans le parcours guidé,
+                        c'est la fenêtre « Préparer le contrat » qui la demande ; la montrer ici faisait doublon. Elle ne revient
+                        que si aucune fenêtre ne la demandera et qu'elle manque encore, pour ne jamais bloquer l'envoi. */}
+                    {lead.r2_result && !intakeContexts[lead.id]?.required && (!isGuidedLead(lead) || (!!intakeContexts[lead.id] && !lead.employee_range)) && (
                       <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>
                           Tranche salariale
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
@@ -6658,13 +7018,14 @@ export default function TrackingSheet() {
                             return (
                               <button key={range}
                                 onClick={() => handleEmployeeRangeChange(lead.id, range)}
+                                aria-pressed={isSel}
                                 style={{
-                                  padding: '3px 8px', borderRadius: 6,
-                                  border: `1px solid ${isSel ? '#fb923c' : C.border}`,
-                                  background: isSel ? (darkMode ? 'rgba(251,146,60,0.2)' : 'rgba(251,146,60,0.1)') : 'transparent',
-                                  color: isSel ? '#fb923c' : C.secondary,
-                                  fontSize: '10px', fontWeight: isSel ? 650 : 500,
-                                  cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                                  padding: '4px 9px', borderRadius: 7,
+                                  border: `1px solid ${isSel ? C.accent : C.border}`,
+                                  background: isSel ? C.accent : 'transparent',
+                                  color: isSel ? C.onAccent : C.secondary,
+                                  fontSize: 11, fontWeight: 500,
+                                  cursor: 'pointer', transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease', fontFamily: 'inherit',
                                 }}
                               >{range}</button>
                             );
@@ -6675,7 +7036,7 @@ export default function TrackingSheet() {
                     {/* Company count (only after qualification) */}
                     {lead.r2_result && !intakeContexts[lead.id]?.required && (
                       <div style={{ marginBottom: 12 }}>
-                        <div style={{ fontSize: 9, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em', marginBottom: 6 }}>
                           Nbr de sociétés
                         </div>
                         <input
@@ -6695,10 +7056,10 @@ export default function TrackingSheet() {
                           }}
                           onFocus={() => { lead._prevCompanyCount = lead.company_count || ''; }}
                           style={{
-                            width: 80, padding: '5px 10px', borderRadius: 6,
-                            border: `1px solid ${lead.company_count ? '#fb923c' : C.border}`,
-                            background: lead.company_count ? (darkMode ? 'rgba(251,146,60,0.1)' : 'rgba(251,146,60,0.05)') : 'transparent',
-                            color: C.text, fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
+                            width: 80, padding: '6px 10px', borderRadius: 9,
+                            border: `1px solid ${C.border}`,
+                            background: C.bg,
+                            color: C.text, fontSize: 12, fontWeight: 500, fontFamily: 'inherit',
                             outline: 'none', transition: 'all 0.15s',
                           }}
                         />
@@ -6709,8 +7070,8 @@ export default function TrackingSheet() {
               })()}
 
               {/* ═══ NEW / CALLBACK / VOICEMAIL TAB WORKFLOW ═══ */}
-              {(activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail') && (() => {
-                if (isGuidedLead(lead)) return <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border,marginBottom:16}} onClick={() => {setActiveWorkflow(null);setContactDialog({lead,category:activeCat.key});}}><PhoneCall size={22}/><span>Qualifier le contact<small>Résultat de l’appel et planification du R1 ou du R2</small></span><ChevronRight size={18}/></button>;
+              {(activeCat.key === 'new' || activeCat.key === 'callback' || activeCat.key === 'voicemail' || (activeCat.key === 'to_recontact' && isGuidedLead(lead))) && (() => {
+                if (isGuidedLead(lead)) return <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border,marginBottom:16}} onClick={() => {setActiveWorkflow(null);setContactDialog({lead,category:activeCat.key});}}><PhoneCall size={22}/><span>{activeCat.key === 'to_recontact' ? 'Reprendre le contact' : 'Qualifier le contact'}<small>Résultat de l’appel et planification du R1 ou du R2</small></span><ChevronRight size={18}/></button>;
                 const wf = activeWorkflow?.leadId === lead.id && !activeWorkflow?.callFlow ? activeWorkflow : null;
                 const today = parisToday();
                 // Preserve original first contact date if already set (callback/voicemail leads have been contacted before)
@@ -6747,7 +7108,7 @@ export default function TrackingSheet() {
                   <button key={label} onClick={onClick} style={{
                     display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 50,
                     border: 'none', background: darkMode ? `${color}22` : `${color}12`, color,
-                    fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                     animation: `wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) ${delay}ms both`,
                     transition: 'background 0.15s, transform 0.15s',
                   }}
@@ -6765,27 +7126,27 @@ export default function TrackingSheet() {
                         onClick={() => setActiveWorkflow({ leadId: lead.id, contactResult: '', appointmentResult: '', newDate: '' })}
                         style={{
                           width: '100%', padding: '10px 16px', borderRadius: 50, border: 'none',
-                          background: '#E8F2FD', color: '#3b82f6', fontSize: 13, fontWeight: 600,
+                          background: darkMode ? '#ededed' : '#2b2927', color: darkMode ? '#141414' : '#ffffff', fontSize: 13, fontWeight: 500,
                           cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                         }}
-                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = '#d4e8fa'; }}
-                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = '#E8F2FD'; }}
+                        onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.02)'; e.currentTarget.style.background = darkMode ? '#ffffff' : '#1c1b19'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.background = darkMode ? '#ededed' : '#2b2927'; }}
                       >
                         {activeCat.key === 'new' ? 'Premier contact' : 'Re-contacter'}
                       </button>
                     ) : !wf.contactResult ? (
                       /* ── Step 1: Contact result pills ── */
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
                           Résultat du contact
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('A décroché', '#10b981', '✓', 30, () => setActiveWorkflow(prev => ({ ...prev, contactResult: 'reached', appointmentResult: '', newDate: '' })))}
-                          {wfPill('Répondeur', '#64748b', '📞', 70, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'voicemail', status: 'voicemail' }))}
+                          {wfPill('Répondeur', '#8b867e', '📞', 70, () => isReContact ? bumpCallAttempts() : handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'voicemail', status: 'voicemail' }))}
                           {wfPill('Non pertinent', '#ef4444', '✕', 110, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_relevant', status: 'not_relevant' }))}
                           {wfPill('Non traitable', '#f59e0b', '⚠', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'not_processable', status: 'not_relevant' }))}
                           {wfPill('À relancer', '#14b8a6', '↻', 190, () => setActiveWorkflow(prev => ({ ...prev, contactResult: 'to_recontact', newDate: '' })))}
-                          {wfPill('Injoignable', '#475569', '🚫', 230, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'unreachable', status: 'unreachable' }))}
+                          {wfPill('Injoignable', '#55514b', '🚫', 230, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'unreachable', status: 'unreachable' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(null)}
                           style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', marginTop: 2, opacity: 0.7, animation: 'wfSplitIn 0.3s ease 200ms both' }}
@@ -6796,7 +7157,7 @@ export default function TrackingSheet() {
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '16px 18px', borderRadius: 16, background: darkMode ? 'rgba(20,184,166,0.08)' : 'rgba(20,184,166,0.05)', border: `1px solid ${darkMode ? 'rgba(20,184,166,0.22)' : 'rgba(20,184,166,0.15)'}`, animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>↻</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#0f9b8e' }}>Quand le recontacter ?</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#0f9b8e' }}>Quand le recontacter ?</span>
                         </div>
                         <div style={{ fontSize: 10.5, color: C.muted }}>Date approximative, modifiable plus tard.</div>
                         <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
@@ -6805,7 +7166,7 @@ export default function TrackingSheet() {
                         />
                         {wf.newDate && wf.newDate.length >= 10 && (
                           <button onClick={() => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, status: 'to_recontact', recontact_date: wf.newDate.slice(0, 10) })}
-                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#14b8a6', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#14b8a6', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
                           >Confirmer → À relancer</button>
                         )}
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', newDate: '' }))}
@@ -6816,14 +7177,14 @@ export default function TrackingSheet() {
                       /* ── Step 2: Follow-up pills ── */
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
-                          <span style={{ fontSize: 11, color: '#10b981', fontWeight: 700 }}>✓ A décroché</span>
+                          <span style={{ fontSize: 11, color: '#10b981', fontWeight: 500 }}>✓ A décroché</span>
                           <span style={{ fontSize: 10, color: C.muted }}>→</span>
-                          <span style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Suite ?</span>
+                          <span style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Suite ?</span>
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
                           {wfPill('RDV R1', '#3b82f6', '📅', 30, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'appointment_set', newDate: '' })))}
                           {wfPill('R2 direct', '#fb923c', '⚡', 70, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'r2_direct', newDate: '' })))}
-                          {wfPill('À rappeler', '#94a3b8', '↩', 110, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'callback_set', newDate: '', note: '', error: '' })))}
+                          {wfPill('À rappeler', '#a8a39b', '↩', 110, () => setActiveWorkflow(prev => ({ ...prev, appointmentResult: 'callback_set', newDate: '', note: '', error: '' })))}
                           {wfPill('Pas intéressé', '#ef4444', '✕', 150, () => handleWorkflowSubmit(lead.id, { first_contact_date: firstContactDate, contact_result: 'reached', appointment_result: 'not_interested', status: 'not_relevant' }))}
                         </div>
                         <button onClick={() => setActiveWorkflow(prev => ({ ...prev, contactResult: '', appointmentResult: '' }))}
@@ -6841,11 +7202,11 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>📅</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>Planifier le R1</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#3b82f6' }}>Planifier le R1</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date"
                               value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
                               onChange={(e) => {
@@ -6860,7 +7221,7 @@ export default function TrackingSheet() {
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
@@ -6873,7 +7234,7 @@ export default function TrackingSheet() {
                             })}
                             style={{
                               padding: '10px 20px', borderRadius: 50, border: 'none',
-                              background: '#3b82f6', color: '#fff', fontSize: 12.5, fontWeight: 700,
+                              background: darkMode ? '#3b82f6' : '#2b2927', color: '#fff', fontSize: 12.5, fontWeight: 500,
                               cursor: 'pointer', fontFamily: 'inherit',
                               animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
                               transition: 'transform 0.15s, box-shadow 0.15s',
@@ -6897,18 +7258,18 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>⚡</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c' }}>Planifier le R2 directement</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#fb923c' }}>Planifier le R2 directement</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
                               onChange={(e) => { const time = wf.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
                               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
@@ -6919,7 +7280,7 @@ export default function TrackingSheet() {
                             })}
                             style={{
                               padding: '10px 20px', borderRadius: 50, border: 'none',
-                              background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 700,
+                              background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 500,
                               cursor: 'pointer', fontFamily: 'inherit',
                               animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both',
                               transition: 'transform 0.15s, box-shadow 0.15s',
@@ -6943,23 +7304,23 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>↩</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: darkMode ? '#cbd5e1' : '#64748b' }}>Planifier le rappel</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: darkMode ? '#d8d3cb' : '#8b867e' }}>Planifier le rappel</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''} disabled={!!wf.saving}
                               onChange={(e) => { const time = wf.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value ? e.target.value + time : '', error: '' })); }}
                               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t, error: '' })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         <div>
-                          <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Description <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(facultatif)</span></div>
+                          <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Description <span style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400 }}>(facultatif)</span></div>
                           <textarea rows={2} maxLength={CALLBACK_NOTE_MAX} value={wf.note || ''} disabled={!!wf.saving}
                             onChange={(e) => setActiveWorkflow(prev => ({ ...prev, note: e.target.value }))}
                             placeholder="Ce dont vous avez convenu avec le prospect…"
@@ -6968,15 +7329,15 @@ export default function TrackingSheet() {
                         </div>
                         {(() => { const ruleNote = recallRuleNote(leads.find(l => l.id === lead.id) || lead); return ruleNote ? (
                           <div role="note" style={{ fontSize: 11.5, lineHeight: 1.4, padding: '8px 10px', borderRadius: 10, color: darkMode ? '#e8d49a' : '#6b5410', background: darkMode ? '#2f2a1b' : '#fbf5e4', border: `1px solid ${darkMode ? '#5a4c24' : '#e6d9b8'}` }}>
-                            <div style={{ fontWeight: 700 }}>{ruleNote}</div>
+                            <div style={{ fontWeight: 500 }}>{ruleNote}</div>
                             <div>{CALLBACK_RULE_HELP}</div>
                           </div>
                         ) : null; })()}
-                        {recallInPast(wf.newDate) && <div role="alert" style={{ fontSize: 11, fontWeight: 600, color: darkMode ? '#fca5a5' : '#b42318' }}>Cette heure est déjà passée.</div>}
-                        {wf.error && <div role="alert" style={{ fontSize: 11, fontWeight: 600, color: darkMode ? '#fca5a5' : '#b42318' }}>{wf.error}</div>}
+                        {recallInPast(wf.newDate) && <div role="alert" style={{ fontSize: 11, fontWeight: 500, color: darkMode ? '#fca5a5' : '#b42318' }}>Cette heure est déjà passée.</div>}
+                        {wf.error && <div role="alert" style={{ fontSize: 11, fontWeight: 500, color: darkMode ? '#fca5a5' : '#b42318' }}>{wf.error}</div>}
                         {wf.newDate && wf.newDate.length >= 10 && !recallInPast(wf.newDate) && (
                           <button disabled={!!wf.saving} onClick={confirmCallback}
-                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#64748b', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: wf.saving ? 'wait' : 'pointer', opacity: wf.saving ? 0.6 : 1, fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#8b867e', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: wf.saving ? 'wait' : 'pointer', opacity: wf.saving ? 0.6 : 1, fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}
                           >{wf.saving ? 'Enregistrement…' : 'Confirmer → À rappeler'}</button>
                         )}
                         <button disabled={!!wf.saving} onClick={() => setActiveWorkflow(prev => ({ ...prev, appointmentResult: '', newDate: '', note: '', error: '' }))}
@@ -6996,7 +7357,7 @@ export default function TrackingSheet() {
                   <button key={label} onClick={onClick} style={{
                     display: 'flex', alignItems: 'center', gap: 7, padding: '9px 16px', borderRadius: 50,
                     border: 'none', background: darkMode ? `${color}22` : `${color}12`, color,
-                    fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                     animation: `wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) ${delay}ms both`,
                     transition: 'background 0.15s, transform 0.15s',
                   }}
@@ -7015,18 +7376,17 @@ export default function TrackingSheet() {
                   <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {!wf ? (
                       <>
-                        <button
-                          onClick={() => isGuidedLead(lead) ? setQualificationDialog({lead,stage:'r1'}) : setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
+                        {isGuidedLead(lead) ? <button className="sj-qualify" style={{background:C.bg,color:C.text,borderColor:C.border}} onClick={() => setQualificationDialog({lead,stage:'r1'})}><CalendarCheck2 size={22}/><span>{lead.r1_result ? 'Qualification du R1' : 'Qualifier le R1'}<small>{lead.r1_result ? 'Modifier le résultat ou planifier le R2' : 'Résultat du rendez-vous et planification du R2'}</small></span><ChevronRight size={18}/></button> : <button
+                          onClick={() => setActiveWorkflow({ leadId: lead.id, r1Result: '', r1FollowUp: '', newDate: '' })}
                           style={{
                             width: '100%', padding: '10px 16px', borderRadius: 50,
                             border: `1px solid ${C.border}`, background: 'transparent',
-                            ...(isGuidedLead(lead)?{display:'flex',alignItems:'center',justifyContent:'space-between',gap:12,borderRadius:13,textAlign:'left'}:{}),
-                            color: C.text, fontSize: 13, fontWeight: 600,
+                            color: C.text, fontSize: 13, fontWeight: 500,
                             cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                           }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#3b82f6'; e.currentTarget.style.color = '#3b82f6'; e.currentTarget.style.transform = 'scale(1.02)'; }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.accent; e.currentTarget.style.color = C.accent; e.currentTarget.style.transform = 'scale(1.02)'; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'scale(1)'; }}
-                        >{isGuidedLead(lead)?<><CalendarCheck2 size={20}/><span>Qualifier le R1<small style={{display:'block',fontSize:11,fontWeight:400,marginTop:4}}>Résultat du rendez-vous et planification du R2</small></span><ChevronRight size={17}/></>:'Qualifier le R1'}</button>
+                        >Qualifier le R1</button>}
 
                         {/* ── R2 placé: separate standalone button (only after R1 qualified) ── */}
                         {isGuidedLead(lead) || !lead.r1_result ? null : !wfR2 ? (
@@ -7036,7 +7396,7 @@ export default function TrackingSheet() {
                               width: '100%', padding: '10px 16px', borderRadius: 50,
                               border: `1px solid ${darkMode ? 'rgba(251,146,60,0.3)' : 'rgba(251,146,60,0.25)'}`,
                               background: darkMode ? 'rgba(251,146,60,0.08)' : 'rgba(251,146,60,0.04)',
-                              color: '#fb923c', fontSize: 13, fontWeight: 600,
+                              color: '#fb923c', fontSize: 13, fontWeight: 500,
                               cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                             }}
@@ -7054,24 +7414,24 @@ export default function TrackingSheet() {
                           }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                               <span style={{ fontSize: 15 }}>📅</span>
-                              <span style={{ fontSize: 12, fontWeight: 700, color: '#fb923c' }}>Planifier le R2</span>
+                              <span style={{ fontSize: 12, fontWeight: 500, color: '#fb923c' }}>Planifier le R2</span>
                             </div>
                             <div style={{ display: 'flex', gap: 8 }}>
                               <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                                <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                                 <input type="date" value={wfR2.newDate ? wfR2.newDate.slice(0, 10) : ''}
                                   onChange={(e) => { const time = wfR2.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
                                   style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                                 />
                               </div>
                               <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                                <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                                 <TimeSelect value={wfR2.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR2.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                               </div>
                             </div>
                             {wfR2.newDate && wfR2.newDate.length >= 10 && (
                               <button onClick={() => handleWorkflowSubmit(lead.id, { r1_result: 'done', r1_completed_at: new Date().toISOString(), r1_follow_up: 'r2_set', r2_date: wfR2.newDate, status: 'r2' })}
-                                style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                                style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#fb923c', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
                                 onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(251,146,60,0.35)'; }}
                                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                               >Confirmer → R2</button>
@@ -7093,9 +7453,9 @@ export default function TrackingSheet() {
                           if (!leadContracts[lead.id] && typeof fetchLeadContracts === 'function') fetchLeadContracts(lead.id);
                           return (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '14px 16px', borderRadius: 14, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`, background: darkMode ? 'rgba(16,185,129,0.04)' : 'rgba(16,185,129,0.02)', animation: 'wfDateCardIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both' }}>
-                              <div style={{ fontSize: 12, fontWeight: 700, color: '#10b981' }}>Envoi rapide du contrat</div>
+                              <div style={{ fontSize: 12, fontWeight: 500, color: '#10b981' }}>Envoi rapide du contrat</div>
                               <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.4 }}>Envoyez le contrat directement à l’issue du R1.</div>
-                              <div style={{ fontSize: 10, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tranche salariale</div>
+                              <div style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tranche salariale</div>
                               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
                                 {EMPLOYEE_RANGES.map(range => {
                                   const isSel = lead.employee_range === range;
@@ -7103,15 +7463,15 @@ export default function TrackingSheet() {
                                 })}
                               </div>
                               <div style={{ display: 'flex', gap: 6 }}>
-                                <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
-                                <button onClick={() => { if (!isSending && hasRange) handleSendContract(lead); }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 600, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
+                                <button onClick={() => openNdaPopup(lead)} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : C.border}`, background: ndaDone ? 'rgba(16,185,129,0.04)' : 'transparent', color: ndaDone ? '#10b981' : C.accent, fontSize: 11, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}>{ndaDone ? 'NDA généré ✓' : 'Générer NDA'}</button>
+                                <button onClick={() => { if (!isSending && hasRange) handleSendContract(lead); }} disabled={!hasRange || isSending} style={{ flex: 1, padding: '8px 12px', borderRadius: 8, border: 'none', background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2e2e2e' : '#ece9e4'), color: hasRange && !isSending ? '#fff' : C.muted, fontSize: 11, fontWeight: 500, cursor: hasRange && !isSending ? 'pointer' : 'not-allowed', fontFamily: 'inherit', opacity: hasRange && !isSending ? 1 : 0.6 }}>{isSending ? 'Envoi...' : 'Envoyer le contrat'}</button>
                               </div>
-                              {latestContract && <div style={{ fontSize: 11, color: cStatus === 'ongoing' ? '#3b82f6' : cStatus === 'done' ? '#10b981' : C.muted, fontWeight: 600 }}>{cStatus === 'ongoing' ? 'En attente de signature' : cStatus === 'done' ? 'Signé ✓' : cStatus}</div>}
+                              {latestContract && <div style={{ fontSize: 11, color: cStatus === 'ongoing' ? '#3b82f6' : cStatus === 'done' ? '#10b981' : C.muted, fontWeight: 500 }}>{cStatus === 'ongoing' ? 'En attente de signature' : cStatus === 'done' ? 'Signé ✓' : cStatus}</div>}
                               <button onClick={() => setR1ShortcutContract(null)} style={{ padding: '4px 0', border: 'none', background: 'transparent', color: C.muted, fontSize: 10.5, cursor: 'pointer', fontFamily: 'inherit', alignSelf: 'center', opacity: 0.7 }}>← Fermer</button>
                             </div>
                           );
                         })() : (
-                          <button onClick={() => intakeContexts[lead.id]?.required ? handleSendContract(lead) : setR1ShortcutContract(lead.id)} style={{ width: '100%', padding: '10px 16px', borderRadius: 50, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`, background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)', color: '#10b981', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit' }}
+                          <button onClick={() => intakeContexts[lead.id]?.required ? handleSendContract(lead) : setR1ShortcutContract(lead.id)} style={{ width: '100%', padding: '10px 16px', borderRadius: 50, border: `1px solid ${darkMode ? 'rgba(16,185,129,0.3)' : 'rgba(16,185,129,0.2)'}`, background: darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)', color: '#10b981', fontSize: 13, fontWeight: 500, cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit' }}
                             onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.12)' : 'rgba(16,185,129,0.06)'; e.currentTarget.style.transform = 'scale(1.02)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(16,185,129,0.06)' : 'rgba(16,185,129,0.03)'; e.currentTarget.style.transform = 'scale(1)'; }}
                           >Envoyer le contrat</button>
@@ -7120,7 +7480,7 @@ export default function TrackingSheet() {
                     ) : !wf.r1Result ? (
                       /* ── Step 1: R1 qualification pills ── */
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
+                        <div style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 2, animation: 'wfSplitIn 0.3s ease both' }}>
                           Qualifier le R1
                         </div>
                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
@@ -7144,24 +7504,24 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>↻</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#3b82f6' }}>Reporter le R1</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#3b82f6' }}>Reporter le R1</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date" value={wf.newDate ? wf.newDate.slice(0, 10) : ''}
                               onChange={(e) => { const time = wf.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
                               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wf.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wf.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wf.newDate && wf.newDate.length >= 10 && (
                           <button onClick={() => handleWorkflowSubmit(lead.id, { r1_result: 'rescheduled', r1_date: wf.newDate })}
-                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#3b82f6', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: darkMode ? '#3b82f6' : '#2b2927', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', animation: 'wfSplitIn 0.3s cubic-bezier(0.25,0.1,0.25,1) both', transition: 'transform 0.15s, box-shadow 0.15s' }}
                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(59,130,246,0.35)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                           >Confirmer nouvelle date</button>
@@ -7176,10 +7536,71 @@ export default function TrackingSheet() {
               })()}
 
 
+              {/* ═══ Commenter et NDA : juste sous la qualification (dev 11/11/2026), avant le contrat et les SMS ═══ */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '10px 0 16px' }}>
+                {(isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id)) && (
+                  <button
+                    onClick={() => { setNotesError(null); setEditingNotes(prev => ({ ...prev, [lead.id]: prev[lead.id] ?? lead.notes ?? '' })); setPanelTab({ leadId: lead.id, tab: 'commentaire' }); if(isGuidedLead(lead)) setCommentLeadId(lead.id); }}
+                    style={{
+                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                      padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
+                      background: 'transparent', color: C.secondary,
+                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                      transition: 'all 0.15s', fontFamily: 'inherit',
+                    }}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = C.accent; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}
+                  >
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    Commenter
+                  </button>
+                )}
+                {(() => {
+                  const ndaDone = !!(lead.has_client_data);
+                  const ndaColor = ndaDone ? (darkMode ? '#7cc49b' : '#0b7a4b') : C.text;
+                  return (
+                <button
+                  onClick={() => openNdaPopup(lead)}
+                  style={{
+                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                    padding: '9px 14px', borderRadius: 10,
+                    border: `1px solid ${C.border}`,
+                    background: 'transparent',
+                    color: ndaColor,
+                    fontSize: 12, fontWeight: 500, cursor: 'pointer',
+                    transition: 'border-color 0.15s ease', fontFamily: 'inherit',
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
+                >
+                  {ndaDone ? (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  ) : (
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                  )}
+                  {ndaDone ? 'Modifier / régénérer le NDA' : 'Générer NDA'}
+                </button>
+                  );
+                })()}
+              </div>
+
               {/* Dates pipeline (À relancer = recontact futur ; Non pertinent = écarté) */}
-              {activeCat.key === 'to_recontact' && lead.recontact_date && (
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: '#0f9b8e', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>↻</span> Relancer vers le {new Date(lead.recontact_date + 'T12:00:00Z').toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' })}
+              {/* À relancer : la date de reprise, modifiable comme la fenêtre l'annonce (audit 11/11/2026). */}
+              {activeCat.key === 'to_recontact' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>Relancer vers le</span>
+                  <FrenchDateInput aria-label="Date de relance" floating value={lead.recontact_date || ''} style={{ width: 150 }}
+                    onChange={async (date) => {
+                      if (!date || date === lead.recontact_date) return;
+                      const before = lead.recontact_date;
+                      setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, recontact_date: date } : l));
+                      try { await apiClient.patch(`/api/v1/tracking/leads/${lead.id}`, { recontact_date: date }); }
+                      catch { setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, recontact_date: before } : l)); }
+                    }} />
                 </div>
               )}
               {activeCat.key === 'not_relevant' && lead.not_relevant_at && (
@@ -7191,7 +7612,7 @@ export default function TrackingSheet() {
               {/* ═══ OTHER TABS: Déplacer vers (not for signed) ═══ */}
               {!['new', 'r1', 'r2', 'r3', 'signed', 'callback', 'voicemail'].includes(activeCat.key) && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                  <span style={{ fontSize: 11, color: C.muted, fontWeight: 500 }}>Déplacer vers</span>
+                  <span style={{ fontSize: 10, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', whiteSpace: 'nowrap', color: darkMode ? C.muted : '#a8a39b' }}>Déplacer vers</span>
                   <select value=""
                     onChange={(e) => { if (e.target.value) handleStatusChange(lead.id, e.target.value); }}
                     style={selectStyle}
@@ -7216,7 +7637,7 @@ export default function TrackingSheet() {
                 onUpdate={(patch) => setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, ...patch } : l))} />
 
               {/* ═══ PLACE R3 (R2 tab, after R2 effectué, only if R3 enabled) ═══ */}
-              {activeCat.key === 'r2' && lead.r2_result === 'done' && calSettings?.r3_enabled && (() => {
+              {activeCat.key === 'r2' && lead.r2_result === 'done' && calSettings?.r3_enabled && !isGuidedLead(lead) && (() => {
                 const wfR3 = activeWorkflow?.leadId === lead.id && activeWorkflow?.r2Result === 'r3_set' ? activeWorkflow : null;
                 return (
                   <div style={{ marginBottom: 16 }}>
@@ -7225,7 +7646,7 @@ export default function TrackingSheet() {
                         width: '100%', padding: '10px 16px', borderRadius: 50,
                         border: `1px solid ${darkMode ? 'rgba(139,92,246,0.3)' : 'rgba(139,92,246,0.25)'}`,
                         background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.04)',
-                        color: '#8b5cf6', fontSize: 13, fontWeight: 600,
+                        color: '#8b5cf6', fontSize: 13, fontWeight: 500,
                         cursor: 'pointer', transition: 'all 0.2s cubic-bezier(0.34,1.56,0.64,1)', fontFamily: 'inherit',
                         display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                       }}
@@ -7242,24 +7663,24 @@ export default function TrackingSheet() {
                       }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ fontSize: 15 }}>📅</span>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: '#8b5cf6' }}>Planifier le R3</span>
+                          <span style={{ fontSize: 12, fontWeight: 500, color: '#8b5cf6' }}>Planifier le R3</span>
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Date</div>
                             <input type="date" value={wfR3.newDate ? wfR3.newDate.slice(0, 10) : ''}
                               onChange={(e) => { const time = wfR3.newDate?.slice(10) || 'T09:00'; setActiveWorkflow(prev => ({ ...prev, newDate: e.target.value + time })); }}
                               style={{ width: '100%', padding: '8px 10px', borderRadius: 10, fontSize: 12.5, fontWeight: 500, border: `1px solid ${C.border}`, background: C.bg, color: C.text, fontFamily: 'inherit', outline: 'none' }}
                             />
                           </div>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 9.5, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
+                            <div style={{ fontSize: 9.5, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 4 }}>Heure</div>
                             <TimeSelect value={wfR3.newDate?.slice(11, 16) || '09:00'} onChange={(t) => { const date = wfR3.newDate?.slice(0, 10) || parisToday(); setActiveWorkflow(prev => ({ ...prev, newDate: date + 'T' + t })); }} C={C} darkMode={darkMode} />
                           </div>
                         </div>
                         {wfR3.newDate && wfR3.newDate.length >= 10 && (
                           <button onClick={() => handleWorkflowSubmit(lead.id, { r2_result: 'done', r2_completed_at: lead.r2_completed_at || new Date().toISOString(), r3_date: wfR3.newDate, status: 'r3' })}
-                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#8b5cf6', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', transition: 'transform 0.15s, box-shadow 0.15s' }}
+                            style={{ padding: '10px 20px', borderRadius: 50, border: 'none', background: '#8b5cf6', color: '#fff', fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', transition: 'transform 0.15s, box-shadow 0.15s' }}
                             onMouseEnter={(e) => { e.currentTarget.style.transform = 'scale(1.03)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(139,92,246,0.35)'; }}
                             onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; e.currentTarget.style.boxShadow = 'none'; }}
                           >Confirmer → R3</button>
@@ -7283,38 +7704,44 @@ export default function TrackingSheet() {
                 const latestContract = contracts[0] || null;
                 const status = latestContract?.yousign_status;
                 const isCanceling = cancelingContract === latestContract?.id;
-                const STATUS_COLORS = { ongoing: '#3b82f6', done: '#10b981', expired: '#fb923c', canceled: '#94a3b8', failed: '#ef4444', draft: '#d1d5db' };
+                // État du contrat en étiquette pastel à point (11/11/2026, style Owner) : fond, texte, liseré.
+                const STATUS_TAGS = darkMode
+                  ? { ongoing: ['rgba(59,130,246,.14)', '#8fb8ee', 'rgba(59,130,246,.26)'], done: ['rgba(16,185,129,.14)', '#7cc49b', 'rgba(16,185,129,.25)'], expired: ['rgba(251,146,60,.14)', '#e8a877', 'rgba(251,146,60,.26)'], failed: ['rgba(239,68,68,.14)', '#f3a6a3', 'rgba(239,68,68,.26)'] }
+                  : { ongoing: ['#e4f0fd', '#1b6fd0', '#c9e0fa'], done: ['#e2f6ea', '#0b7a4b', '#c3ebd3'], expired: ['#fde9da', '#c2500e', '#f8d4ba'], failed: ['#fde6e6', '#c5221f', '#f6caca'] };
                 const STATUS_LABELS = { ongoing: 'En attente de signature', done: 'Signé', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur', draft: 'Brouillon' };
-                const badgeColor = STATUS_COLORS[status] || C.muted;
+                const badgeTone = STATUS_TAGS[status] || (darkMode ? ['#262626', '#a3a3a3', '#3a3a3a'] : ['#f1eee9', '#4a4540', '#e3ded6']);
                 const badgeLabel = STATUS_LABELS[status] || status;
+                const dangerInk = darkMode ? '#f3a6a3' : '#c5221f';
+                const dangerSoft = darkMode ? 'rgba(239,68,68,.14)' : '#fde6e6';
+                const contractNote = { fontSize: 12, color: C.muted, lineHeight: 1.5 };
                 const daysLeft = latestContract?.expiry_date ? Math.ceil((new Date(latestContract.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null;
                 const actionBtnStyle = (color) => ({
-                  padding: '5px 12px', borderRadius: 8, border: `1px solid ${color}`,
-                  background: 'transparent', color, fontSize: 11, fontWeight: 600,
-                  cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
+                  padding: '6px 11px', borderRadius: 9, border: `1px solid ${C.border}`,
+                  background: C.bg, color, fontSize: 12, fontWeight: 500,
+                  cursor: 'pointer', transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease', fontFamily: 'inherit',
                 });
                 return (
-                  <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 9, ...(latestContract ? { background: C.subtle, borderRadius: 14, padding: '12px 14px' } : {}) }}>
 
                     {latestContract && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{
-                          display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                          borderRadius: 20, fontSize: 11, fontWeight: 600,
-                          background: `${badgeColor}20`, color: badgeColor,
-                        }}>{badgeLabel}</span>
-                        {status === 'ongoing' && daysLeft !== null && <span style={{ fontSize: 11, color: C.muted }}>Expire dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''}</span>}
-                        {status === 'ongoing' && <span style={{ flexBasis: '100%', fontSize: 11, color: C.muted, lineHeight: 1.45 }}>{contractSentLine(latestContract, contractSenders)}. En cas d’erreur, annulez-le pour pouvoir en envoyer un autre.</span>}
-                        {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 11, color: C.muted }}>Signé le {formatDate(latestContract.signed_at)}</span>}
-                        {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 11, color: C.muted }}>Expiré le {formatDate(latestContract.expired_at)}</span>}
-                        {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 11, color: C.muted }}>Annulé le {formatDate(latestContract.canceled_at)}</span>}
-                        {status === 'canceled' && isGuidedLead(lead) && <span style={{ flexBasis: '100%', fontSize: 11, color: C.muted, lineHeight: 1.45 }}>Pour envoyer un nouveau contrat, rouvrez la qualification du rendez-vous et poursuivez vers le contrat.</span>}
-                        {status === 'failed' && latestContract.yousign_error && <span style={{ fontSize: 11, color: '#ef4444' }}>{presentContractError(latestContract.yousign_error, { pilot: !!intakeContexts[lead.id]?.required }).message}</span>}
+                          display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 9px',
+                          borderRadius: 7, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
+                          background: badgeTone[0], color: badgeTone[1], border: `1px solid ${badgeTone[2]}`,
+                        }}><span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />{badgeLabel}</span>
+                        {status === 'ongoing' && daysLeft !== null && <span style={{ fontSize: 12, color: C.muted }}>expire dans {daysLeft} jour{daysLeft !== 1 ? 's' : ''}</span>}
+                        {status === 'done' && latestContract.signed_at && <span style={{ fontSize: 12, color: C.muted }}>le {formatDate(latestContract.signed_at)}</span>}
+                        {status === 'expired' && latestContract.expired_at && <span style={{ fontSize: 12, color: C.muted }}>le {formatDate(latestContract.expired_at)}</span>}
+                        {status === 'canceled' && latestContract.canceled_at && <span style={{ fontSize: 12, color: C.muted }}>le {formatDate(latestContract.canceled_at)}</span>}
+                        {status === 'ongoing' && <span style={{ flexBasis: '100%', ...contractNote }}>{contractSentLine(latestContract, contractSenders)}.</span>}
+                        {['canceled', 'expired', 'failed'].includes(status) && isGuidedLead(lead) && <span style={{ flexBasis: '100%', ...contractNote }}>Pour envoyer un nouveau contrat, rouvrez la qualification du rendez-vous et poursuivez vers le contrat.</span>}
+                        {status === 'failed' && latestContract.yousign_error && <span style={{ flexBasis: '100%', ...contractNote, color: dangerInk }}>{presentContractError(latestContract.yousign_error, { pilot: !!intakeContexts[lead.id]?.required }).message}</span>}
                       </div>
                     )}
                     {/* View contract PDFs */}
                     {latestContract && (status === 'ongoing' || status === 'done') && (
-                      <div style={{ display: 'flex', gap: 6 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                         {(latestContract.documents || [{ doc_type: 'owner', name: 'Convention Owner' }]).filter(doc => doc.doc_type === 'owner').map(doc => { const docType = doc.doc_type; return (
                           <button key={docType} onClick={async () => {
                             try {
@@ -7326,21 +7753,30 @@ export default function TrackingSheet() {
                               const blob = await resp.blob();
                               window.open(URL.createObjectURL(blob), '_blank');
                             } catch (e) { alert('Erreur lors du téléchargement du contrat'); console.error(e); }
-                          }} style={{
-                            padding: '4px 10px', borderRadius: 8, border: `1px solid ${C.border}`,
-                            background: 'transparent', color: C.accent, fontSize: 10.5, fontWeight: 600,
-                            cursor: 'pointer', transition: 'all 0.15s', fontFamily: 'inherit',
-                            display: 'flex', alignItems: 'center', gap: 4,
+                          }} title="Ouvrir le contrat" style={{
+                            padding: '6px 11px', borderRadius: 9, border: `1px solid ${C.border}`,
+                            background: C.bg, color: C.text, fontSize: 12, fontWeight: 500,
+                            cursor: 'pointer', transition: 'border-color 0.15s ease', fontFamily: 'inherit',
+                            display: 'flex', alignItems: 'center', gap: 6,
                           }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = `${C.accent}10`; e.currentTarget.style.borderColor = C.accent; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
                           >
-                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" />
                             </svg>
                             {doc.name || 'Convention Owner'}
                           </button>
                         ); })}
+                        {/* Annuler : discret, à droite ; la raison se lit au survol et dans la confirmation. */}
+                        {status === 'ongoing' && (
+                          <button onClick={() => !isCanceling && handleCancelContract(latestContract.id, lead.id)} disabled={isCanceling}
+                            title="En cas d’erreur, annulez-le pour pouvoir en envoyer un autre"
+                            style={{ marginLeft: 'auto', padding: '6px 9px', borderRadius: 9, border: 'none', background: 'transparent', color: dangerInk, fontSize: 12, fontWeight: 500, cursor: isCanceling ? 'default' : 'pointer', transition: 'background 0.15s ease', fontFamily: 'inherit' }}
+                            onMouseEnter={(e) => { e.currentTarget.style.background = dangerSoft; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+                          >{isCanceling ? 'Annulation…' : 'Annuler le contrat'}</button>
+                        )}
                       </div>
                     )}
 
@@ -7356,7 +7792,7 @@ export default function TrackingSheet() {
                       const fr = iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '';
                       return (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: C.muted }}>Date du contrat</span>
+                          <span style={{ fontSize: 11, fontWeight: 500, color: C.muted }}>Date du contrat</span>
                           <input
                             type="date"
                             value={iso}
@@ -7378,7 +7814,7 @@ export default function TrackingSheet() {
                               style={{
                                 padding: '2px 8px', borderRadius: 6, border: `1px solid ${C.border}`,
                                 background: 'transparent', color: C.muted, fontSize: 10,
-                                fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                                fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                                 transition: 'all 0.15s',
                               }}
                               onMouseEnter={(e) => { e.currentTarget.style.color = C.text; e.currentTarget.style.borderColor = C.text; }}
@@ -7390,41 +7826,34 @@ export default function TrackingSheet() {
                     })()}
 
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      {status === 'ongoing' && (
-                        <button onClick={() => !isCanceling && handleCancelContract(latestContract.id, lead.id)} disabled={isCanceling}
-                          style={actionBtnStyle('#ef4444')}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#ef4444'; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#ef4444'; }}
-                        >{isCanceling ? 'Annulation...' : 'Annuler le contrat'}</button>
-                      )}
                       {!isGuidedLead(lead) && (status === 'expired' || status === 'canceled' || status === 'failed') && (
                         <button onClick={() => !isResending && handleResendContract(latestContract.id, lead.id)} disabled={isResending}
-                          style={actionBtnStyle('#fb923c')}
-                          onMouseEnter={(e) => { e.currentTarget.style.background = '#fb923c'; e.currentTarget.style.color = '#fff'; }}
-                          onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#fb923c'; }}
+                          style={actionBtnStyle(C.text)}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
                         >{isResending ? 'Renvoi...' : (status === 'failed' ? 'Réessayer' : 'Renvoyer')}</button>
                       )}
                       {/* First time — no contract ever sent */}
                       {!isGuidedLead(lead) && !latestContract && (
                         <>
                           {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
-                            style={actionBtnStyle('#6366f1')}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
+                            style={actionBtnStyle(C.text)}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
                           >Générer NDA</button>}
                           <button
                             onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
                             disabled={!hasRange || isSending}
                             title={!hasRange ? "Sélectionnez une tranche salariale d'abord" : ''}
                             style={{
-                              padding: '5px 12px', borderRadius: 8, border: 'none',
-                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                              color: hasRange && !isSending ? '#fff' : C.muted,
-                              fontSize: 11, fontWeight: 600,
+                              padding: '7px 12px', borderRadius: 9, border: 'none',
+                              background: hasRange && !isSending ? C.accent : (darkMode ? '#2e2e2e' : '#ece9e4'),
+                              color: hasRange && !isSending ? C.onAccent : C.muted,
+                              fontSize: 12, fontWeight: 500,
                               cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
                               opacity: hasRange && !isSending ? 1 : 0.6,
-                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,background:'#254b44',display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
+                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
                             }}
                           >{isSending ? 'Préparation…' : isGuidedLead(lead) ? 'Préparer le contrat' : 'Envoyer le contrat'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
                         </>
@@ -7433,22 +7862,22 @@ export default function TrackingSheet() {
                       {!isGuidedLead(lead) && latestContract && status === 'draft' && (
                         <>
                           {!isGuidedLead(lead) && <button onClick={() => openNdaPopup(lead)}
-                            style={actionBtnStyle('#6366f1')}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = '#6366f1'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = '#6366f1'; }}
+                            style={actionBtnStyle(C.text)}
+                            onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
+                            onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}
                           >Générer NDA</button>}
                           <button
                             onClick={() => hasRange && !isSending ? handleSendContract(lead) : null}
                             disabled={!hasRange || isSending}
                             style={{
-                              padding: '5px 12px', borderRadius: 8, border: 'none',
-                              background: hasRange && !isSending ? '#10b981' : (darkMode ? '#2a2b36' : '#e2e6ef'),
-                              color: hasRange && !isSending ? '#fff' : C.muted,
-                              fontSize: 11, fontWeight: 600,
+                              padding: '7px 12px', borderRadius: 9, border: 'none',
+                              background: hasRange && !isSending ? C.accent : (darkMode ? '#2e2e2e' : '#ece9e4'),
+                              color: hasRange && !isSending ? C.onAccent : C.muted,
+                              fontSize: 12, fontWeight: 500,
                               cursor: hasRange && !isSending ? 'pointer' : 'not-allowed',
                               transition: 'all 0.15s', fontFamily: 'inherit',
                               opacity: hasRange && !isSending ? 1 : 0.6,
-                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,background:'#254b44',display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
+                              ...(isGuidedLead(lead)?{width:'100%',padding:'13px 16px',borderRadius:12,fontSize:13,display:'flex',alignItems:'center',justifyContent:'center',gap:8}:{}),
                             }}
                           >{isSending ? 'Préparation…' : isGuidedLead(lead) ? 'Préparer le contrat' : 'Envoyer le contrat'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
                         </>
@@ -7474,56 +7903,60 @@ export default function TrackingSheet() {
                 // Statut contrats (Owner + Opti'Lex) — depuis la donnée du lead (marche en vue admin, sans fetch user-scopé).
                 const _ownerDone = !!lead.contract_signed_at;   // onglet Signés -> Owner signé
                 const _ol = lead.contract_optilex_status;        // null = contrat groupé (pré-split), pas de statut Opti'Lex séparé
-                const OL_COLORS = { done: '#10b981', ongoing: '#3b82f6', scheduled: '#a855f7', awaiting_owner_signature: '#94a3b8', expired: '#fb923c', canceled: '#94a3b8', failed: '#ef4444' };
+                // Étiquettes pastel du style Owner (11/11/2026) : fond, texte, liseré.
+                const SIGN_TONES = darkMode
+                  ? { vert: ['rgba(16,185,129,.14)', '#7cc49b', 'rgba(16,185,129,.25)'], bleu: ['rgba(59,130,246,.14)', '#8fb8ee', 'rgba(59,130,246,.26)'], peche: ['rgba(251,146,60,.14)', '#e8a877', 'rgba(251,146,60,.26)'], rouge: ['rgba(239,68,68,.14)', '#f3a6a3', 'rgba(239,68,68,.26)'], beige: ['#262626', '#a3a3a3', '#3a3a3a'] }
+                  : { vert: ['#e2f6ea', '#0b7a4b', '#c3ebd3'], bleu: ['#e4f0fd', '#1b6fd0', '#c9e0fa'], peche: ['#fde9da', '#c2500e', '#f8d4ba'], rouge: ['#fde6e6', '#c5221f', '#f6caca'], beige: ['#f1eee9', '#4a4540', '#e3ded6'] };
+                const OL_COLORS = { done: 'vert', ongoing: 'bleu', scheduled: 'bleu', awaiting_owner_signature: 'beige', expired: 'peche', canceled: 'beige', failed: 'rouge' };
+                const signTag = (tone) => ({ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 8px', borderRadius: 7, fontSize: 11.5, fontWeight: 500, whiteSpace: 'nowrap',
+                  background: SIGN_TONES[tone][0], color: SIGN_TONES[tone][1], border: `1px solid ${SIGN_TONES[tone][2]}` });
+                const signLabel = { fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' };
                 const OL_LABELS = { done: 'Signé', ongoing: 'En attente de signature', scheduled: 'Envoi programmé', awaiting_owner_signature: 'En attente', expired: 'Expiré', canceled: 'Annulé', failed: 'Erreur' };
                 // Split -> vrai statut Opti'Lex (signal de relance). Groupé (null) + Owner signé -> signé dans l'enveloppe Owner.
                 const _grouped = !_ol && _ownerDone;
-                const olColor = _ol ? (OL_COLORS[_ol] || C.muted) : (_grouped ? '#10b981' : C.muted);
+                const olTone = _ol ? (OL_COLORS[_ol] || 'beige') : (_grouped ? 'vert' : 'beige');
                 const olLabel = _ol ? (OL_LABELS[_ol] || _ol) : (_grouped ? 'Signé (inclus au contrat Owner)' : '—');
                 return (
                   <div style={{ marginBottom: 16 }}>
 
                     {_ownerDone && (
                       <div style={{ marginBottom: 16 }}>
-                        <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>Contrats</div>
+                        <div style={{ ...signLabel, marginBottom: 8 }}>Contrats</div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: '#10b98120', color: '#10b981' }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />Owner : Signé
+                          <span style={signTag('vert')}>
+                            <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />Owner : Signé
                           </span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${olColor}20`, color: olColor }}>
-                            <span style={{ width: 6, height: 6, borderRadius: '50%', background: olColor }} />Opti'Lex : {olLabel}
+                          <span style={signTag(olTone)}>
+                            <span aria-hidden="true" style={{ width: 5, height: 5, borderRadius: '50%', background: 'currentColor' }} />Opti'Lex : {olLabel}
                           </span>
                           {_ol === 'done' && lead.contract_optilex_signed_at && <span style={{ fontSize: 11, color: C.muted }}>signé le {formatDate(lead.contract_optilex_signed_at)}</span>}
                         </div>
                       </div>
                     )}
-                    <div style={{ fontSize: 11, fontWeight: 600, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>Post-signature</div>
+                    <div style={{ ...signLabel, marginBottom: 10 }}>Post-signature</div>
 
                     {!rdvDatesSet && onbAwaiting && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 12px', borderRadius: 10,
-                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)', border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}` }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
-                        <span role="status" style={{ flex: 1, fontSize: 12.5, fontWeight: 600, color: C.text }}>{fmtRdvLabel(onbDate)} · Réservation en cours de confirmation</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '8px 12px', borderRadius: 12, background: C.subtle }}>
+                        <span style={{ ...signLabel, whiteSpace: 'nowrap' }}>Onboarding</span>
+                        <span role="status" style={{ flex: 1, fontSize: 12.5, fontWeight: 500, color: C.text }}>{fmtRdvLabel(onbDate)} · Réservation en cours de confirmation</span>
                       </div>
                     )}
                     {rdvDatesSet && (<>
                     {/* Reprogrammation disponible dès la réservation confirmée, avant comme après la déclaration de la vente. */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                       <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
-                        background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.05)',
-                        border: `1px solid ${darkMode ? 'rgba(16,185,129,0.2)' : 'rgba(16,185,129,0.15)'}`,
+                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 12, background: C.subtle,
                       }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#10b981', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Onboarding</span>
+                        <span style={{ ...signLabel, whiteSpace: 'nowrap' }}>Onboarding</span>
                         <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'onboarding', twoStage: isSignedPilot(lead) })}
                           title="Reprogrammer (créneaux libres de l'agenda)"
                           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
-                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: onbDate ? C.text : C.muted,
-                            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#10b981'; }}
+                            border: `1px solid ${C.border}`, background: C.bg, color: onbDate ? C.text : C.muted,
+                            fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
                           <span>{onbDate ? `${fmtRdvLabel(onbDate)} · Reprogrammer` : 'Choisir un créneau'}</span>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                           </svg>
                         </button>
@@ -7534,20 +7967,18 @@ export default function TrackingSheet() {
                     {/* RDV Lancement : contrats historiques uniquement */}
                     {intakeJourneys[lead.id]?.onboarding_only === false && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <div style={{
-                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 10,
-                        background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(99,102,241,0.05)',
-                        border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(99,102,241,0.15)'}`,
+                        display: 'flex', alignItems: 'center', gap: 8, flex: 1, padding: '8px 12px', borderRadius: 12, background: C.subtle,
                       }}>
-                        <span style={{ fontSize: 9, fontWeight: 700, color: '#6366f1', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>Lancement</span>
+                        <span style={{ ...signLabel, whiteSpace: 'nowrap' }}>Lancement</span>
                         <button type="button" onClick={() => setReschedRdv({ leadId: lead.id, kind: 'lancement' })}
                           title="Reprogrammer (créneaux libres de l'agenda)"
                           style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '6px 10px', borderRadius: 8,
-                            border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb', color: lead.rdv_lancement_date ? C.text : C.muted,
-                            fontSize: 12.5, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
-                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = '#6366f1'; }}
+                            border: `1px solid ${C.border}`, background: C.bg, color: lead.rdv_lancement_date ? C.text : C.muted,
+                            fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', transition: 'border-color 0.15s' }}
+                          onMouseEnter={(e) => { e.currentTarget.style.borderColor = C.muted; }}
                           onMouseLeave={(e) => { e.currentTarget.style.borderColor = C.border; }}>
                           <span>{lead.rdv_lancement_date ? fmtRdvLabel(lead.rdv_lancement_date) : 'Choisir un créneau'}</span>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
                             <rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
                           </svg>
                         </button>
@@ -7582,13 +8013,13 @@ export default function TrackingSheet() {
                       style={{
                         width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                         padding: '10px 16px', borderRadius: 10, border: 'none', cursor: canDeclare ? 'pointer' : 'default',
-                        background: canDeclare ? (isSignedPilot(lead)?'#202432':'#10b981') : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                        color: canDeclare ? '#fff' : C.muted,
-                        fontSize: 13, fontWeight: 600, fontFamily: 'inherit',
+                        background: canDeclare ? C.accent : (darkMode ? '#2e2e2e' : '#ece9e4'),
+                        color: canDeclare ? C.onAccent : C.muted,
+                        fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
                         transition: 'all 0.2s ease', opacity: canDeclare ? 1 : 0.6,
                       }}
-                      onMouseEnter={(e) => { if (canDeclare) e.currentTarget.style.background = isSignedPilot(lead)?'#343b50':'#059669'; }}
-                      onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.background = isSignedPilot(lead)?'#202432':'#10b981'; }}
+                      onMouseEnter={(e) => { if (canDeclare) e.currentTarget.style.opacity = '0.88'; }}
+                      onMouseLeave={(e) => { if (canDeclare) e.currentTarget.style.opacity = '1'; }}
                     >
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
                       <span>{intakeJourneys[lead.id]?.preparation?.status === 'finalized' ? 'Vente déclarée' : intakeJourneys[lead.id]?.preparation ? 'Finaliser la déclaration' : 'Déclarer une vente'}{isSignedPilot(lead)&&<small>{intakeJourneys[lead.id]?.preparation?.status === 'finalized' ? 'Consulter la confirmation' : intakeJourneys[lead.id]?.preparation ? 'Reprendre le dossier enregistré' : 'Réserver le rendez-vous, puis finaliser le dossier'}</small>}</span>{isSignedPilot(lead)&&<ArrowRight size={20}/>}
@@ -7604,62 +8035,10 @@ export default function TrackingSheet() {
                 );
               })()}
 
-              {/* ═══ ACTION BUTTONS ═══ */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {(isGuidedLead(lead) || !editingNotes.hasOwnProperty(lead.id)) && (
-                  <button
-                    onClick={() => { setNotesError(null); setEditingNotes(prev => ({ ...prev, [lead.id]: prev[lead.id] ?? lead.notes ?? '' })); if(isGuidedLead(lead)) setCommentLeadId(lead.id); }}
-                    style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                      padding: '9px 14px', borderRadius: 10, border: `1px solid ${C.border}`,
-                      background: 'transparent', color: C.secondary,
-                      fontSize: 12, fontWeight: 500, cursor: 'pointer',
-                      transition: 'all 0.15s', fontFamily: 'inherit',
-                    }}
-                    onMouseEnter={(e) => { e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)'; e.currentTarget.style.borderColor = C.accent; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = C.border; }}
-                  >
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                    </svg>
-                    Commenter
-                  </button>
-                )}
-                {(() => {
-                  const ndaDone = !!(lead.has_client_data);
-                  const ndaColor = ndaDone ? '#10b981' : '#6366f1';
-                  return (
-                <button
-                  onClick={() => openNdaPopup(lead)}
-                  style={{
-                    flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                    padding: '9px 14px', borderRadius: 10,
-                    border: `1px solid ${ndaDone ? 'rgba(16,185,129,0.25)' : (darkMode ? 'rgba(99,102,241,0.25)' : 'rgba(91,106,191,0.2)')}`,
-                    background: ndaDone ? (darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent',
-                    color: ndaColor,
-                    fontSize: 12, fontWeight: 600, cursor: 'pointer',
-                    transition: 'all 0.15s', fontFamily: 'inherit',
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = ndaColor; e.currentTarget.style.color = '#fff'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = ndaDone ? (darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.04)') : 'transparent'; e.currentTarget.style.color = ndaColor; }}
-                >
-                  {ndaDone ? (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                  ) : (
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-                    </svg>
-                  )}
-                  {ndaDone ? 'Modifier / régénérer le NDA' : 'Générer NDA'}
-                </button>
-                  );
-                })()}
-              </div>
-
               {/* ═══ REASSIGN (killed sheet or invitation) ═══ */}
               {isAdminView && (viewingSheetStatus === 'killed' || myInvitations.some(inv => inv.sheet_email === viewingSheetId)) && (
                 <div style={{ marginTop: 16, padding: '14px 0', borderTop: `1px solid ${C.border}` }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 10 }}>
                     Réaffecter ce lead
                   </div>
                   {reassignTarget?.leadId === lead.id ? (
@@ -7698,7 +8077,7 @@ export default function TrackingSheet() {
                       padding: '10px 14px', borderRadius: 10,
                       border: `1px solid ${darkMode ? 'rgba(139,92,246,0.25)' : 'rgba(139,92,246,0.2)'}`,
                       background: darkMode ? 'rgba(139,92,246,0.08)' : 'rgba(139,92,246,0.04)',
-                      color: '#8b5cf6', fontSize: 13, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                      color: '#8b5cf6', fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                       transition: 'all 0.15s',
                     }}
                       onMouseEnter={(e) => { e.currentTarget.style.background = '#8b5cf6'; e.currentTarget.style.color = '#fff'; }}
@@ -7724,7 +8103,7 @@ export default function TrackingSheet() {
                   style={{
                     display: 'flex', alignItems: 'center', gap: 6, padding: '4px 6px',
                     border: 'none', background: 'transparent', color: C.muted,
-                    fontSize: 11.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit',
+                    fontSize: 11.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit',
                     letterSpacing: '0.02em',
                   }}
                 >
@@ -7741,7 +8120,7 @@ export default function TrackingSheet() {
                     </label>
 
                     {/* Sociétés couvertes (Annexe 1 de la convention Opti'Lex) */}
-                    <div style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
+                    <div style={{ fontSize: 11, fontWeight: 500, color: C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>
                       Sociétés couvertes par la convention
                     </div>
                     <div style={{ fontSize: 11, color: C.muted, marginBottom: 8, lineHeight: 1.5 }}>
@@ -7763,7 +8142,7 @@ export default function TrackingSheet() {
                       }}>
                         <input type="checkbox" checked={cc.selected} onChange={() => toggleCoveredCompany(lead.id, cc)} style={{ cursor: 'pointer' }} />
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cc.denomination}</div>
+                          <div style={{ fontSize: 12.5, fontWeight: 500, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{cc.denomination}</div>
                           <div style={{ fontSize: 10.5, color: C.muted }}>{cc.siren ? `SIREN ${cc.siren}` : 'SIREN inconnu'}{cc.source === 'manual' ? ' · ajout manuel' : ''}</div>
                         </div>
                       </label>
@@ -7773,16 +8152,17 @@ export default function TrackingSheet() {
                     <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                       <input value={manualCompany.denomination} placeholder="Ajouter une société…"
                         onChange={(e) => setManualCompany(prev => ({ ...prev, denomination: e.target.value }))}
-                        style={{ flex: 2, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
+                        style={{ flex: 2, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#181818' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
                       <input value={manualCompany.siren} placeholder="SIREN"
                         onChange={(e) => setManualCompany(prev => ({ ...prev, siren: e.target.value.replace(/[^\d\s]/g, '') }))}
-                        style={{ flex: 1, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#16171e' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
+                        style={{ flex: 1, padding: '6px 9px', borderRadius: 8, border: `1px solid ${C.border}`, background: darkMode ? '#181818' : '#fff', color: C.text, fontSize: 12, fontFamily: 'inherit', outline: 'none', minWidth: 0 }} />
                       <button onClick={() => addManualCoveredCompany(lead.id)} disabled={!manualCompany.denomination.trim()}
-                        style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: manualCompany.denomination.trim() ? C.accent : C.muted, color: '#fff', fontSize: 12, fontWeight: 700, cursor: manualCompany.denomination.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>+</button>
+                        style={{ padding: '6px 12px', borderRadius: 8, border: 'none', background: manualCompany.denomination.trim() ? C.accent : C.muted, color: C.onAccent, fontSize: 12, fontWeight: 500, cursor: manualCompany.denomination.trim() ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}>+</button>
                     </div>
                   </div>
                 )}
               </div>}
+              </div>{/* fin du volet Infos, 2e partie */}
 
             </div>{/* end detail padding */}
           </div>,
@@ -7817,8 +8197,9 @@ export default function TrackingSheet() {
                 height: '100%',
                 overflow: 'hidden',
                 position: 'relative',
-                borderRadius: 8,
+                borderRadius: 18,
                 border: `1px solid ${C.border}`,
+                background: C.bg,
               }}
             />
           </div>
@@ -7834,7 +8215,7 @@ export default function TrackingSheet() {
         <div
           style={{
             position: 'fixed', inset: 0, zIndex: 9999,
-            background: 'rgba(0,0,0,0.45)',
+            background: C.veil,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             animation: 'modalOverlayIn 0.2s ease both',
           }}
@@ -7842,15 +8223,15 @@ export default function TrackingSheet() {
         >
           <div style={{
             width: '100%', maxWidth: 440, maxHeight: '85vh', overflowY: 'auto',
-            background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 8px 40px rgba(0,0,0,0.5)' : '0 8px 40px rgba(0,0,0,0.12)',
+            background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            boxShadow: C.sheetShadow,
             padding: '28px 28px 24px',
             animation: 'modalCardInFlex 0.25s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
             {/* Header */}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
               <div>
-                <h2 style={{ fontSize: 18, fontWeight: 700, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Ajouter un lead</h2>
+                <h2 style={{ fontSize: 18, fontWeight: 500, color: C.text, margin: 0, letterSpacing: '-0.01em' }}>Ajouter un lead</h2>
                 <p style={{ fontSize: 12, color: C.muted, margin: '3px 0 0' }}>Créez un nouveau lead pour le cold call</p>
               </div>
               <button onClick={() => setShowAddLeadModal(false)} style={{
@@ -7874,7 +8255,7 @@ export default function TrackingSheet() {
                 { key: 'company_type', label: "Type d'entreprise", placeholder: 'Sélectionner...', type: 'select', options: ["SARL","SAS","SASU","SA","EURL","SCI","SNC","EI"] },
               ].map(field => (
                 <div key={field.key}>
-                  <label style={{ fontSize: 11.5, fontWeight: 600, color: C.secondary, marginBottom: 5, display: 'block' }}>
+                  <label style={{ fontSize: 11.5, fontWeight: 500, color: C.secondary, marginBottom: 5, display: 'block' }}>
                     {field.label}
                   </label>
                   {field.type === 'select' ? (
@@ -7885,7 +8266,7 @@ export default function TrackingSheet() {
                         width: '100%', padding: '9px 12px', borderRadius: 10,
                         fontSize: 13, fontWeight: 500,
                         border: `1px solid ${C.border}`,
-                        background: darkMode ? '#16171e' : '#fff', color: formData[field.key] ? C.text : C.muted,
+                        background: darkMode ? '#181818' : '#fff', color: formData[field.key] ? C.text : C.muted,
                         outline: 'none', fontFamily: 'inherit',
                         transition: 'border-color 0.15s, box-shadow 0.15s',
                         boxSizing: 'border-box', cursor: 'pointer',
@@ -7911,7 +8292,7 @@ export default function TrackingSheet() {
                         width: '100%', padding: '9px 12px', borderRadius: 10,
                         fontSize: 13, fontWeight: 500,
                         border: `1px solid ${C.border}`,
-                        background: darkMode ? '#16171e' : '#fff', color: C.text,
+                        background: darkMode ? '#181818' : '#fff', color: C.text,
                         outline: 'none', fontFamily: 'inherit',
                         transition: 'border-color 0.15s, box-shadow 0.15s',
                         boxSizing: 'border-box',
@@ -7935,8 +8316,8 @@ export default function TrackingSheet() {
                 disabled={formSubmitting}
                 style={{
                   width: '100%', padding: '10px 24px', borderRadius: 10, border: 'none',
-                  background: formSubmitting ? C.muted : (darkMode ? '#fff' : '#1e2330'),
-                  color: darkMode ? '#1e2330' : '#fff', fontSize: 13, fontWeight: 600,
+                  background: formSubmitting ? C.muted : (darkMode ? '#fff' : '#2b2927'),
+                  color: darkMode ? '#141414' : '#fff', fontSize: 13, fontWeight: 500,
                   cursor: formSubmitting ? 'not-allowed' : 'pointer',
                   fontFamily: 'inherit', transition: 'all 0.15s',
                   opacity: formSubmitting ? 0.7 : 1, marginTop: 2,
@@ -7960,7 +8341,7 @@ export default function TrackingSheet() {
                     <path d="M7 12.5l3 3 7-7" stroke="#10b981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
                       strokeDasharray="24" strokeDashoffset="0" style={{ animation: 'checkmarkDraw 0.5s ease 0.15s both' }} />
                   </svg>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#10b981' }}>Lead ajouté avec succès</span>
+                  <span style={{ fontSize: 13, fontWeight: 500, color: '#10b981' }}>Lead ajouté avec succès</span>
                 </div>
               )}
             </div>
@@ -7976,11 +8357,11 @@ export default function TrackingSheet() {
         if (!lead) return null;
         const inputStyle = {
           width: '100%', padding: '8px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 500,
-          border: `1px solid ${C.border}`, background: darkMode ? '#16171e' : '#fafbfd',
+          border: `1px solid ${C.border}`, background: darkMode ? '#181818' : '#faf9f7',
           color: C.text, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box',
           transition: 'border-color 0.2s',
         };
-        const labelStyle = { fontSize: isGuidedLead(lead) ? 11 : 9.5, fontWeight: 600, color: isGuidedLead(lead) ? C.secondary : C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
+        const labelStyle = { fontSize: isGuidedLead(lead) ? 11 : 9.5, fontWeight: 500, color: isGuidedLead(lead) ? C.secondary : C.muted, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 3 };
         const selectStyle = {
           ...inputStyle, appearance: 'none', WebkitAppearance: 'none', cursor: 'pointer',
           backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='${encodeURIComponent(C.muted)}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E")`,
@@ -7991,26 +8372,32 @@ export default function TrackingSheet() {
           <div className={isGuidedLead(lead)?`sj-nda-overlay ${darkMode?"sj-dark":""}`:undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.45)',
+              background: C.veil,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
             onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { ndaRequest.current++;setNdaPopup(null); setNdaData(null); } }}
           >
-            <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
+            <div className={isGuidedLead(lead)?"sj-nda-dialog ts-scroll-card":"ts-scroll-card"} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
-              background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: '24px 28px',
+              background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+              boxShadow: C.sheetShadow, padding: '24px 28px',
               animation: 'modalCardInFlex 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
             }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                  <span style={{ display: 'grid', placeItems: 'center', width: 46, height: 46, borderRadius: 14, background: darkMode ? '#262626' : '#f4f2ee', color: C.text, flexShrink: 0 }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>Contrat</div>
+                    <h3 style={{ margin: '3px 0 0', fontSize: 16, fontWeight: 500, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 12.5, color: C.muted }}>{lead.full_name}{lead.company_name ? ` · ${lead.company_name}` : ''}</p>
+                  </div>
                 </div>
                 <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { ndaRequest.current++;setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >✕</button>
+                ><X size={14} strokeWidth={2} aria-hidden="true" /></button>
               </div>
               {isGuidedLead(lead)&&<NdaProgress step={ndaStep}/>}
               {children}
@@ -8030,7 +8417,7 @@ export default function TrackingSheet() {
                 <b style={{ color: C.text }}>Identifiez la société</b><br />
                 Renseignez son SIREN pour retrouver ses informations et préremplir le NDA, ou indiquez qu’elle est en cours de création.
               </div>
-              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 600, color: C.muted, marginBottom: 5 }}>SIREN (9 chiffres)</label>
+              <label style={{ display: 'block', fontSize: 11.5, fontWeight: 500, color: C.muted, marginBottom: 5 }}>SIREN (9 chiffres)</label>
               <input
                 value={ndaSirenInput}
                 onChange={(e) => setNdaSirenInput(e.target.value.replace(/[^\d\s]/g, ''))}
@@ -8040,10 +8427,10 @@ export default function TrackingSheet() {
               />
               {ndaError && <div style={{ marginTop: 10, fontSize: 12, color: '#ef4444' }}>{ndaError}</div>}
               <button className={isGuidedLead(lead)?"sj-nda-primary":undefined} onClick={handleNdaSirenContinue} disabled={ndaLoading}
-                style={{ width: '100%', marginTop: 14, padding: '11px 0', borderRadius: 10, border: 'none', background: C.accent, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ width: '100%', marginTop: 14, padding: '11px 0', borderRadius: 10, border: 'none', background: C.accent, color: C.onAccent, fontSize: 13.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
               >{ndaLoading ? 'Recherche…' : 'Continuer'}{isGuidedLead(lead)&&<ArrowRight size={17}/>}</button>
               <button className={isGuidedLead(lead)?"sj-nda-secondary":undefined} disabled={ndaLoading} onClick={handleNdaInCreation}
-                style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12.5, fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}
+                style={{ width: '100%', marginTop: 8, padding: '10px 0', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent', color: C.muted, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit' }}
               >En cours d’immatriculation (pas encore de SIREN)</button>
             </>
           );
@@ -8064,13 +8451,13 @@ export default function TrackingSheet() {
                     <label key={i} style={{
                       display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderRadius: 10, cursor: 'pointer',
                       border: `1px solid ${checked ? C.accent : C.border}`,
-                      background: checked ? (darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(91,106,191,0.06)') : 'transparent',
+                      background: checked ? (darkMode ? 'rgba(99,102,241,0.10)' : 'rgba(43,41,39,0.06)') : 'transparent',
                       transition: 'all 0.15s',
                     }}>
                       <input type="checkbox" checked={checked} style={{ cursor: 'pointer' }}
                         onChange={() => setNdaSelectedDirs(prev => checked ? prev.filter(x => x !== i) : [...prev, i])} />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{d.fullName}</div>
+                        <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{d.fullName}</div>
                         <div style={{ fontSize: 11, color: C.muted }}>{d.role}</div>
                       </div>
                     </label>
@@ -8085,7 +8472,7 @@ export default function TrackingSheet() {
                   setNdaStep('form');
                 }}
                 disabled={!ndaSelectedDirs.length}
-                style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', background: ndaSelectedDirs.length ? C.accent : C.muted, color: '#fff', fontSize: 13.5, fontWeight: 700, cursor: ndaSelectedDirs.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
+                style={{ width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', background: ndaSelectedDirs.length ? C.accent : C.muted, color: C.onAccent, fontSize: 13.5, fontWeight: 500, cursor: ndaSelectedDirs.length ? 'pointer' : 'not-allowed', fontFamily: 'inherit' }}
               >Continuer</button>
             </>
           );
@@ -8095,44 +8482,50 @@ export default function TrackingSheet() {
           <div className={isGuidedLead(lead)?`sj-nda-overlay ${darkMode?"sj-dark":""}`:undefined}
             style={{
               position: 'fixed', inset: 0, zIndex: 9999,
-              background: 'rgba(0,0,0,0.45)',
+              background: C.veil,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               animation: 'modalOverlayIn 0.25s ease both',
             }}
             onClick={(e) => { if (e.target === e.currentTarget && !ndaGenerating) { ndaRequest.current++;setNdaPopup(null); setNdaData(null); } }}
           >
-            <div className={isGuidedLead(lead)?"sj-nda-dialog":undefined} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
+            <div className={isGuidedLead(lead)?"sj-nda-dialog ts-scroll-card":"ts-scroll-card"} role="dialog" aria-modal="true" aria-label="Préparer le NDA" style={{
               width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto',
-              background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
-              boxShadow: '0 20px 60px rgba(0,0,0,0.25)', padding: '24px 28px',
+              background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+              boxShadow: C.sheetShadow, padding: '24px 28px',
               animation: 'modalCardInFlex 0.35s cubic-bezier(0.34,1.56,0.64,1) both',
             }}>
               {/* Header */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-                <div>
-                  <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
-                  <p style={{ margin: '2px 0 0', fontSize: 12, color: C.muted }}>{lead.full_name} {lead.company_name ? `— ${lead.company_name}` : ''}</p>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 0 }}>
+                  <span style={{ display: 'grid', placeItems: 'center', width: 46, height: 46, borderRadius: 14, background: darkMode ? '#262626' : '#f4f2ee', color: C.text, flexShrink: 0 }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="m9 15 2 2 4-4"/></svg>
+                  </span>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '0.09em', textTransform: 'uppercase', color: darkMode ? C.muted : '#a8a39b' }}>Contrat</div>
+                    <h3 style={{ margin: '3px 0 0', fontSize: 16, fontWeight: 500, color: C.text, letterSpacing: '-0.02em' }}>Générer le NDA</h3>
+                    <p style={{ margin: '2px 0 0', fontSize: 12.5, color: C.muted }}>{lead.full_name}{lead.company_name ? ` · ${lead.company_name}` : ''}</p>
+                  </div>
                 </div>
                 <button disabled={ndaGenerating} aria-label="Fermer le NDA" onClick={() => { ndaRequest.current++;setNdaPopup(null); setNdaData(null); }}
                   style={{ width: 30, height: 30, borderRadius: '50%', border: 'none', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 15, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                >✕</button>
+                ><X size={14} strokeWidth={2} aria-hidden="true" /></button>
               </div>
 
               {isGuidedLead(lead)&&<NdaProgress step={ndaStep}/>}
               {/* Statut du prefill automatique (plus de bouton manuel — 2026-08-20) */}
               <div style={{
                 display: 'flex', gap: 8, marginBottom: 16, padding: '12px 14px', borderRadius: 12,
-                background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(91,106,191,0.06)',
-                border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(91,106,191,0.12)'}`,
+                background: darkMode ? 'rgba(99,102,241,0.08)' : 'rgba(43,41,39,0.06)',
+                border: `1px solid ${darkMode ? 'rgba(99,102,241,0.2)' : 'rgba(43,41,39,0.12)'}`,
               }}>
                 <div style={{ flex: 1, fontSize: 12, color: C.secondary }}>
                   {ndaLoading
-                    ? <span><span style={{ fontWeight: 600, color: C.accent }}>Recherche Pappers en cours…</span> les informations vont se préremplir.</span>
+                    ? <span><span style={{ fontWeight: 500, color: C.accent }}>Recherche Pappers en cours…</span> les informations vont se préremplir.</span>
                     : ndaData.isInRegistration
-                      ? <span><span style={{ fontWeight: 600, color: C.accent }}>Société en création</span> — pas de SIREN, remplissez les informations manuellement.</span>
+                      ? <span><span style={{ fontWeight: 500, color: C.accent }}>Société en création</span> — pas de SIREN, remplissez les informations manuellement.</span>
                       : ndaSuccess
-                        ? <span><span style={{ fontWeight: 600, color: '#34d399' }}>✓ Informations préremplies via Pappers</span> — vérifiez et ajustez si besoin avant de générer.</span>
-                        : <span><span style={{ fontWeight: 600, color: C.accent }}>Saisie manuelle</span> — le préremplissage automatique n'a pas abouti.</span>}
+                        ? <span><span style={{ fontWeight: 500, color: darkMode ? '#7cc49b' : '#0b7a4b' }}>Informations préremplies via Pappers</span> — vérifiez et ajustez si besoin avant de générer.</span>
+                        : <span><span style={{ fontWeight: 500, color: C.accent }}>Saisie manuelle</span> — le préremplissage automatique n'a pas abouti.</span>}
                 </div>
               </div>
 
@@ -8141,13 +8534,13 @@ export default function TrackingSheet() {
               {ndaPappersUrl && (
                 <a href={ndaPappersUrl} target="_blank" rel="noopener noreferrer" style={{
                   display: 'flex', alignItems: 'center', gap: 5, alignSelf: 'flex-start',
-                  fontSize: 11, fontWeight: 600, color: '#34c759', textDecoration: 'none',
-                  padding: '4px 12px', borderRadius: 50, marginTop: -4,
-                  border: '1px solid rgba(52,199,89,0.3)', background: 'rgba(52,199,89,0.06)',
-                  transition: 'background 0.2s',
+                  fontSize: 12, fontWeight: 500, color: C.text, textDecoration: 'none',
+                  padding: '5px 10px', borderRadius: 9, marginTop: -4,
+                  border: `1px solid ${C.border}`, background: C.bg,
+                  transition: 'border-color 0.15s ease',
                 }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(52,199,89,0.12)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'rgba(52,199,89,0.06)'}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = C.muted}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = C.border}
                 >
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   Voir sur Pappers
@@ -8156,12 +8549,12 @@ export default function TrackingSheet() {
 
               {/* Success / Error messages */}
               {ndaSuccess && !isGuidedLead(lead) && (
-                <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', border: `1px solid rgba(16,185,129,0.15)`, fontSize: 12, color: '#10b981', fontWeight: 600, animation: 'toastSlideIn 0.3s ease both' }}>
+                <div style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(16,185,129,0.08)' : 'rgba(16,185,129,0.06)', border: `1px solid rgba(16,185,129,0.15)`, fontSize: 12, color: '#10b981', fontWeight: 500, animation: 'toastSlideIn 0.3s ease both' }}>
                   Informations pré-remplies avec succès
                 </div>
               )}
               {ndaError && (
-                <div role="alert" style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid rgba(239,68,68,0.15)`, fontSize: 12, color: '#ef4444', fontWeight: 600 }}>
+                <div role="alert" style={{ marginBottom: 12, padding: '8px 12px', borderRadius: 8, background: darkMode ? 'rgba(239,68,68,0.08)' : 'rgba(239,68,68,0.06)', border: `1px solid rgba(239,68,68,0.15)`, fontSize: 12, color: '#ef4444', fontWeight: 500 }}>
                   {ndaError}
                 </div>
               )}
@@ -8339,9 +8732,9 @@ export default function TrackingSheet() {
                 <button onClick={handleNdaGenerate} disabled={ndaGenerating || ndaLoading}
                   style={{
                     flex: 2, padding: '11px 16px', borderRadius: 10, border: 'none',
-                    background: ndaGenerating ? C.muted : (darkMode ? '#fff' : '#1e2330'),
-                    color: ndaGenerating ? '#fff' : (darkMode ? '#1e2330' : '#fff'),
-                    fontSize: 13, fontWeight: 700, cursor: ndaGenerating ? 'wait' : 'pointer',
+                    background: ndaGenerating ? C.muted : (darkMode ? '#fff' : '#2b2927'),
+                    color: ndaGenerating ? '#fff' : (darkMode ? '#141414' : '#fff'),
+                    fontSize: 13, fontWeight: 500, cursor: ndaGenerating ? 'wait' : 'pointer',
                     fontFamily: 'inherit', transition: 'all 0.15s',
                   }}
                   onMouseEnter={(e) => { if (!ndaGenerating) { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 4px 14px rgba(0,0,0,0.2)'; } }}
@@ -8366,7 +8759,7 @@ export default function TrackingSheet() {
           {/* Name label + current tab */}
           <div style={{
             position: 'absolute', left: 14, top: 14,
-            background: cur.color, color: '#fff', fontSize: 10, fontWeight: 600,
+            background: cur.color, color: '#fff', fontSize: 10, fontWeight: 500,
             padding: '2px 8px', borderRadius: 4, whiteSpace: 'nowrap',
             boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
             display: 'flex', alignItems: 'center', gap: 4,
@@ -8385,7 +8778,7 @@ export default function TrackingSheet() {
           {actionToasts.filter(t => (t.email === email || t.user_name === cur.full_name)).map(toast => (
             <div key={toast.id} style={{
               position: 'absolute', left: 20, top: -28,
-              background: darkMode ? '#2a2b36' : '#fff', color: darkMode ? '#eef0f6' : '#1e2330',
+              background: darkMode ? '#2e2e2e' : '#fff', color: darkMode ? '#f2f2f2' : '#1c1b19',
               fontSize: 11, fontWeight: 500, padding: '5px 12px', borderRadius: 8, whiteSpace: 'nowrap',
               boxShadow: '0 4px 16px rgba(0,0,0,0.2)', border: `1px solid ${cur.color}40`,
               animation: 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
@@ -8403,55 +8796,32 @@ export default function TrackingSheet() {
       }).map((toast, i) => (
         <div key={toast.id} style={{
           position: 'fixed', top: 80 + i * 50, right: 20, zIndex: 99997,
-          background: darkMode ? '#2a2b36' : '#fff', color: darkMode ? '#eef0f6' : '#1e2330',
+          background: darkMode ? '#2e2e2e' : '#fff', color: darkMode ? '#f2f2f2' : '#1c1b19',
           fontSize: 12, fontWeight: 500, padding: '8px 16px', borderRadius: 10, whiteSpace: 'nowrap',
           boxShadow: '0 4px 20px rgba(0,0,0,0.15)', border: `1px solid ${C.border}`,
           animation: 'fadeUp 0.3s cubic-bezier(0.16,1,0.3,1) both',
           display: 'flex', alignItems: 'center', gap: 8,
         }}>
-          <span style={{ fontWeight: 600 }}>{toast.user_name}</span>
+          <span style={{ fontWeight: 500 }}>{toast.user_name}</span>
           <span style={{ color: C.muted }}>·</span>
           <span>{toast.action}{toast.lead_name ? ` sur ${toast.lead_name}` : ''}</span>
         </div>
       ))}
 
-      {/* Presence indicator (bottom-left) */}
-      {presenceUsers.length > 0 && (
-        <div style={{
-          position: 'fixed', bottom: 16, left: 236, zIndex: 99996,
-          display: 'flex', gap: -6, alignItems: 'center',
-        }}>
-          {presenceUsers.slice(0, 3).map((u, i) => (
-            <div key={u.email} title={u.full_name} style={{
-              width: 28, height: 28, borderRadius: '50%', border: '2px solid ' + (darkMode ? '#1e1f28' : '#fff'),
-              background: getCursorColor(u.email), display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 11, fontWeight: 700, color: '#fff', marginLeft: i > 0 ? -8 : 0,
-              boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-            }}>
-              {(u.full_name || u.email).charAt(0).toUpperCase()}
-            </div>
-          ))}
-          {presenceUsers.length > 0 && (
-            <span style={{ fontSize: 10, color: C.muted, marginLeft: 6, fontWeight: 500 }}>
-              {presenceUsers.length} en ligne
-            </span>
-          )}
-        </div>
-      )}
       {/* ═══ SPOTLIGHT SEARCH (Ctrl+K) ═══ */}
       {spotlightOpen && createPortal(
         <>
           <div onClick={() => setSpotlightOpen(false)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9996, animation: 'modalOverlayIn 0.15s ease both',
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
             width: 520, maxWidth: '90vw', maxHeight: '60vh',
-            background: C.bg, borderRadius: 16, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.5)' : '0 24px 48px rgba(0,0,0,0.12)',
+            background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            boxShadow: C.sheetShadow,
             zIndex: 9997, display: 'flex', flexDirection: 'column', overflow: 'hidden',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.2s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
             {/* Search input */}
@@ -8470,7 +8840,7 @@ export default function TrackingSheet() {
                   fontSize: 15, color: C.text, fontFamily: 'inherit', fontWeight: 500,
                 }}
               />
-              <span style={{ fontSize: 10, color: C.muted, padding: '2px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', fontWeight: 600 }}>ESC</span>
+              <span style={{ fontSize: 10, color: C.muted, padding: '2px 6px', borderRadius: 4, background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', fontWeight: 500 }}>ESC</span>
             </div>
             {/* Results */}
             <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
@@ -8518,7 +8888,7 @@ export default function TrackingSheet() {
                     >
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: cat.color, flexShrink: 0 }} />
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 600, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                           {lead.full_name || '—'}
                         </div>
                         <div style={{ fontSize: 11, color: C.muted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -8526,7 +8896,7 @@ export default function TrackingSheet() {
                         </div>
                       </div>
                       <span style={{
-                        fontSize: 10, fontWeight: 600, padding: '2px 8px', borderRadius: 50,
+                        fontSize: 10, fontWeight: 500, padding: '2px 8px', borderRadius: 50,
                         background: `${cat.color}15`, color: cat.color, flexShrink: 0,
                       }}>{cat.label}</span>
                     </button>
@@ -8558,8 +8928,8 @@ export default function TrackingSheet() {
             <div onClick={() => setQualDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
             <div style={{
               position: 'fixed', top: qualDropdownPos.y, left: qualDropdownPos.x, zIndex: 9991,
-              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
-              boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14,
+              boxShadow: C.popShadow,
               padding: 4, minWidth: 180,
             }}>
               {QUAL_OPTIONS.map(q => (
@@ -8583,7 +8953,7 @@ export default function TrackingSheet() {
                   onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = current === q.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
                 >
-                  <img src={q.icon} alt="" style={{ height: 20, objectFit: 'contain' }} />
+                  <img src={q.icon} alt="" style={{ height: 20, objectFit: 'contain', filter: imgDark }} />
                 </button>
               ))}
             </div>
@@ -8607,8 +8977,8 @@ export default function TrackingSheet() {
             <div onClick={() => setPrioDropdown(null)} style={{ position: 'fixed', inset: 0, zIndex: 9990 }} />
             <div style={{
               position: 'fixed', top: prioDropdownPos.y, left: prioDropdownPos.x, zIndex: 9991,
-              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 12,
-              boxShadow: darkMode ? '0 8px 24px rgba(0,0,0,0.4)' : '0 8px 24px rgba(0,0,0,0.1)',
+              background: C.bg, border: `1px solid ${C.border}`, borderRadius: 14,
+              boxShadow: C.popShadow,
               padding: 4, minWidth: 140,
             }}>
               {PRIO_OPTIONS.map(p => (
@@ -8627,7 +8997,7 @@ export default function TrackingSheet() {
                   onMouseEnter={(e) => e.currentTarget.style.background = darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)'}
                   onMouseLeave={(e) => e.currentTarget.style.background = current === p.key ? (darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.03)') : 'transparent'}
                 >
-                  <img src={p.icon} alt="" style={{ height: 20, objectFit: 'contain' }} />
+                  <img src={p.icon} alt="" style={{ height: 20, objectFit: 'contain', filter: imgDark }} />
                 </button>
               ))}
             </div>
@@ -8640,14 +9010,14 @@ export default function TrackingSheet() {
       {inviteModal && createPortal(
         <>
           <div onClick={() => setInviteModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
             width: 420, maxWidth: '90vw', maxHeight: '70vh', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+            boxShadow: C.sheetShadow,
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
             display: 'flex', flexDirection: 'column',
           }}>
@@ -8655,7 +9025,7 @@ export default function TrackingSheet() {
             <div style={{ padding: '24px 24px 16px', borderBottom: `1px solid ${C.border}` }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                 <div>
-                  <div style={{ fontSize: 17, fontWeight: 700, color: C.text, letterSpacing: '-0.02em' }}>Inviter un commercial</div>
+                  <div style={{ fontSize: 17, fontWeight: 500, color: C.text, letterSpacing: '-0.02em' }}>Inviter un commercial</div>
                   <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>Sélectionnez qui peut réaffecter les leads</div>
                 </div>
                 <button onClick={() => setInviteModal(null)} style={{
@@ -8663,7 +9033,7 @@ export default function TrackingSheet() {
                   background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
                   color: C.muted, fontSize: 14, cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>✕</button>
+                }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
               </div>
               {/* Search */}
               <div style={{ position: 'relative' }}>
@@ -8675,7 +9045,7 @@ export default function TrackingSheet() {
                   placeholder="Rechercher par nom ou email..."
                   style={{
                     width: '100%', padding: '9px 12px 9px 34px', borderRadius: 10,
-                    border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
+                    border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#faf9f7',
                     color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none',
                   }}
                 />
@@ -8703,11 +9073,11 @@ export default function TrackingSheet() {
                   >
                     <div style={{
                       width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
-                      background: '#6366f1', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontSize: 12, fontWeight: 700,
+                      background: darkMode ? '#6366f1' : '#2b2927', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontSize: 12, fontWeight: 500,
                     }}>{(u.full_name || u.name || u.email || '?').slice(0, 2).toUpperCase()}</div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: C.text }}>{u.full_name || u.name}</div>
+                      <div style={{ fontSize: 13, fontWeight: 500, color: C.text }}>{u.full_name || u.name}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{u.email}</div>
                     </div>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.muted} strokeWidth="2" strokeLinecap="round" style={{ opacity: 0.3 }}>
@@ -8728,18 +9098,18 @@ export default function TrackingSheet() {
       {sansSuiteModal && createPortal(
         <>
           <div onClick={() => { micCleanup(); setSansSuiteModal(null); }} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
             width: 400, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08)',
+            boxShadow: C.sheetShadow,
             padding: '28px 24px 22px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
-            <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 6, letterSpacing: '-0.02em' }}>Sans suite</div>
+            <div style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 6, letterSpacing: '-0.02em' }}>Sans suite</div>
             <div style={{ fontSize: 13, color: C.muted, marginBottom: 16 }}>Ajoutez un commentaire obligatoire avant d'archiver ce lead.</div>
             <div style={{ position: 'relative' }}>
               <textarea
@@ -8748,7 +9118,7 @@ export default function TrackingSheet() {
                 placeholder="Raison de la clôture sans suite..."
                 style={{
                   width: '100%', minHeight: 100, padding: '10px 44px 10px 14px', borderRadius: 10,
-                  border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#f9fafb',
+                  border: `1px solid ${C.border}`, background: darkMode ? C.subtle : '#faf9f7',
                   color: C.text, fontSize: 13, fontFamily: 'inherit', outline: 'none', resize: 'vertical',
                   lineHeight: 1.5,
                 }}
@@ -8782,12 +9152,12 @@ export default function TrackingSheet() {
                 )}
               </button>
               {micError && (
-                <div style={{ position: 'absolute', right: 44, bottom: 10, padding: '4px 12px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
+                <div style={{ position: 'absolute', right: 44, bottom: 10, padding: '4px 12px', borderRadius: 6, background: '#ef4444', color: '#fff', fontSize: 11, fontWeight: 500, whiteSpace: 'nowrap', animation: 'copiedToastIn 0.3s ease both' }}>{micError}</div>
               )}
             </div>
             <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
               <button onClick={() => { micCleanup(); setSansSuiteModal(null); }} style={{
-                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 500,
                 fontFamily: 'inherit', cursor: 'pointer', border: `1px solid ${C.border}`,
                 background: 'transparent', color: C.muted, transition: 'all 0.15s',
               }}>Annuler</button>
@@ -8808,7 +9178,7 @@ export default function TrackingSheet() {
                 }
                 setSansSuiteModal(null);
               }} disabled={!sansSuiteComment.trim()} style={{
-                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                flex: 1, padding: '11px 0', borderRadius: 12, fontSize: 14, fontWeight: 500,
                 fontFamily: 'inherit', cursor: sansSuiteComment.trim() ? 'pointer' : 'not-allowed',
                 border: 'none',
                 background: sansSuiteComment.trim() ? (darkMode ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)') : (darkMode ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)'),
@@ -8826,15 +9196,15 @@ export default function TrackingSheet() {
       {duplicateLeadModal && createPortal(
         <>
           <div onClick={() => setDuplicateLeadModal(false)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
             width: 400, maxWidth: '90vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
+            boxShadow: C.sheetShadow,
             padding: '32px 28px 26px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 22 }}>
@@ -8843,7 +9213,7 @@ export default function TrackingSheet() {
                 background: 'rgba(248,113,113,0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22,
               }}>⚠️</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
+              <div style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 Ce lead existe déjà
               </div>
               <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 320, margin: '0 auto' }}>
@@ -8853,7 +9223,7 @@ export default function TrackingSheet() {
               </div>
             </div>
             <button onClick={() => setDuplicateLeadModal(false)} style={{
-              width: '100%', padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+              width: '100%', padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 500,
               fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
               border: 'none', background: '#f87171', color: '#fff',
             }}>Compris</button>
@@ -8865,15 +9235,15 @@ export default function TrackingSheet() {
       {confirmModal && createPortal(
         <>
           <div onClick={() => setConfirmModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
             width: 420, maxWidth: '90vw', maxHeight: '88vh', overflowY: 'auto', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
+            boxShadow: C.sheetShadow,
             padding: '32px 28px 26px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 22 }}>
@@ -8881,9 +9251,9 @@ export default function TrackingSheet() {
                 width: 52, height: 52, borderRadius: 16, margin: '0 auto 16px',
                 background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 22, fontWeight: 700, color: darkMode ? '#8b8fa0' : '#9ca3af',
+                fontSize: 22, fontWeight: 500, color: darkMode ? '#a3a3a3' : '#9d9890',
               }}>{confirmModal.icon}</div>
-              <div style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
+              <div style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 {confirmModal.title}
               </div>
               <div style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto', whiteSpace: 'pre-line' }}>
@@ -8892,7 +9262,7 @@ export default function TrackingSheet() {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setConfirmModal(null)} style={{
-                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 500,
                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
                 border: `1px solid ${C.border}`, background: 'transparent', color: C.muted,
                 transition: 'all 0.15s',
@@ -8901,7 +9271,7 @@ export default function TrackingSheet() {
                 onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; }}
               >Annuler</button>
               <button onClick={confirmModal.onConfirm} style={{
-                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 600,
+                flex: 1, padding: '12px 0', borderRadius: 12, fontSize: 14, fontWeight: 500,
                 fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
                 border: 'none',
                 background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
@@ -8921,15 +9291,15 @@ export default function TrackingSheet() {
       {contractErrorModal && createPortal(
         <>
           <div onClick={() => setContractErrorModal(null)} style={{
-            position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)',
+            position: 'fixed', inset: 0, background: C.veil,
             zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both',
           }} />
           <div role="alertdialog" aria-modal="true" aria-labelledby="contract-error-title" aria-describedby="contract-error-message" style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
             width: 420, maxWidth: '90vw', maxHeight: '88vh', overflowY: 'auto', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
-            boxShadow: darkMode ? '0 24px 48px rgba(0,0,0,0.4)' : '0 24px 48px rgba(0,0,0,0.08), 0 8px 16px rgba(0,0,0,0.04)',
+            boxShadow: C.sheetShadow,
             padding: '32px 28px 26px',
-            fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Inter, system-ui, sans-serif',
+            fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
           }}>
             <div style={{ textAlign: 'center', marginBottom: 22 }}>
@@ -8939,21 +9309,21 @@ export default function TrackingSheet() {
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
                 {contractErrorModal.isNdaMissing ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#8b8fa0' : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="16"/><circle cx="12" cy="18" r="0.5"/></svg>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#a3a3a3' : '#9d9890'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="12" x2="12" y2="16"/><circle cx="12" cy="18" r="0.5"/></svg>
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#8b8fa0' : '#9ca3af'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={darkMode ? '#a3a3a3' : '#9d9890'} strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
                 )}
               </div>
-              <div id="contract-error-title" style={{ fontSize: 17, fontWeight: 700, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
+              <div id="contract-error-title" style={{ fontSize: 17, fontWeight: 500, color: C.text, marginBottom: 8, letterSpacing: '-0.02em' }}>
                 {contractErrorModal.title || (contractErrorModal.isNdaMissing ? 'NDA non généré' : 'Action impossible')}
               </div>
               <div id="contract-error-message" style={{ fontSize: 13.5, color: C.muted, lineHeight: 1.6, letterSpacing: '-0.01em', maxWidth: 300, margin: '0 auto', whiteSpace: 'pre-line' }}>
                 {contractErrorModal.message}
               </div>
             </div>
-            {contractErrorModal.action && contractErrorModal.leadId && <button autoFocus onClick={correctContractInformation} style={{ width: '100%', padding: '12px 0', marginBottom: 8, borderRadius: 12, border: 'none', background: C.accent, color: '#fff', fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer' }}>{contractErrorModal.action === 'nda' ? 'Ouvrir le NDA' : 'Corriger les informations'}</button>}
+            {contractErrorModal.action && contractErrorModal.leadId && <button autoFocus onClick={correctContractInformation} style={{ width: '100%', padding: '12px 0', marginBottom: 8, borderRadius: 12, border: 'none', background: C.accent, color: C.onAccent, fontSize: 14, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer' }}>{contractErrorModal.action === 'nda' ? 'Ouvrir le NDA' : 'Corriger les informations'}</button>}
             <button autoFocus={!contractErrorModal.action} onClick={() => setContractErrorModal(null)} style={{
-              width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 600,
+              width: '100%', padding: '12px 0', borderRadius: 12, border: 'none', fontSize: 14, fontWeight: 500,
               fontFamily: 'inherit', cursor: 'pointer', letterSpacing: '-0.01em',
               background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)',
               color: C.secondary,
@@ -8995,20 +9365,20 @@ export default function TrackingSheet() {
         return (
           <>
             <div onClick={() => setReschedRdv(null)}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+              style={{ position: 'fixed', inset: 0, background: C.veil, zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div style={{
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
-              boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+              width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+              boxShadow: C.sheetShadow, padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             }}>
               <button onClick={() => setReschedRdv(null)}
                 style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
                   background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
               <div style={{ textAlign: 'center', marginBottom: 18 }}>
-                <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Reprogrammer le RDV {kind === 'onboarding' ? 'Onboarding' : 'Lancement'}</div>
+                <div style={{ fontSize: 18, fontWeight: 500, color: C.text }}>Reprogrammer le RDV {kind === 'onboarding' ? 'Onboarding' : 'Lancement'}</div>
                 <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {kind === 'onboarding' ? 'facturation' : "Opti'Lex"}{lead.full_name ? ` · ${lead.full_name}` : ''}</div>
               </div>
               <SaleSlotPicker kind={kind} band={lead.employee_range}
@@ -9022,27 +9392,27 @@ export default function TrackingSheet() {
       {onbAvailOpen && createPortal(
         <>
           <div onClick={() => setOnbAvailOpen(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+            style={{ position: 'fixed', inset: 0, background: C.veil, zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
           <div role="dialog" aria-modal="true" aria-label="Disponibilités onboarding" style={{
             position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-            width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
-            boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+            width: 680, maxWidth: '92vw', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+            boxShadow: C.sheetShadow, padding: '28px 28px 24px',
             animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
             fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
           }}>
             <button onClick={() => setOnbAvailOpen(false)} aria-label="Fermer"
               style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
                 background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
-                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><X size={14} strokeWidth={2} aria-hidden="true" /></button>
             <div style={{ textAlign: 'center', marginBottom: 18 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Disponibilités onboarding</div>
-              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Emilie ou Vincent, et facturation · pour information, le créneau se réserve à la déclaration de vente</div>
+              <div style={{ fontSize: 18, fontWeight: 500, color: C.text }}>Disponibilités onboarding</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{onboardingHostsChoice(calSettings?.onboarding_hosts)}, et facturation · pour information, le créneau se réserve à la déclaration de vente</div>
             </div>
             <SaleSlotPicker kind="onboarding" value="" onChange={() => {}} readOnly C={C} darkMode={darkMode} />
           </div>
         </>, document.body)}
 
-      {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={async()=>{if(await handleNotesSave(commentLeadId)){micCleanup();setCommentLeadId(null);}}} recording={micRecording} transcribing={micTranscribing} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
+      {commentLeadId && <NotesDialog dark={darkMode} lead={leads.find(l=>l.id===commentLeadId)} value={editingNotes[commentLeadId]||''} onChange={value=>setEditingNotes(p=>({...p,[commentLeadId]:value}))} error={notesError?.leadId===commentLeadId?notesError.message:null} onClose={()=>{micCleanup();setCommentLeadId(null);}} onSave={()=>handleNotesSave(commentLeadId)} recording={micRecording} transcribing={micTranscribing} liveText={micLive} micError={micError} onDictate={()=>{if(micRecording){const id=commentLeadId;micStopAndTranscribe(text=>setEditingNotes(p=>({...p,[id]:(p[id]?p[id]+' ':'')+text})));}else if(!micTranscribing)micStartRecording();}}/>}
       {contactDialog && <ContactQualificationDialog key={contactDialog.lead.id} {...contactDialog} dark={darkMode} onClose={() => setContactDialog(null)} onSave={async values => {
         const current = leads.find(l => l.id === contactDialog.lead.id);
         if (!current || !isGuidedLead(current) || current.status !== contactDialog.category) throw new Error('Le dossier a changé. Fermez cette fenêtre et rouvrez le contact.');
@@ -9081,23 +9451,44 @@ export default function TrackingSheet() {
 
       {showSaleModal && createPortal((() => {
         const lead = leads.find(l => l.id === showSaleModal);
+        // Style Owner (11/11/2026) : un titre à gauche, des champs blancs à trait fin, les choix en pastilles, l'action
+        // principale en bas à droite. Elle reste discrète tant qu'il manque une réponse.
+        const saleHead = (title, sub) => (
+          <div style={{ margin: '0 36px 20px 0' }}>
+            <div style={{ fontSize: 19, fontWeight: 500, letterSpacing: '-0.02em', color: C.text }}>{title}</div>
+            {sub && <div style={{ fontSize: 13, color: C.muted, marginTop: 3 }}>{sub}</div>}
+          </div>
+        );
+        const saleLabel = { fontSize: 13, color: C.muted, display: 'block', marginBottom: 7 };
+        const saleField = { width: '100%', padding: '10px 12px', borderRadius: 12, border: `1px solid ${darkMode ? C.border : '#e3ded6'}`, background: darkMode ? '#181818' : '#ffffff', color: C.text, fontSize: 13.5, fontFamily: 'inherit', outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s ease, box-shadow 0.2s ease' };
+        const saleFocus = { onFocus: (e) => { e.target.style.borderColor = C.accent; e.target.style.boxShadow = darkMode ? '0 0 0 3px rgba(255,255,255,.08)' : '0 0 0 3px rgba(43,41,39,.08)'; }, onBlur: (e) => { e.target.style.borderColor = darkMode ? C.border : '#e3ded6'; e.target.style.boxShadow = 'none'; } };
+        const salePill = (on, extra = {}) => ({ padding: '8px 0', borderRadius: 10, fontSize: 12.5, fontWeight: 500, fontFamily: 'inherit', fontVariantNumeric: 'tabular-nums', cursor: 'pointer', minWidth: 0,
+          border: `1px solid ${on ? C.accent : C.border}`, background: on ? C.accent : C.bg, color: on ? C.onAccent : C.text, transition: 'background 0.15s ease, color 0.15s ease, border-color 0.15s ease', ...extra });
+        const salePrimary = (ready, busy = false) => ({ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 8, height: 40, padding: '0 16px', borderRadius: 12, border: 'none', fontSize: 13, fontWeight: 500, fontFamily: 'inherit',
+          cursor: ready && !busy ? 'pointer' : 'default', background: ready ? C.accent : C.subtle, color: ready ? C.onAccent : C.muted, opacity: busy ? 0.7 : 1, transition: 'background 0.2s ease, color 0.2s ease' });
+        const saleGhost = { height: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: 'transparent', color: C.muted, fontSize: 13, fontWeight: 500, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' };
+        const saleFooter = { display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6, marginTop: 22 };
         return (
           <>
             <div onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
+              style={{ position: 'fixed', inset: 0, background: C.veil, zIndex: 9998, animation: 'modalOverlayIn 0.25s ease both' }} />
             <div className={saleOnboardingOnly?'sj-sale-dialog':undefined} role="dialog" aria-modal="true" aria-label="Déclarer une vente" style={{
               boxSizing: saleOnboardingOnly ? 'border-box' : undefined,
               position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999,
-              width: !saleOnboardingOnly && (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 20, border: `1px solid ${C.border}`,
-              boxShadow: '0 24px 48px rgba(0,0,0,0.2)', padding: '28px 28px 24px',
+              width: !saleOnboardingOnly && (saleStep === 'form' || saleStep === 'questions') ? 420 : 720, maxWidth: '92vw', maxHeight: '90dvh', overflowY: 'auto', background: C.bg, borderRadius: 22, border: `1px solid ${C.border}`,
+              boxShadow: C.sheetShadow, padding: '28px 28px 24px',
               animation: 'modalCardIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both',
               fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
             }}>
               {/* Close */}
               <button onClick={() => { if (!saleSubmitting) { setShowSaleModal(null); setSaleSuccess(false); } }}
-                style={{ position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%', border: 'none',
-                  background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.04)', color: C.muted, fontSize: 14,
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✕</button>
+                aria-label="Fermer" style={{ position: 'absolute', top: 18, right: 18, width: 32, height: 32, borderRadius: 10, border: 'none',
+                  background: 'transparent', color: C.muted, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  transition: 'background 0.15s ease, color 0.15s ease, transform 0.3s cubic-bezier(0.34,1.56,0.64,1)' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = C.subtle; e.currentTarget.style.color = C.text; e.currentTarget.style.transform = 'rotate(90deg)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.color = C.muted; e.currentTarget.style.transform = 'none'; }}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12" /></svg>
+              </button>
 
               {saleOnboardingOnly && !saleSuccess && <>
                 <p className="sj-sale-part">{salePreparation?.status === 'finalized' ? 'Déclaration terminée' : ['handoff','documents'].includes(saleStep) ? 'Partie 2 sur 2 · Finaliser et déclarer la vente' : 'Partie 1 sur 2 · Sécuriser le rendez-vous'}</p>
@@ -9106,10 +9497,12 @@ export default function TrackingSheet() {
               {saleReservationError && saleStep !== 'reserved' && <div className="si-error" role="alert">{saleReservationError}</div>}
               {saleSuccess ? (
                 <div style={{ textAlign: 'center', padding: '20px 0' }}>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: '#10b98120', margin: '0 auto 14px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24 }}>✓</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: C.text, marginBottom: 6 }}>Vente déclarée !</div>
-                  {saleClientNumero && <div style={{ fontSize: 14, fontWeight: 600, color: '#10b981', marginBottom: 4 }}>{saleClientNumero}</div>}
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: darkMode ? 'rgba(16,185,129,.14)' : '#e2f6ea', color: darkMode ? '#7cc49b' : '#0b7a4b', margin: '0 auto 14px',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'modalCardIn 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>
+                  </div>
+                  <div style={{ fontSize: 19, fontWeight: 500, letterSpacing: '-0.02em', color: C.text, marginBottom: 6 }}>Vente déclarée</div>
+                  {saleClientNumero && <div style={{ display: 'inline-block', padding: '3px 9px', borderRadius: 7, fontSize: 12.5, fontWeight: 500, marginBottom: 6, background: darkMode ? 'rgba(16,185,129,.14)' : '#e2f6ea', color: darkMode ? '#7cc49b' : '#0b7a4b', border: `1px solid ${darkMode ? 'rgba(16,185,129,.25)' : '#c3ebd3'}` }}>{saleClientNumero}</div>}
                   <div style={{ fontSize: 13, color: C.muted }}>La vente a été enregistrée avec succès</div>
                 </div>
               ) : saleStep === 'reserved' ? (
@@ -9117,60 +9510,37 @@ export default function TrackingSheet() {
                   onReschedule={() => setReschedRdv({ leadId: showSaleModal, kind: 'onboarding', twoStage: true })} />
               ) : saleStep === 'form' ? (
                 <>
-                  {/* Header */}
-                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7', margin: '0 auto 10px',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
-                        <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Déclarer une vente</div>
-                    {lead && <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>{lead.full_name}</div>}
-                  </div>
+                  {saleHead('Déclarer une vente', lead?.full_name)}
 
                   {/* Email */}
                   <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 4 }}>Email client</label>
+                    <label style={saleLabel}>Email client</label>
                     <input value={saleForm.email} onChange={(e) => setSaleForm(p => ({ ...p, email: e.target.value }))}
                       placeholder="client@exemple.com" type="email"
-                      style={{ width: '100%', padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
-                        background: darkMode ? '#252636' : '#f9fafb', color: C.text, fontSize: 13, fontFamily: 'inherit',
-                        outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
-                      onFocus={(e) => e.target.style.borderColor = C.accent}
-                      onBlur={(e) => e.target.style.borderColor = C.border}
+                      style={saleField} {...saleFocus}
                     />
                   </div>
 
-                  <SalePaymentMode leadId={showSaleModal} value={saleForm.paymentModality} onChange={value => setSaleForm(p => ({ ...p, paymentModality: value }))} />
+                  <SalePaymentMode leadId={showSaleModal} dark={darkMode} value={saleForm.paymentModality} onChange={value => setSaleForm(p => ({ ...p, paymentModality: value }))} />
 
                   {/* Employee range grid */}
                   <div style={{ marginBottom: 18 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Tranche salariale</label>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 4 }}>
+                    <label style={saleLabel}>Tranche salariale</label>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 4 }}>
                       {EMPLOYEE_RANGES.map(r => (
-                        <button key={r} onClick={() => setSaleForm(p => ({ ...p, employeeRange: r }))}
-                          style={{
-                            padding: '6px 2px', borderRadius: 6, fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer',
-                            border: `1px solid ${saleForm.employeeRange === r ? C.accent : C.border}`,
-                            background: saleForm.employeeRange === r ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
-                            color: saleForm.employeeRange === r ? C.accent : C.muted,
-                            transition: 'all 0.15s',
-                          }}>{r}</button>
+                        <button key={r} aria-pressed={saleForm.employeeRange === r} onClick={() => setSaleForm(p => ({ ...p, employeeRange: r }))}
+                          style={salePill(saleForm.employeeRange === r, { padding: '7px 0', fontSize: 12 })}>{r}</button>
                       ))}
                     </div>
                   </div>
 
                   {/* Continuer -> choix des créneaux (dispo agenda). Ordre : Lancement d'abord. */}
-                  <button onClick={() => setSaleStep(saleOnboardingOnly ? 'questions' : 'lancement')}
-                    disabled={!saleForm.email.trim() || !saleForm.employeeRange}
-                    style={{
-                      width: '100%', padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600,
-                      fontFamily: 'inherit', cursor: saleForm.email.trim() && saleForm.employeeRange ? 'pointer' : 'default',
-                      background: saleForm.email.trim() && saleForm.employeeRange ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                      color: saleForm.email.trim() && saleForm.employeeRange ? '#fff' : C.muted, transition: 'all 0.2s',
-                    }}
-                  >Continuer</button>
+                  <div style={saleFooter}>
+                    <button onClick={() => setSaleStep(saleOnboardingOnly ? 'questions' : 'lancement')}
+                      disabled={!saleForm.email.trim() || !saleForm.employeeRange}
+                      style={salePrimary(!!(saleForm.email.trim() && saleForm.employeeRange))}
+                    >Continuer<ArrowRight size={16} /></button>
+                  </div>
                 </>
               ) : saleStep === 'handoff' ? (
                 <SaleIntake key={showSaleModal} leadId={showSaleModal} backLabel="Rendez-vous réservé" onBack={() => setSaleStep('reserved')} onSaved={value => {setSaleIntake(value); setSaleStep('documents');}} />
@@ -9182,71 +9552,40 @@ export default function TrackingSheet() {
                       Réponses -> description de l'event RDV Onboarding (agenda facturation@).
                       Style STRICTEMENT identique à l'étape 'form' (header rond + iconWiggle,
                       labels 12px C.secondary, boutons segmentés C.accent). */}
-                  <div style={{ textAlign: 'center', marginBottom: 20 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
-                      background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
-                        <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
-                      </svg>
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>Facturation</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Deux précisions pour l'équipe facturation</div>
-                  </div>
+                  {saleHead('Facturation', 'Deux précisions pour l’équipe facturation')}
 
                   {/* Q1 : une ou plusieurs structures (+ combien si plusieurs) */}
                   <div style={{ marginBottom: 14 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>La facturation porte sur</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={saleLabel}>La facturation porte sur</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
                       {[{ key: 'une', label: 'Une structure' }, { key: 'plusieurs', label: 'Plusieurs structures' }].map(opt => (
                         <button key={opt.key} onClick={() => setSaleForm(p => ({ ...p, billingStructures: opt.key, structuresCount: opt.key === 'une' ? '' : p.structuresCount }))}
-                          style={{
-                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                            border: `1px solid ${saleForm.billingStructures === opt.key ? C.accent : C.border}`,
-                            background: saleForm.billingStructures === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
-                            color: saleForm.billingStructures === opt.key ? C.accent : C.muted,
-                            transition: 'all 0.2s',
-                          }}>{opt.label}</button>
+                          aria-pressed={saleForm.billingStructures === opt.key} style={salePill(saleForm.billingStructures === opt.key, { flex: 1, padding: '9px 0', fontSize: 13 })}>{opt.label}</button>
                       ))}
                     </div>
                     {saleForm.billingStructures === 'plusieurs' && (
-                      <select value={saleForm.structuresCount || ''} onChange={(e) => setSaleForm(p => ({ ...p, structuresCount: e.target.value }))}
-                        style={{ width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
-                          background: darkMode ? '#252636' : '#f9fafb', color: (saleForm.structuresCount || '') ? C.text : C.muted, fontSize: 13, fontFamily: 'inherit',
-                          outline: 'none', boxSizing: 'border-box', cursor: 'pointer', appearance: 'auto', transition: 'border-color 0.2s' }}
-                        onFocus={(e) => e.target.style.borderColor = C.accent}
-                        onBlur={(e) => e.target.style.borderColor = C.border}>
-                        <option value="" disabled>Combien de structures ?</option>
+                      <div role="group" aria-label="Combien de structures ?" style={{ display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 4, marginTop: 8, animation: 'solarFadeIn 0.2s ease both' }}>
                         {['2', '3', '4', '5', '6', '7', '8', '9', '10+'].map(n => (
-                          <option key={n} value={n}>{n} structures</option>
+                          <button key={n} type="button" title={`${n} structures`} aria-pressed={(saleForm.structuresCount || '') === n} onClick={() => setSaleForm(p => ({ ...p, structuresCount: n }))}
+                            style={salePill((saleForm.structuresCount || '') === n, { padding: '7px 0', fontSize: 12 })}>{n}</button>
                         ))}
-                      </select>
+                      </div>
                     )}
                   </div>
 
                   {/* Q2 : réduction oui/non + valeur libre si oui */}
                   <div style={{ marginBottom: 18 }}>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: C.secondary, display: 'block', marginBottom: 6 }}>Une réduction a été accordée ?</label>
-                    <div style={{ display: 'flex', gap: 8 }}>
+                    <label style={saleLabel}>Une réduction a été accordée ?</label>
+                    <div style={{ display: 'flex', gap: 6 }}>
                       {[{ key: false, label: 'Non' }, { key: true, label: 'Oui' }].map(opt => (
                         <button key={String(opt.key)} onClick={() => setSaleForm(p => ({ ...p, discount: opt.key, discountValue: opt.key ? (p.discountValue || '') : '' }))}
-                          style={{
-                            flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 13, fontWeight: 600, fontFamily: 'inherit', cursor: 'pointer',
-                            border: `1px solid ${saleForm.discount === opt.key ? C.accent : C.border}`,
-                            background: saleForm.discount === opt.key ? (darkMode ? C.accent + '20' : '#f0f1ff') : 'transparent',
-                            color: saleForm.discount === opt.key ? C.accent : C.muted,
-                            transition: 'all 0.2s',
-                          }}>{opt.label}</button>
+                          aria-pressed={saleForm.discount === opt.key} style={salePill(saleForm.discount === opt.key, { flex: 1, padding: '9px 0', fontSize: 13 })}>{opt.label}</button>
                       ))}
                     </div>
                     {saleForm.discount === true && (
                       <input value={saleForm.discountValue || ''} onChange={(e) => setSaleForm(p => ({ ...p, discountValue: e.target.value }))}
                         placeholder="Laquelle ? ex : 5 %, 10 %, 1 mois offert…"
-                        style={{ width: '100%', marginTop: 8, padding: '10px 12px', borderRadius: 10, border: `1px solid ${C.border}`,
-                          background: darkMode ? '#252636' : '#f9fafb', color: C.text, fontSize: 13, fontFamily: 'inherit',
-                          outline: 'none', boxSizing: 'border-box', transition: 'border-color 0.2s' }}
-                        onFocus={(e) => e.target.style.borderColor = C.accent}
-                        onBlur={(e) => e.target.style.borderColor = C.border}
+                        style={{ ...saleField, marginTop: 8 }} {...saleFocus}
                       />
                     )}
                   </div>
@@ -9257,15 +9596,10 @@ export default function TrackingSheet() {
                       && (saleForm.billingStructures !== 'plusieurs' || !!(saleForm.structuresCount || ''))
                       && (saleForm.discount === false || (saleForm.discount === true && (saleForm.discountValue || '').trim()));
                     return (
-                      <div style={{ display: 'flex', gap: 8 }}>
-                        <button onClick={() => setSaleStep(saleOnboardingOnly ? 'form' : 'onboarding')} disabled={saleSubmitting}
-                          style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
-                            color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
+                      <div style={saleFooter}>
+                        <button onClick={() => setSaleStep(saleOnboardingOnly ? 'form' : 'onboarding')} disabled={saleSubmitting} style={{ ...saleGhost, marginRight: 'auto', marginLeft: -14 }}>Retour</button>
                         <button onClick={() => saleOnboardingOnly ? setSaleStep('onboarding') : handleSaleSubmitWithSlots(showSaleModal)} disabled={!qReady || saleSubmitting}
-                          style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                            cursor: qReady && !saleSubmitting ? 'pointer' : 'default',
-                            background: qReady ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                            color: qReady ? '#fff' : C.muted, opacity: saleSubmitting ? 0.7 : 1, transition: 'all 0.2s' }}>{saleSubmitting ? 'Déclaration...' : saleOnboardingOnly ? 'Choisir le rendez-vous' : 'Déclarer la vente'}</button>
+                          style={salePrimary(qReady, saleSubmitting)}>{saleSubmitting ? 'Déclaration…' : saleOnboardingOnly ? 'Choisir le rendez-vous' : 'Déclarer la vente'}{!saleSubmitting && <ArrowRight size={16} />}</button>
                       </div>
                     );
                   })()}
@@ -9273,44 +9607,21 @@ export default function TrackingSheet() {
               ) : (
                 <>
                   {/* Étape créneau : Lancement (Opti'Lex) d'abord, puis Onboarding (facturation@) */}
-                  <div style={{ textAlign: 'center', marginBottom: 16 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', margin: '0 auto 10px',
-                      background: darkMode ? 'rgba(255,255,255,0.06)' : '#f4f5f7',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {saleStep === 'lancement' ? (
-                        <svg width="23" height="23" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
-                          <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z" /><path d="M7 21h10" /><path d="M12 3v18" /><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2" />
-                        </svg>
-                      ) : (
-                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={C.text} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: saleOnboardingOnly ? 'none' : 'iconWiggle 3s ease-in-out infinite' }}>
-                          <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1-2-1Z" /><path d="M8 7h8M8 11h6M8 15h4" />
-                        </svg>
-                      )}
-                    </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: C.text }}>{saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement'}</div>
-                    <div style={{ fontSize: 13, color: C.muted, marginTop: 4 }}>Choisis un créneau libre · {saleStep === 'onboarding' ? 'Emilie ou Vincent, et facturation' : "Opti'Lex"}</div>
-                  </div>
+                  {saleHead(saleStep === 'onboarding' ? 'RDV Onboarding' : 'RDV Lancement', `Choisis un créneau libre · ${saleStep === 'onboarding' ? `${onboardingHostsChoice(calSettings?.onboarding_hosts)}, et facturation` : "Opti'Lex"}`)}
 
                   <SaleSlotPicker key={saleStep} kind={saleStep} value={saleSlots[saleStep]} band={saleForm.employeeRange}
                     onChange={(v) => setSaleSlots(p => ({ ...p, [saleStep]: v }))} C={C} darkMode={darkMode} />
 
                   {/* Navigation : d'abord Lancement (cabinet Opti'Lex), puis Onboarding (facturation) */}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+                  <div style={saleFooter}>
                     <button onClick={() => setSaleStep(saleOnboardingOnly ? 'questions' : saleStep === 'onboarding' ? 'lancement' : 'form')} disabled={saleSubmitting}
-                      style={{ padding: '11px 16px', borderRadius: 10, border: `1px solid ${C.border}`, background: 'transparent',
-                        color: C.muted, fontSize: 14, fontWeight: 600, fontFamily: 'inherit', cursor: saleSubmitting ? 'default' : 'pointer' }}>Retour</button>
+                      style={{ ...saleGhost, marginRight: 'auto', marginLeft: -14 }}>Retour</button>
                     {saleStep === 'lancement' ? (
                       <button onClick={() => setSaleStep('onboarding')} disabled={!saleSlots.lancement}
-                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.lancement ? 'pointer' : 'default',
-                          background: saleSlots.lancement ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.lancement ? '#fff' : C.muted, transition: 'all 0.2s' }}>Suivant → Onboarding</button>
+                        style={salePrimary(!!saleSlots.lancement)}>Suivant : Onboarding<ArrowRight size={16} /></button>
                     ) : (
                       <button onClick={() => saleOnboardingOnly ? reserveSaleAppointment(showSaleModal) : setSaleStep('questions')} disabled={!saleSlots.onboarding || saleSubmitting}
-                        style={{ flex: 1, padding: '11px 0', borderRadius: 10, border: 'none', fontSize: 14, fontWeight: 600, fontFamily: 'inherit',
-                          cursor: saleSlots.onboarding ? 'pointer' : 'default',
-                          background: saleSlots.onboarding ? '#1e2330' : (darkMode ? 'rgba(255,255,255,0.06)' : '#e5e7eb'),
-                          color: saleSlots.onboarding ? '#fff' : C.muted, transition: 'all 0.2s' }}>{saleSubmitting ? "Réservation…" : saleOnboardingOnly ? "Confirmer et réserver le rendez-vous" : "Suivant → Questions"}</button>
+                        style={salePrimary(!!saleSlots.onboarding, saleSubmitting)}>{saleSubmitting ? "Réservation…" : saleOnboardingOnly ? "Confirmer et réserver le rendez-vous" : "Suivant : Questions"}{!saleSubmitting && <ArrowRight size={16} />}</button>
                     )}
                   </div>
                 </>
@@ -9330,7 +9641,7 @@ export default function TrackingSheet() {
         const isFailed = n.status === 'failed';
         const isQueued = n.status === 'queued';
         const isUnconfirmed = n.status === 'unconfirmed';
-        const accentColor = isFailed || isUnconfirmed ? (isUnconfirmed ? '#f59e0b' : '#ef4444') : isSent ? '#10b981' : '#5b6abf';
+        const accentColor = isFailed || isUnconfirmed ? (isUnconfirmed ? '#f59e0b' : '#ef4444') : isSent ? '#10b981' : (darkMode ? '#ededed' : '#2b2927');
         const SMS_TYPE_LABELS = {
           sms_repondeur: 'SMS Répondeur',
           sms_noshow: 'SMS Lapin',
@@ -9374,7 +9685,7 @@ export default function TrackingSheet() {
                 {(isPending || isPreparing) && (
                   <div style={{
                     position: 'absolute', right: -4, bottom: -4, width: 16, height: 16,
-                    borderRadius: '50%', background: darkMode ? '#1e1f28' : '#fff',
+                    borderRadius: '50%', background: darkMode ? '#1f1f1f' : '#fff',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                     boxShadow: '0 1px 4px rgba(0,0,0,0.15)',
                   }}>
@@ -9396,7 +9707,7 @@ export default function TrackingSheet() {
                   </div>
                 )}
                 {isQueued && (
-                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: '#5b6abf', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(91,106,191,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
+                  <div style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, background: (darkMode ? '#ededed' : '#2b2927'), borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 6px rgba(43,41,39,0.45)', animation: 'smsCheckPop 0.5s cubic-bezier(0.34,1.56,0.64,1) both' }}>
                     <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                   </div>
                 )}
@@ -9407,10 +9718,10 @@ export default function TrackingSheet() {
                 )}
               </div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, fontWeight: 700, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <div style={{ fontSize: 13.5, fontWeight: 500, color: C.text, letterSpacing: '-0.01em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {n.lead_name || 'Prospect'}
                 </div>
-                <div style={{ fontSize: 11.5, color: isUnconfirmed ? '#f59e0b' : isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? '#5b6abf' : C.muted, marginTop: 1, fontWeight: 600, transition: 'color 0.4s ease' }}>
+                <div style={{ fontSize: 11.5, color: isUnconfirmed ? '#f59e0b' : isFailed ? '#ef4444' : isSent ? '#10b981' : isQueued ? (darkMode ? '#ededed' : '#2b2927') : C.muted, marginTop: 1, fontWeight: 500, transition: 'color 0.4s ease' }}>
                   {SMS_TYPE_LABELS[n.sms_type] || 'SMS'} · {subtitle}
                 </div>
               </div>
@@ -9438,7 +9749,7 @@ export default function TrackingSheet() {
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  <div style={{ fontSize: 12, color: darkMode ? '#fbbf24' : '#92400e', fontWeight: 600, lineHeight: 1.45 }}>
+                  <div style={{ fontSize: 12, color: darkMode ? '#fbbf24' : '#92400e', fontWeight: 500, lineHeight: 1.45 }}>
                     Aucune confirmation reçue du serveur. Vérifie tes paramètres SMS ou contacte l'admin.
                   </div>
                 </div>
@@ -9450,7 +9761,7 @@ export default function TrackingSheet() {
                   display: 'flex', alignItems: 'flex-start', gap: 8,
                 }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginTop: 1 }}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-                  <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 600, lineHeight: 1.45 }}>
+                  <div style={{ fontSize: 12, color: '#ef4444', fontWeight: 500, lineHeight: 1.45 }}>
                     {n.error || "L'envoi du SMS a échoué."}
                   </div>
                 </div>
@@ -9481,7 +9792,7 @@ export default function TrackingSheet() {
                           position: 'absolute', top: -7, left: 10,
                           padding: '1px 7px', borderRadius: 6,
                           background: accentColor, color: '#fff',
-                          fontSize: 9, fontWeight: 700, letterSpacing: '0.04em',
+                          fontSize: 9, fontWeight: 500, letterSpacing: '0.04em',
                           transition: 'background 0.4s ease',
                         }}>SMS {i + 1}/{segs.length}</span>
                       )}
