@@ -20,9 +20,13 @@
 .ocv-btn svg { color:#6b665f; transition:transform .35s cubic-bezier(.34,1.56,.64,1), color .15s; }
 .ocv-btn:hover:not(:disabled), .ocv-btn[aria-expanded="true"] { border-color:#e3ded6; background:#faf9f7; }
 .ocv-btn:hover:not(:disabled) svg, .ocv-btn[aria-expanded="true"] svg { color:#1c1b19; transform:translate(2px, -2px) rotate(-8deg); }
-.ocv-btn.is-confirm { border-color:#c5221f; background:#c5221f; color:#fff; }
-.ocv-btn.is-confirm svg { color:#fff; }
-.ocv-btn.is-done { border-color:#e2f6ea; background:#e2f6ea; color:#0b7a4b; }
+/* Confirmation et réussite gardent leur fond sous le curseur : le survol général (fond clair) est plus précis que la
+   classe seule, et rendait « Confirmer » blanc sur blanc juste après le clic sur « Renouveler ». */
+.ocv-btn.is-confirm, .ocv-btn.is-confirm:hover:not(:disabled) { border-color:#c5221f; background:#c5221f; color:#fff; }
+.ocv-btn.is-confirm:hover:not(:disabled) { border-color:#a81d1a; background:#a81d1a; }
+.ocv-btn.is-confirm svg, .ocv-btn.is-confirm:hover:not(:disabled) svg { color:#fff; }
+.ocv-btn.is-done, .ocv-btn.is-done:hover:not(:disabled) { border-color:#e2f6ea; background:#e2f6ea; color:#0b7a4b; }
+.ocv-btn.is-done svg, .ocv-btn.is-done:hover:not(:disabled) svg { color:#0b7a4b; }
 .ocv-btn:disabled { cursor:default; }
 /* Lisa déjà prévenue : une coche ronde, le détail (date, auteur, canaux) au survol. */
 .ocv-last { display:grid; place-items:center; width:22px; height:22px; border-radius:50%; background:#e2f6ea; color:#0b7a4b; cursor:help; }
