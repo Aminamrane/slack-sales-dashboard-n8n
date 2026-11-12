@@ -1,5 +1,6 @@
 import SalePaymentMode from '../components/SalePaymentMode';
 import { generateSavedNda } from '../contracts/ndaGeneration.js';
+import { revealInRail } from "../utils/tabRail.js";
 import { ndaRepresentatives, emptyRepresentative } from '../contracts/representatives.js';
 import React, { useEffect, useLayoutEffect, useState, useMemo, useRef, useCallback } from "react";
 import { fetchContractsOfLead, contractSentLine } from '../utils/leadContracts.js';
@@ -1787,11 +1788,16 @@ export default function TrackingSheetSetter() {
       });
     };
     place();
-    rail.querySelector('[data-tab-active="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     const observer = new ResizeObserver(place);
     observer.observe(rail);
     return () => observer.disconnect();
   }, [activeTab, sidebarView, tabCounts, calSettings?.r3_enabled]);
+
+  // L'onglet actif reste visible dans sa rangée : au changement d'onglet seulement, et sans déplacer la page.
+  useLayoutEffect(() => {
+    const rail = tabRailRef.current;
+    revealInRail(rail, rail?.querySelector('[data-tab-active="true"]'));
+  }, [activeTab, sidebarView]);
 
   const handleTabChange = (idx) => {
     if (idx === activeTab) return;

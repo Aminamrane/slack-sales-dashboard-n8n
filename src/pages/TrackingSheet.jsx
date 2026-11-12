@@ -1,5 +1,6 @@
 import SalePaymentMode from '../components/SalePaymentMode';
 import { ContractFolders } from '../components/BoardClientFiles.jsx';
+import { revealInRail } from "../utils/tabRail.js";
 import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
 import LeadTransfer, { TransferTag } from '../components/leadTransfer/LeadTransfer.jsx';
 import {canRescheduleAfterSale, onboardingDateOf, onboardingAwaitingConfirmation} from '../utils/saleRescheduling';
@@ -2272,11 +2273,16 @@ export default function TrackingSheet() {
       });
     };
     place();
-    rail.querySelector('[data-tab-active="true"]')?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
     const observer = new ResizeObserver(place);
     observer.observe(rail);
     return () => observer.disconnect();
   }, [activeTab, sidebarView, tabCounts, calSettings?.r3_enabled]);
+
+  // L'onglet actif reste visible dans sa rangée : au changement d'onglet seulement, et sans déplacer la page.
+  useLayoutEffect(() => {
+    const rail = tabRailRef.current;
+    revealInRail(rail, rail?.querySelector('[data-tab-active="true"]'));
+  }, [activeTab, sidebarView]);
 
   const handleTabChange = (idx) => {
     if (idx === activeTab) return;
@@ -6387,6 +6393,25 @@ export default function TrackingSheet() {
               </div>
 
               <div style={{ display: leadTab === 'infos' ? 'block' : 'none' }}>
+              {/* Les notes se lisent dès la première page de la fiche (demande des sales, 12/11/2026) : la note du rappel
+                  et le commentaire du lead, en lecture ; « Modifier » ouvre le volet Commentaire, où ils se saisissent. */}
+              {(recallText || notesShown) && (
+                <div style={{ marginBottom: 14, padding: '14px 16px', borderRadius: 14, fontSize: 13.5, background: darkMode ? '#181818' : '#f7f5f2', animation: 'contentReveal 0.3s cubic-bezier(0.4,0,0.2,1) both' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: 10, fontWeight: 500, color: darkMode ? C.muted : '#a8a39b', textTransform: 'uppercase', letterSpacing: '0.09em' }}>{recallText && !notesShown ? 'Note du rappel' : 'Commentaire'}</span>
+                    <button type="button" onClick={() => setPanelTab({ leadId: lead.id, tab: 'commentaire' })}
+                      style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 500, color: C.muted }}>
+                      Modifier
+                    </button>
+                  </div>
+                  {recallText && <SalesNotesView value={recallText}/>}
+                  {recallText && notesShown && <div style={{ height: 1, margin: '8px 0', background: darkMode ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)' }} />}
+                  {notesShown && <SalesNotesView value={lead.notes}/>}
+                  {notesShown && lead.notes_updated_at && formatNoteDate(lead.notes_updated_at) && (
+                    <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: 'right' }}>Modifié {formatNoteDate(lead.notes_updated_at)}</div>
+                  )}
+                </div>
+              )}
               {intakeSaved[lead.id]?.available && <div style={{ marginBottom: 14 }}>
                 <IntegrationButton consult ready={intakeSaved[lead.id].validated} onClick={() => openSavedIntake(lead.id)} />
               </div>}
