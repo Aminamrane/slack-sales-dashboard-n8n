@@ -8,6 +8,7 @@ import { ArrowRight, FileText, Undo2 } from "lucide-react";
 import { Tag } from "../../pages/TrackingSheetFinance/components/PageKit.jsx";
 import { dayLabel, eventSentence, sizeLabel } from "../../utils/automationBoard";
 import { Composer, Feedback, Files } from "./Followup.jsx";
+import { partnerFile } from "./followupApi.js";
 
 const STATES = { done: ["green", "Fait"], now: ["blue", "Étape actuelle"], next: [undefined, "À venir"] };
 
@@ -65,7 +66,10 @@ export default function Journey({ processId, milestones, follow, owned, locked, 
                         <div className="ab-event-what">{eventSentence(item)}</div>
                         <div className="ab-event-who">{[`le ${dayLabel(item.day)}`, item.time && `à ${item.time.replace(":", " h ")}`, item.detail].filter(Boolean).join(" · ")}</div>
                         {item.text && <div className="ab-event-text">{item.text}</div>}
-                        {item.file && <span className={`ab-chip${item.file.removed ? " is-gone" : ""}`}><FileText size={13} />{item.file.name}<span style={{ color: "var(--muted)" }}>{sizeLabel(item.file.size)}</span></span>}
+                        {/* Un fichier déposé dans Opti'Lex se télécharge ici ; retiré, il ne reste que son nom. */}
+                        {item.file && (partnerFile(item.file) && !item.file.removed
+                          ? <Files processId={processId} files={[partnerFile(item.file)]} />
+                          : <span className={`ab-chip${item.file.removed ? " is-gone" : ""}`}><FileText size={13} />{item.file.name}<span style={{ color: "var(--muted)" }}>{sizeLabel(item.file.size)}</span></span>)}
                         <Files processId={processId} files={item.files} />
                         <Feedback processId={processId} itemKey={item.key} follow={follow} onChanged={onChanged} entryId={item.id} mine={item.mine} />
                       </div>

@@ -16,7 +16,7 @@ import "../../pages/TrackingSheetFinance/components/ExchangeThread.css";
 import { ExternalIcon, Face, StepTrack, Usage } from "./parts";
 import { Composer, Feedback, Files } from "./Followup.jsx";
 import Journey from "./Journey.jsx";
-import { FILE_ACCEPT, followupApi, pickFiles } from "./followupApi.js";
+import { FILE_ACCEPT, followupApi, partnerFile, pickFiles } from "./followupApi.js";
 import { TONE_OF, number } from "./theme";
 
 const API = "/api/v1/optilex/automation-board";
@@ -139,10 +139,11 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   };
 
   const classification = classifications.find((item) => item.value === row?.classification);
-  // Cahier des charges : les documents déposés depuis Owner (téléchargeables ici), puis ceux d'Opti'Lex.
+  // Cahier des charges : les documents déposés depuis Owner, puis ceux que le cabinet a déposés dans Opti'Lex. Tous se
+  // téléchargent ici.
   const docs = [
     ...follow.entries.filter((entry) => entry.kind === "document").flatMap((entry) => entry.files.map((file) => ({ key: file.id, name: file.file_name, meta: [sizeLabel(file.byte_size), entry.author_name, new Date(entry.created_at).toLocaleDateString("fr-FR")], file }))),
-    ...(data?.attachments || []).map((file, i) => ({ key: `x${i}`, name: file.name, meta: [sizeLabel(file.size), file.by, file.at, "dans Opti’Lex"], file: null })),
+    ...(data?.attachments || []).map((file, i) => ({ key: `x${i}`, name: file.name, meta: [sizeLabel(file.size), file.by, file.at, "déposé dans Opti’Lex"], file: partnerFile(file) })),
   ];
   const fileInput = useRef(null);
   const confirm = (state, onChange) => (
@@ -227,7 +228,10 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                           <Face name={item.who} />
                           <span className="fx-author">{item.who || "Opti’Lex"}</span>
                           <i className="fx-dot" /><span className="fx-time">{new Date(`${item.day}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}, {item.time}</span>
-                          <span className="fx-head-end">{item.shared ? <Tag tone="blue">Partagé avec le cabinet</Tag> : <Tag>Interne</Tag>}</span>
+                          <span className="fx-head-end">
+                            {item.target != null && steps.find((step) => step.value === item.target) && <Tag title="Dans Opti’Lex, ce commentaire est rangé sous cette étape du parcours">{steps.find((step) => step.value === item.target).label}</Tag>}
+                            {item.shared ? <Tag tone="blue">Partagé avec le cabinet</Tag> : <Tag>Interne</Tag>}
+                          </span>
                         </header>
                         {item.text && <div className="fx-text">{item.text}</div>}
                         <Files processId={id} files={item.files} />

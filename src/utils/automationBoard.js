@@ -135,7 +135,8 @@ export function missionComments(history, entries) {
   const items = [];
   (Array.isArray(history) ? history : []).forEach((day) => (day.items || []).forEach((item) => {
     if (item.filter !== "comments") return;
-    items.push({ key: eventKey(day.day, item), day: day.day, time: item.time || "", shared: true, who: item.who, text: item.text || "", files: [] });
+    // `target` : l'étape du parcours que le commentaire vise dans Opti'Lex, s'il en vise une.
+    items.push({ key: eventKey(day.day, item), day: day.day, time: item.time || "", shared: true, who: item.who, text: item.text || "", files: [], target: Number.isInteger(item.target) ? item.target : null });
   }));
   (Array.isArray(entries) ? entries : []).forEach((entry) => {
     if (entry.kind !== "comment" || entry.target_key) return;
@@ -172,8 +173,9 @@ export function journey(row, steps, history, entries) {
   let validated = null;
   events.forEach((event) => {
     const what = String(event.what || "");
-    if (event.kind === "decision" && /étape/i.test(what) && String(event.detail || "").includes("→")) {
-      const step = list.find((item) => item.label === event.detail.split("→").pop().trim());
+    // Un changement d'étape : Opti'Lex donne l'étape atteinte (`step`) ; à défaut, elle se lit dans « avant → après ».
+    if (Number.isInteger(event.step) || (event.kind === "decision" && /étape/i.test(what) && String(event.detail || "").includes("→"))) {
+      const step = Number.isInteger(event.step) ? list.find((item) => item.value === event.step) : list.find((item) => item.label === event.detail.split("→").pop().trim());
       if (step && (!reached[step.value] || event.at > reached[step.value].at)) reached[step.value] = event;
     } else if ((event.kind === "first" || /ajouté le process/i.test(what)) && (!created || event.at < created.at)) created = event;
     else if (event.kind === "validated" && (!validated || event.at > validated.at)) validated = event;
