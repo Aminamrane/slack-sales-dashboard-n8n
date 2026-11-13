@@ -215,7 +215,7 @@ export function journey(row, steps, history, entries) {
 // "dev" quand il a demandé une modification. Sinon l'étape parle : avant toute version, c'est aux développeurs ; une
 // version validée n'attend personne. Chaque situation a son geste, enregistré d'un clic ; le classement suit tout seul.
 // Un geste est une action du suivi (`action`) ou un changement d'étape (`step`) ; `needsNote` : le mot est obligatoire.
-export function turnOf(row, steps, locked = false) {
+function baseTurn(row, steps, locked) {
   const step = Number(row?.step) || 0;
   const awaiting = row?.awaiting?.who === "lawyer" || row?.awaiting?.who === "dev" ? row.awaiting : null;
   const who = awaiting ? awaiting.who : step < 2 ? "build" : step === 2 ? "idle" : "done";
@@ -253,6 +253,60 @@ export function turnOf(row, steps, locked = false) {
     actions: [{ key: "deliver", action: "deliver", label: "Version livrée, à tester", primary: true },
       ...(!locked && step === 0 && label(1) ? [{ key: "step-1", step: 1, label: label(1) }] : [])],
   };
+}
+
+// ── Suivi des développeurs (13/11/2026 : « un onglet où on voit ce que les devs sont en train de travailler, sur quoi ils
+// attendent une validation ») ────────────────────────────────────────────────────────────────────────────────────────
+// Opti'Lex dit, pour chaque ligne, si les développeurs y travaillent (`working` : depuis quand, qui l'a dit, le dernier point
+// d'avancement). Trois gestes : « On y travaille », un point d'avancement (un mot obligatoire), « Mettre de côté ».
+const WORK = {
+  start: { key: "start", action: "start", label: "On y travaille" },
+  progress: { key: "progress", action: "progress", label: "Point d’avancement", needsNote: true, missing: "Écrivez où vous en êtes : c’est ce que le cabinet lira." },
+  pause: { key: "pause", action: "pause", label: "Mettre de côté" },
+};
+
+// À qui de jouer sur une mission, avec ses gestes ; le travail en cours des développeurs s'y ajoute. Pendant que le juriste
+// teste une version, il n'y a rien à commencer.
+export function turnOf(row, steps, locked = false) {
+  const turn = baseTurn(row, steps, locked);
+  const working = row?.working || null;
+  const extra = working ? [WORK.progress, WORK.pause] : turn.who === "lawyer" ? [] : [WORK.start];
+  return { ...turn, working, actions: [...turn.actions, ...extra],
+    placeholder: working && turn.who !== "lawyer" ? "Où vous en êtes (obligatoire pour un point d’avancement), ou ce qu’il faut tester…" : turn.placeholder };
+}
+
+// Depuis quand, par qui : « Depuis le 12/11/2026 · Prénom Nom ».
+function sinceLine(fact) {
+  return [fact?.since ? `Depuis le ${String(fact.since).slice(0, 10)}` : "", fact?.by || ""].filter(Boolean).join(" · ");
+}
+
+// Le tableau de suivi : ce qui est en cours chez les développeurs, ce qui attend le test d'un juriste, ce qu'on leur a demandé
+// de reprendre et qu'ils n'ont pas encore repris. Une ligne n'apparaît que dans une colonne : « en cours » l'emporte.
+export function devBoard(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const item = (row, fact, actions, extra = "") => ({ id: row.id, name: row.name, pole: row.pole?.label || "", meta: [sinceLine(fact), extra].filter(Boolean).join(" · "), text: fact?.text || "", actions });
+  const deliver = (label) => ({ key: "deliver", action: "deliver", label, primary: true });
+  return [
+    { key: "working", title: "En cours chez les développeurs", tone: "blue", empty: "Rien en cours. Ajoutez la mission sur laquelle vous travaillez.",
+      // Une modification demandée que les développeurs ont reprise garde le mot du juriste tant qu'ils n'ont pas donné de nouvelles.
+      items: list.filter((row) => row.working).map((row) => {
+        const asked = row.awaiting?.who === "dev";
+        const fact = row.working.text || !asked ? row.working : { ...row.working, text: row.awaiting.text };
+        return item(row, fact, [deliver(asked ? "Version corrigée, à retester" : "Version livrée, à tester"), WORK.progress, WORK.pause],
+          [asked ? "modification demandée" : "", row.working.updatedAt && row.working.updatedAt !== row.working.since ? `dernier point le ${String(row.working.updatedAt).slice(0, 10)}` : ""].filter(Boolean).join(" · "));
+      }) },
+    { key: "lawyer", title: "En attente du juriste", tone: "yellow", empty: "Aucune version n’attend de test.",
+      items: list.filter((row) => !row.working && row.awaiting?.who === "lawyer").map((row) => item(row, row.awaiting, [])) },
+    { key: "dev", title: "Modification demandée", tone: "peach", empty: "Aucune modification en attente.",
+      items: list.filter((row) => !row.working && row.awaiting?.who === "dev").map((row) => item(row, row.awaiting, [{ ...WORK.start, primary: true }, { ...deliver("Version corrigée, à retester"), primary: false }])) },
+  ];
+}
+
+// Les missions qu'on peut déclarer « en cours » : celles qui ne le sont pas, hors process validés par la direction.
+export function startable(rows, query, limit = 6) {
+  const needle = fold(query);
+  if (!needle) return [];
+  return (Array.isArray(rows) ? rows : []).filter((row) => !row.working && !row.validated && fold(row.name).includes(needle)).slice(0, limit);
 }
 
 // Le message d'une erreur du serveur, tel qu'on peut le lire : une saisie refusée par le serveur arrive en liste.

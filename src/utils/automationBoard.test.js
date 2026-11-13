@@ -142,10 +142,10 @@ test("à qui de jouer : avant toute version, c'est aux développeurs, et leur ge
   const { turnOf } = await import('./automationBoard.js');
   const start = turnOf({ step: 0, awaiting: null }, STEPS);
   assert.equal(start.who, 'build');
-  assert.deepEqual(start.actions.map((a) => [a.key, a.label, Boolean(a.primary)]), [['deliver', 'Version livrée, à tester', true], ['step-1', 'Cahier des charges envoyé', false]]);
+  assert.deepEqual(start.actions.map((a) => [a.key, a.label, Boolean(a.primary)]), [['deliver', 'Version livrée, à tester', true], ['step-1', 'Cahier des charges envoyé', false], ['start', 'On y travaille', false]]);
   assert.equal(start.actions[1].step, 1);
   // Cahier des charges déjà envoyé : il ne reste que la livraison.
-  assert.deepEqual(turnOf({ step: 1 }, STEPS).actions.map((a) => a.key), ['deliver']);
+  assert.deepEqual(turnOf({ step: 1 }, STEPS).actions.map((a) => a.key), ['deliver', 'start']);
 });
 
 test('à qui de jouer : une version livrée attend le juriste, qui valide ou demande une modification', async () => {
@@ -164,22 +164,22 @@ test('à qui de jouer : une modification demandée attend les développeurs, ave
   assert.equal(asked.who, 'dev');
   assert.equal(asked.title, 'Aux développeurs de jouer : une modification est demandée');
   assert.equal(asked.quote, 'Il manque la période d’essai.');
-  assert.deepEqual(asked.actions.map((a) => [a.action, a.label]), [['deliver', 'Version corrigée, à retester'], ['request_change', 'Compléter la demande']]);
+  assert.deepEqual(asked.actions.map((a) => [a.action, a.label]), [['deliver', 'Version corrigée, à retester'], ['request_change', 'Compléter la demande'], ['start', 'On y travaille']]);
 });
 
 test("à qui de jouer : une version validée n'attend personne ; on peut demander une évolution ou passer à la version maximale", async () => {
   const { turnOf } = await import('./automationBoard.js');
   const approved = turnOf({ step: 3, awaiting: null }, STEPS);
   assert.equal(approved.who, 'done');
-  assert.deepEqual(approved.actions.map((a) => a.key), ['request_change', 'step-4']);
+  assert.deepEqual(approved.actions.map((a) => a.key), ['request_change', 'step-4', 'start']);
   assert.equal(approved.actions[1].label, 'Passer à « Version maximale optimisée »');
   // Dernière étape, ou process validé par la direction : plus de changement d'étape proposé.
-  assert.deepEqual(turnOf({ step: 4 }, STEPS).actions.map((a) => a.key), ['request_change']);
-  assert.deepEqual(turnOf({ step: 3 }, STEPS, true).actions.map((a) => a.key), ['request_change']);
-  assert.deepEqual(turnOf({ step: 0 }, STEPS, true).actions.map((a) => a.key), ['deliver']);
+  assert.deepEqual(turnOf({ step: 4 }, STEPS).actions.map((a) => a.key), ['request_change', 'start']);
+  assert.deepEqual(turnOf({ step: 3 }, STEPS, true).actions.map((a) => a.key), ['request_change', 'start']);
+  assert.deepEqual(turnOf({ step: 0 }, STEPS, true).actions.map((a) => a.key), ['deliver', 'start']);
   // Une version existe sans être attendue (« non utilisée ») : livrer une nouvelle version ou demander une modification.
   const idle = turnOf({ step: 2, awaiting: null }, STEPS);
-  assert.deepEqual([idle.who, ...idle.actions.map((a) => a.action)], ['idle', 'deliver', 'request_change']);
+  assert.deepEqual([idle.who, ...idle.actions.map((a) => a.action)], ['idle', 'deliver', 'request_change', 'start']);
   // Une valeur inconnue venue d'Opti'Lex ne casse rien : l'étape parle.
   assert.equal(turnOf({ step: 1, awaiting: { who: 'autre' } }, STEPS).who, 'build');
 });
@@ -217,4 +217,53 @@ test("une erreur du serveur se lit, même quand il renvoie une liste", async () 
   assert.equal(errorText({ message: '[object Object]', data: { detail: [{ msg: 'Input should be less than or equal to 4' }] } }, 'x'), 'Input should be less than or equal to 4');
   assert.equal(errorText({ message: '[object Object]', data: { detail: [] } }, 'Le geste n’a pas été enregistré.'), 'Le geste n’a pas été enregistré.');
   assert.equal(errorText(null, 'Indisponible.'), 'Indisponible.');
+});
+
+// ── Suivi des développeurs (13/11/2026) ──
+test("le tableau de suivi range chaque mission dans une seule colonne, « en cours » l'emporte", async () => {
+  const { devBoard } = await import("./automationBoard.js");
+  const rows = [
+    { id: 1, name: "Promesses d'embauche", pole: { label: "Social" }, awaiting: null, working: { since: "12/11/2026 à 09:10", by: "Dev Un", text: "Reste la période d'essai.", updatedAt: "13/11/2026 à 10:00", updatedBy: "Dev Deux" } },
+    { id: 2, name: "PV d'assemblée", awaiting: { who: "dev", since: "11/11/2026 à 15:00", by: "Juriste", text: "Le quorum manque." }, working: null },
+    { id: 3, name: "TVA", awaiting: { who: "lawyer", since: "10/11/2026 à 08:00", by: "Dev Un", text: "À tester." }, working: null },
+    { id: 4, name: "Bulletins", awaiting: { who: "dev", since: "09/11/2026 à 08:00", by: "Juriste", text: "Net à payer faux." }, working: { since: "13/11/2026 à 08:00", by: "Dev Un", text: null, updatedAt: "13/11/2026 à 08:00", updatedBy: "Dev Un" } },
+    { id: 5, name: "Courrier", awaiting: null, working: null },
+  ];
+  const [working, lawyer, dev] = devBoard(rows);
+  assert.deepEqual([working.items.map((item) => item.id), lawyer.items.map((item) => item.id), dev.items.map((item) => item.id)], [[1, 4], [3], [2]]);
+  assert.equal(working.items[0].meta, "Depuis le 12/11/2026 · Dev Un · dernier point le 13/11/2026");
+  assert.equal(working.items[0].text, "Reste la période d'essai.");
+  assert.deepEqual(working.items[0].actions.map((gesture) => gesture.action), ["deliver", "progress", "pause"]);
+  assert.equal(working.items[0].actions[0].label, "Version livrée, à tester");
+  // Une modification demandée que les développeurs ont reprise : la livraison s'appelle « corrigée ».
+  assert.equal(working.items[1].actions[0].label, "Version corrigée, à retester");
+  assert.equal(working.items[1].meta, "Depuis le 13/11/2026 · Dev Un · modification demandée");
+  assert.equal(working.items[1].text, "Net à payer faux.", "le mot du juriste reste tant que les développeurs n'ont pas donné de nouvelles");
+  assert.deepEqual(dev.items[0].actions.map((gesture) => gesture.action), ["start", "deliver"]);
+  assert.deepEqual(lawyer.items[0].actions, [], "pendant le test du juriste, rien à faire côté développeurs");
+  assert.deepEqual(devBoard(null).map((group) => group.items.length), [0, 0, 0]);
+});
+
+test("on ajoute une mission en cours en tapant son nom ; celles déjà en cours ou validées ne sont pas proposées", async () => {
+  const { startable } = await import("./automationBoard.js");
+  const rows = [{ id: 1, name: "Rémunération du dirigeant", working: null }, { id: 2, name: "Rémunération variable", working: { since: "x" } },
+    { id: 3, name: "Remuneration des apprentis", working: null, validated: { at: "x" } }, { id: 4, name: "TVA", working: null }];
+  assert.deepEqual(startable(rows, "remun").map((row) => row.id), [1]);
+  assert.deepEqual(startable(rows, "  "), []);
+  assert.deepEqual(startable(rows, "tva").map((row) => row.id), [4]);
+});
+
+test("la fiche d'une mission propose « On y travaille », puis le point d'avancement et la mise de côté", async () => {
+  const { turnOf } = await import("./automationBoard.js");
+  const steps = [0, 1, 2, 3, 4].map((value) => ({ value, label: `Étape ${value}` }));
+  const idle = turnOf({ step: 0, awaiting: null, working: null }, steps);
+  assert.equal(idle.working, null);
+  assert.ok(idle.actions.some((gesture) => gesture.action === "start"));
+  const busy = turnOf({ step: 0, awaiting: null, working: { since: "13/11/2026", by: "Dev", text: "En route.", updatedAt: "13/11/2026", updatedBy: "Dev" } }, steps);
+  assert.deepEqual(busy.actions.filter((gesture) => ["start", "progress", "pause"].includes(gesture.action)).map((gesture) => gesture.action), ["progress", "pause"]);
+  assert.ok(busy.actions.find((gesture) => gesture.action === "progress").needsNote);
+  assert.match(busy.placeholder, /point d’avancement/);
+  // Pendant que le juriste teste, il n'y a rien à commencer.
+  const tested = turnOf({ step: 2, awaiting: { who: "lawyer" }, working: null }, steps);
+  assert.ok(!tested.actions.some((gesture) => gesture.action === "start"));
 });
