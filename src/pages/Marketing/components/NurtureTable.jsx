@@ -50,6 +50,8 @@ const LABELS_BY_COHORT = {
   // 24 novembre (TPE/PME) : le webinaire prévu le 17, déplacé d'une semaine. La landing garde les types d'envoi
   // `email_post17_*` pour cette cohorte. Même suivi que le 22 octobre, sujets seulement.
   'webinar-2026-11-24': {
+    // Avis du 10/11 aux inscrits d'alors (la landing le remonte avec les relances : son type commence par `email_post`).
+    email_postponement:    { subject: 'Changement de date · rendez-vous le 24 novembre à 11 h' },
     email_post17_missed:   { subject: 'Vous avez raté quelque chose…' },
     email_post17_attended: { subject: 'Merci pour votre présence' },
     email_post17_j1: { subject: 'Payez-vous trop de charges ? Voici comment le savoir' },
@@ -147,6 +149,10 @@ export default function NurtureTable({ webinarId, C }) {
     );
   }
 
+  // Avant le live d'un webinaire déplacé, la seule ligne est l'avis de changement de date : le titre le dit.
+  const onlyNotice = rows.every((r) => r.kind === 'email_postponement');
+  const title = onlyNotice ? 'Avis de changement de date' : 'Relances post-webinaire · séquence 4 jours';
+
   const HEADER_CELL = {
     padding: '14px 16px',
     fontSize: 10,
@@ -169,8 +175,8 @@ export default function NurtureTable({ webinarId, C }) {
 
   return (
     <Card
-      title="Relances post-webinaire · séquence 4 jours"
-      subtitle={`${fmtInt(grandSent)} envoyés · ${fmtInt(grandPending)} en attente · ${fmtInt(grandTotal)} total sur ${rows.length} emails programmés`}
+      title={title}
+      subtitle={`${fmtInt(grandSent)} envoyés · ${fmtInt(grandPending)} en attente · ${fmtInt(grandTotal)} total sur ${rows.length} ${rows.length > 1 ? 'emails programmés' : 'email programmé'}`}
       C={C}
       noPadding
     >
