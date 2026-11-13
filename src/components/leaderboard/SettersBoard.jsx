@@ -17,14 +17,10 @@ const RULES = [
 function Pill({ children, darkMode }) {
   return (
     <div style={{
-      display: 'inline-block', fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
-      color: darkMode ? '#9ca3b8' : '#464b65', padding: '8px 18px',
-      background: darkMode ? '#2a2b36' : '#dfdfe5', borderRadius: '14px',
-      border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
-      borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
-      boxShadow: darkMode
-        ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
-        : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+      display: 'inline-block', fontSize: '13px', fontWeight: 500, letterSpacing: '-0.01em',
+      color: darkMode ? '#a3a3a3' : '#55514b', padding: '8px 18px',
+      background: darkMode ? '#262626' : '#f4f2ee', borderRadius: '14px',
+      border: darkMode ? '1px solid #2e2e2e' : '1px solid #e8e4de',
       userSelect: 'none',
     }}>{children}</div>
   );
@@ -43,7 +39,7 @@ function RulesBubble({ card }) {
     <span ref={ref} style={{ position: 'relative', display: 'inline-flex' }}>
       <button type="button" aria-label="Règles de calcul" onClick={() => setOpen(o => !o)} style={{
         width: 22, height: 22, borderRadius: '50%', border: `1px solid ${card.border}`, background: card.bg,
-        color: card.secondary, fontSize: 12, fontWeight: 700, fontFamily: 'Georgia, serif', fontStyle: 'italic',
+        color: card.secondary, fontSize: 12, fontWeight: 500, fontFamily: 'Georgia, serif', fontStyle: 'italic',
         cursor: 'pointer', lineHeight: '20px', padding: 0,
       }}>i</button>
       <AnimatePresence>
@@ -58,7 +54,7 @@ function RulesBubble({ card }) {
             }}>
             {RULES.map(([title, body]) => (
               <div key={title} style={{ fontSize: 12, lineHeight: 1.45, color: card.secondary }}>
-                <span style={{ fontWeight: 700, color: card.text }}>{title}</span> · {body}
+                <span style={{ fontWeight: 500, color: card.text }}>{title}</span> · {body}
               </div>
             ))}
           </motion.div>
@@ -71,7 +67,7 @@ function RulesBubble({ card }) {
 const COLS = '52px minmax(0, 1fr) 92px 92px 72px';
 
 function Header({ card, first }) {
-  const th = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: card.muted, fontWeight: 600 };
+  const th = { fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: card.muted, fontWeight: 500 };
   return (
     <div style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', padding: '8px 4px',
       borderBottom: `1px solid ${card.border}` }}>
@@ -108,8 +104,8 @@ function Avatar({ person, darkMode }) {
     ? <img src={person.avatar_url} className="avatar" alt="" />
     : (
       <span className="avatar" style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700,
-        background: darkMode ? '#2a2b36' : '#e4e8f2', color: darkMode ? '#9ca3b8' : '#5b6380',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 500,
+        background: darkMode ? '#262626' : '#f1eee9', color: darkMode ? '#a3a3a3' : '#55514b',
       }}>{initials}</span>
     );
 }
@@ -129,13 +125,13 @@ function SetterRow({ setter, index, open, onToggle, card, darkMode, medals }) {
   return (
     <motion.div layout="position" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, ease: EASE, delay: Math.min(index, 12) * 0.035 }}
-      style={{ borderBottom: `1px solid ${darkMode ? '#2a2b36' : '#eef1f6'}` }}>
+      style={{ borderBottom: `1px solid ${darkMode ? '#2e2e2e' : '#f1eee9'}` }}>
       <div onClick={clickable ? onToggle : undefined} role={clickable ? 'button' : undefined}
         aria-expanded={clickable ? open : undefined} className="setters-board__row"
         style={{
           display: 'grid', gridTemplateColumns: COLS, alignItems: 'center', padding: '8px 4px', borderRadius: 8,
           cursor: clickable ? 'pointer' : 'default', fontWeight: first ? 600 : 400,
-          background: open ? (darkMode ? '#252636' : '#f4f6fb') : first ? 'rgba(91, 106, 191, 0.06)' : 'transparent',
+          background: open ? (darkMode ? '#262626' : '#f4f2ee') : first ? (darkMode ? 'rgba(255,255,255,0.05)' : '#f6f4f0') : 'transparent',
           transition: 'background-color .2s ease',
         }}>
         <Medal rank={setter.rank} medals={medals} card={card} />
@@ -200,8 +196,8 @@ function ClientLines({ clients, card, darkMode }) {
       <span style={{ gridColumn: '3 / 6', textAlign: 'right', fontSize: 11.5, color: card.muted, whiteSpace: 'nowrap',
         display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 6 }}>
         {!c.declared && (
-          <span style={{ fontSize: 10.5, fontWeight: 600, padding: '1px 7px', borderRadius: 999,
-            color: darkMode ? '#fbbf77' : '#b45309', background: darkMode ? 'rgba(251,191,119,0.12)' : '#fef3c7' }}>
+          <span style={{ fontSize: 10.5, fontWeight: 500, padding: '1px 7px', borderRadius: 999,
+            color: darkMode ? '#e8a877' : '#c2500e', background: darkMode ? 'rgba(251,146,60,0.14)' : '#fde9da' }}>
             Non déclarée
           </span>
         )}
@@ -232,13 +228,13 @@ function ProvenanceTable({ rows, card, darkMode, title }) {
   return (
     <div>
       {title && (
-        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: card.muted, fontWeight: 600,
+        <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '1px', color: card.muted, fontWeight: 500,
           padding: '18px 4px 6px 56px' }}>{title}</div>
       )}
       {rows.map((p, i) => (
         <motion.div key={p.key} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, ease: EASE, delay: i * 0.03 }}
-          style={{ padding: '8px 4px', borderBottom: `1px solid ${darkMode ? '#2a2b36' : '#eef1f6'}`,
+          style={{ padding: '8px 4px', borderBottom: `1px solid ${darkMode ? '#2e2e2e' : '#f1eee9'}`,
             opacity: p.rdv || p.sales ? 1 : 0.45 }}>
           <div style={{ display: 'grid', gridTemplateColumns: COLS, alignItems: 'center' }}>
             <span />
