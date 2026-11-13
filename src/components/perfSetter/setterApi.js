@@ -1,23 +1,15 @@
-import { useEffect, useState } from 'react';
 import apiClient from '../../services/apiClient';
+import { createReadStore, useStoreRead } from './freshRead';
 
-// RDV posés par jour par les setters (/monitoring/performance/v2/setters/placed), gardés le temps de la page.
-// `refreshKey` (bouton « Actualiser » de Perf Setter) fait partie de la clé : une actualisation relit la route.
-const cache = new Map();
+// RDV posés par jour par les setters (/monitoring/performance/v2/setters/placed). Gardés en mémoire pour que changer de période ou d'onglet soit
+// instantané, mais jamais présentés comme à jour au-delà de 30 s : avant, la lecture restait affichée des heures durant, et les RDV posés depuis
+// la première ouverture de la page n'apparaissaient qu'au bouton « Actualiser ». Voir freshRead.js : la dernière valeur reste visible pendant la
+// relecture (pas d'écran vide), « Actualiser » (`refreshKey`) impose une relecture, le retour sur l'onglet du navigateur relit une valeur périmée.
+const store = createReadStore();
 export function usePlacements(start, end, refreshKey = 0) {
-  const [state, setState] = useState([null, false]);
-  useEffect(() => {
-    if (!start || !end) return undefined;
-    let alive = true;
-    const key = `${start}|${end}|${refreshKey}`;
-    setState([null, false]);
-    if (!cache.has(key)) {
-      cache.set(key, apiClient.get(`/api/v1/monitoring/performance/v2/setters/placed?start=${start}&end=${end}`).catch((e) => { cache.delete(key); throw e; }));
-    }
-    cache.get(key).then((d) => alive && setState([d, false])).catch(() => alive && setState([null, true]));
-    return () => { alive = false; };
-  }, [start, end, refreshKey]);
-  return state;
+  const key = start && end ? `${start}|${end}` : null;
+  const { value, error, refreshing } = useStoreRead(store, key, () => apiClient.get(`/api/v1/monitoring/performance/v2/setters/placed?start=${start}&end=${end}`), { version: refreshKey, enabled: !!key });
+  return [value, error, refreshing];
 }
 
 const pad = (n) => String(n).padStart(2, '0');

@@ -10,7 +10,9 @@ export const WEBINAR_CAMPAIGNS = {
   // ses 150 leads Meta = les 150 inscrits Meta de la cohorte côté landing).
   'webinar-2026-10-22': ['WEBINAIRE BROAD OCTOBRE'],
   // Campagne des inscrits du formulaire « Webinaire BROAD - NOVEMBRE » (nom lu sur leurs fiches Meta le 06/11).
-  'webinar-2026-11-17': ['WEBINAIRE BROAD NOVEMBRE'],
+  // Webinaire prévu le 17 novembre, déplacé au 24 : la cohorte suivie est celle du 24 (130 de ses 132 inscrits Meta
+  // portent cette campagne au 13/11).
+  'webinar-2026-11-24': ['WEBINAIRE BROAD NOVEMBRE'],
 };
 
 export function acquisitionPeriod(stats, webinar) {

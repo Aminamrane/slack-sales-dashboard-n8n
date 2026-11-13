@@ -46,13 +46,19 @@ function callsOf(response, setterId) {
   return { state: "ok", ...st };
 }
 
-// Lectures gardées le temps de la page Perf Setter (le changement d'onglet ne relit pas Allo) ; « Actualiser » (refreshKey) les relit.
-const keep = (map, key, load) => {
-  if (!map.has(key)) map.set(key, load().catch((e) => { map.delete(key); throw e; }));
-  return map.get(key);
+// Lectures gardées 60 s au plus (le changement d'onglet ne relit pas Allo à chaque fois) ; « Actualiser » (refreshKey) les relit. Avant : gardées tout le temps de
+// la page, donc affichées telles quelles des heures durant (RDV et appels posés depuis la première ouverture absents) ; une lecture en cours est partagée.
+const READ_TTL_MS = 60_000;
+const keep = (map, key, load, version = 0) => {
+  const hit = map.get(key);
+  if (hit && hit.version === version && Date.now() - hit.at < READ_TTL_MS) return hit.promise;
+  const entry = { at: Date.now(), version, promise: null };
+  entry.promise = load().catch((e) => { if (map.get(key) === entry) map.delete(key); throw e; });
+  map.set(key, entry);
+  return entry.promise;
 };
-const loadOverview = (store, refreshKey) => keep(store.overview, String(refreshKey), () => apiClient.get("/api/v1/ceo-dashboard/setters"));
-const loadCalls = (store, period, refreshKey) => keep(store.calls, `${refreshKey}|${period}`, () => apiClient.get(`/api/v1/ceo-dashboard/setters/calls?period=${period}`));
+const loadOverview = (store, refreshKey) => keep(store.overview, "overview", () => apiClient.get("/api/v1/ceo-dashboard/setters"), refreshKey);
+const loadCalls = (store, period, refreshKey) => keep(store.calls, period, () => apiClient.get(`/api/v1/ceo-dashboard/setters/calls?period=${period}`), refreshKey);
 
 // ── Pièces de présentation (charte ps2) ───────────────────────────────────────────────────────────
 function Face({ name, size = 30, url }) {

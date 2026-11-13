@@ -42,7 +42,7 @@ export default function SetterPlacements({ period, dark, avatarFor, rdvMonth, re
   const [preset, setPreset] = useState('month');
   const [day, setDay] = useState('');
   const range = day ? [day, day] : PRESETS.find(([k]) => k === preset)[2];
-  const [data, error] = usePlacements(range[0], range[1], refreshKey);
+  const [data, error, refreshing] = usePlacements(range[0], range[1], refreshKey);
   const [hist, setHist] = useState(null);
   const closeHist = useCallback(() => setHist(null), []);
   const open = usePop();
@@ -71,7 +71,7 @@ export default function SetterPlacements({ period, dark, avatarFor, rdvMonth, re
   };
 
   return (
-    <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-place-title">
+    <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-place-title" aria-busy={refreshing || undefined}>
       <Motion.div className="ps2-card-head" variants={ITEM}>
         <h2 id="ps2-place-title">RDV posés par jour</h2>
         <span className="ps2-place-periods" role="group" aria-label="Période">

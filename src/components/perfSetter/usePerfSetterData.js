@@ -19,16 +19,21 @@ export function useSetterMonth(month, refreshKey = 0) {
   return state;
 }
 
-// Jours ouvrés du mois (pilotage.days de la Performance Sales : écoulés, restants, total) : les moyennes par jour et le volume d'appels
-// « pour l'objectif » s'appuient sur le MÊME calendrier que la Performance Sales. Absent (lecture en cours ou en échec) : pas de moyenne par jour.
-export function useMonthDays(month, refreshKey = 0) {
-  const [days, setDays] = useState(null);
+// Jours ouvrés du mois (écoulés, restants, total) : les moyennes par jour et le volume d'appels « pour l'objectif » s'appuient sur le MÊME calendrier que la
+// Performance Sales. Le serveur les joint désormais à la lecture des setters du mois (`data.days`) : plus besoin de charger la charge utile entière de la
+// Performance Sales (/performance/v2, plusieurs fois plus lourde que les setters) pour trois nombres. Un serveur qui ne les joint pas encore (clé `days`
+// absente) garde l'ancienne lecture, lancée une fois les setters arrivés. `null` : mois pas commencé, lecture en cours ou en échec (pas de moyenne par jour).
+export function useMonthDays(month, refreshKey = 0, data = null) {
+  const [legacy, setLegacy] = useState(null);
+  const joined = !!data && Object.prototype.hasOwnProperty.call(data, 'days');
+  const needLegacy = !!data && !joined;
   useEffect(() => {
-    if (!/^\d{4}-\d{2}$/.test(month || '')) return undefined;
+    if (!needLegacy || !/^\d{4}-\d{2}$/.test(month || '')) return undefined;
     let alive = true;
-    setDays(null);
-    apiClient.get(`/api/v1/monitoring/performance/v2?period=${month}`).then((d) => alive && setDays(d?.pilotage?.days || null)).catch(() => {});
+    setLegacy(null);
+    apiClient.get(`/api/v1/monitoring/performance/v2?period=${month}`).then((d) => alive && setLegacy(d?.pilotage?.days || null)).catch(() => {});
     return () => { alive = false; };
-  }, [month, refreshKey]);
-  return days;
+  }, [needLegacy, month, refreshKey]);
+  if (joined) return data.days || null;
+  return needLegacy ? legacy : null;
 }

@@ -1,6 +1,6 @@
 {
  "schema": 1,
- "generatedAt": "2026-11-06",
+ "generatedAt": "2026-11-13",
  "cohort": {
   "id": "webinar-2026-11-17",
   "label": "Webinaire du 17 novembre 2026",
@@ -18,7 +18,8 @@
    "Séquence fournie par le dev (« Séquence Webinaire Broad du 17 novembre », 06/11) : même structure que le 22 octobre. Ouverte d'abord en mise en ligne minimale (confirmation seule), complétée le 06/11.",
    "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
    "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
-   "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite."
+   "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite.",
+   "Webinaire déplacé au 24 novembre le 10/11 : les inscrits et la suite des envois sont sur la cohorte du 24 novembre. Cette cohorte n'est plus suivie par le CRM."
   ],
   "codeEra": "sept",
   "stepCount": 19
