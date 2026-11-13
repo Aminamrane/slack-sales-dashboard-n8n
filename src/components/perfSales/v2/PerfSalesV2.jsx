@@ -10,6 +10,7 @@ import WeeksBoard from './WeeksBoard';
 import ChannelBoard from './ChannelBoard';
 import AutoAssignTab from './AutoAssignTab';
 import VentesTab from './VentesTab';
+import QualityCards from './QualityCards';
 import ChannelTable from './ChannelTable';
 import ChannelFilter from './ChannelFilter';
 import SalesKpis from './SalesKpis';
@@ -866,7 +867,7 @@ export default function PerfSalesV2({ data, dark, period, tab, onTab, front, con
             )}
             {tab === 'reactivity' && reactivityNode}
             {tab === 'cohort' && <Cohort model={model} />}
-            {tab === 'ventes' && <VentesTab breakdown={ventesData} model={model} onOpen={open} />}
+            {tab === 'ventes' && <><VentesTab breakdown={ventesData} model={model} onOpen={open} /><QualityCards period={period} /></>}
             {tab === 'auto' && <AutoAssignTab month={period} avatarFor={model.avatarFor} />}
           </Motion.div>
         </AnimatePresence>

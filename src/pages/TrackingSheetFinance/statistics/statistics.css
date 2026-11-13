@@ -12,6 +12,8 @@
   flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; background: var(--bg); color: var(--ink);
   padding: 22px 28px 64px; border-radius: 18px; font-feature-settings: 'cv11', 'ss01';
 }
+/* Cartes reprises hors de la page Finance (Performance Sales) : la page hôte garde son fond et son défilement. */
+.fst-root.fst-embed { flex: none; overflow: visible; background: transparent; padding: 0; border-radius: 0; }
 .fst-root *, .fst-root *::before, .fst-root *::after { box-sizing: border-box; }
 /* :where garde cette remise à zéro sans poids : chaque bouton de la vue fixe ensuite sa taille et sa couleur par sa classe. */
 :where(.fst-root) button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; }
