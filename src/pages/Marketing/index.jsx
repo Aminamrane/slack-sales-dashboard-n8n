@@ -58,13 +58,18 @@ const COHORTS_WITH_NURTURE = new Set([
   'webinar-2026-09-07',
   'webinar-2026-09-21',
   'webinar-2026-10-22',
-  'webinar-2026-11-17',
+  'webinar-2026-11-24',
 ]);
+
+// Webinaires déplacés : l'ancien identifiant (liens enregistrés, onglet resté ouvert) mène à la cohorte qui le remplace.
+const MOVED_WEBINARS = {
+  'webinar-2026-11-17': 'webinar-2026-11-24',
+};
 
 function readWebinarFromUrl() {
   try {
     const v = new URLSearchParams(window.location.search).get('webinar');
-    return v && /^webinar-\d{4}-\d{2}-\d{2}$/.test(v) ? v : DEFAULT_WEBINAR_ID;
+    return v && /^webinar-\d{4}-\d{2}-\d{2}$/.test(v) ? (MOVED_WEBINARS[v] || v) : DEFAULT_WEBINAR_ID;
   } catch {
     return DEFAULT_WEBINAR_ID;
   }

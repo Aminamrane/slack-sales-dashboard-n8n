@@ -47,8 +47,9 @@ const LABELS_BY_COHORT = {
     email_post22_j3: { subject: 'Combien votre entreprise sort pour vous payer ?' },
     email_post22_j4: { subject: 'Dernier mail sur le sujet' },
   },
-  // 17 novembre (TPE/PME) : même suivi que le 22 octobre, sujets seulement.
-  'webinar-2026-11-17': {
+  // 24 novembre (TPE/PME) : le webinaire prévu le 17, déplacé d'une semaine. La landing garde les types d'envoi
+  // `email_post17_*` pour cette cohorte. Même suivi que le 22 octobre, sujets seulement.
+  'webinar-2026-11-24': {
     email_post17_missed:   { subject: 'Vous avez raté quelque chose…' },
     email_post17_attended: { subject: 'Merci pour votre présence' },
     email_post17_j1: { subject: 'Payez-vous trop de charges ? Voici comment le savoir' },

@@ -95,7 +95,8 @@ const EMAIL_KIND_LABELS = {
   email_oct22_h1: 'H-1',
   email_oct22_live: 'On est en live',
   email_oct22_live15: 'Live +15 min',
-  // 17 novembre (TPE/PME). Les relances post-live (email_post17_*) sont dans
+  // 24 novembre (TPE/PME) : webinaire prévu le 17, déplacé d'une semaine ; la landing garde les
+  // types d'envoi `email_nov17_*`. Les relances post-live (email_post17_*) sont dans
   // « Séquences post-webinaire » : la landing ne les remonte pas ici.
   email_nov17_invite_j14: 'Invitation J-14',
   email_nov17_invite_j8: 'Invitation J-8',
@@ -196,7 +197,7 @@ const EMAIL_KIND_ORDER = [
   'email_oct22_h1',
   'email_oct22_live',
   'email_oct22_live15',
-  // 17 novembre
+  // 24 novembre (types d'envoi `email_nov17_*`)
   'email_nov17_invite_j14',
   'email_nov17_invite_j8',
   'email_nov17_invite_j1',
