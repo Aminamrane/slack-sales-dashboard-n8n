@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { CalendarX2, ChevronRight, Undo2 } from 'lucide-react';
+import { CalendarX2, ChevronRight, PhoneOutgoing, Undo2 } from 'lucide-react';
 import { useDrawn } from '../../../components/perfSales/motion.jsx';
 import { parisToday } from '../../../utils/parisDates.js';
 import {
-  LEVEL, ONBOARDING_STATUS, ONBOARDING_VIEWS, REPORT_WHEN, byPerson, count, dayFR, eur, outcomeMeta, pct, peopleOf, plural, weatherTone,
+  CALL_OUTCOME, LEVEL, ONBOARDING_STATUS, ONBOARDING_VIEWS, REPORT_WHEN, byPerson, callLength, callMoment, contactLine, contactMeta, count, dayFR, eur,
+  outcomeMeta, pct, peopleOf, plural, weatherTone,
 } from './model.js';
 
 const since = (iso) => (iso ? ` Les reports laissent une trace depuis le ${dayFR(iso)} : avant, ils ne sont pas comptés.` : '');
@@ -209,8 +210,41 @@ export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
 }
 
 // ── No show et reports d'onboarding ─────────────────────────────────────────────────────────────────
-function Onboarding({ row, canOpen, onOpenClient }) {
+// Ce que disent les appels Allo du Client Success vers un client en no show (dev 13/11/2026 : « combien de fois le CSM
+// a essayé de contacter le client », « qui fait le mort »). `calls` : la lecture des tentatives, chargée à part.
+function Contact({ row, calls }) {
+  if (row.status !== 'no_show' && row.status !== 'to_confirm') return null;
+  const attempt = calls.data?.clients?.[String(row.client_id)];
+  const meta = contactMeta(attempt);
+  return (
+    <div className="fst-notes">
+      <div className="fst-noteblock">
+        <div className="fst-noteblock-head">
+          <span className="fst-micro"><PhoneOutgoing size={11} strokeWidth={2.2} /> Appels du Client Success</span>
+          {meta && <Pill tone={meta.tone} plain>{meta.label}</Pill>}
+          {!attempt && <span>{calls.loading ? 'Lecture des appels…' : calls.error ? 'Appels indisponibles pour le moment.' : 'Client hors de la lecture des appels.'}</span>}
+        </div>
+        {attempt && <p>{contactLine(attempt)}</p>}
+        {attempt?.calls?.length > 0 && (
+          <ul className="fst-calls">
+            {attempt.calls.map((call, i) => (
+              <li key={`${call.at}-${i}`} data-before={call.after ? undefined : 'true'}>
+                <span className="fst-num">{callMoment(call.at)}</span>
+                <span>{call.by || 'Client Success'}</span>
+                <span>{call.direction === 'outbound' ? 'appel sortant' : 'appel du client'}</span>
+                <span data-outcome={call.outcome}>{CALL_OUTCOME[call.outcome]}{callLength(call.duration) ? ` · ${callLength(call.duration)}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Onboarding({ row, calls, canOpen, onOpenClient }) {
   const status = ONBOARDING_STATUS[row.status] || ONBOARDING_STATUS.none;
+  const reach = contactMeta(calls?.data?.clients?.[String(row.client_id)]);
   return (
     <div className="fst-case">
       <div className="fst-case-head">
@@ -218,6 +252,7 @@ function Onboarding({ row, canOpen, onOpenClient }) {
         <Pill tone={status.tone}>{status.label}</Pill>
         {row.status === 'no_show' && row.level && <Pill tone="ghost" plain title="Certain : le Client Success l’a signalé. Probable : le rappel était parti, le rendez-vous tenait.">{LEVEL[row.level]}</Pill>}
         {row.reports > 0 && <Pill tone="ghost" plain>{plural(row.reports, 'report')}</Pill>}
+        {reach?.tone === 'red' && <Pill tone="red" plain>{reach.label}</Pill>}
       </div>
       <div className="fst-case-facts">
         <div><span>Vente signée le</span> {dayFR(row.signed_on)}</div>
@@ -240,6 +275,7 @@ function Onboarding({ row, canOpen, onOpenClient }) {
           );
         })}
       </ol>
+      {calls && <Contact row={row} calls={calls} />}
     </div>
   );
 }
@@ -249,6 +285,10 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
   const { span, range } = win;
   const [view, setView] = useState('no_show');
   const state = useStatistic('onboarding-no-shows', range);
+  // Les appels du Client Success vers les clients en no show : lus à part dans Allo, la carte ne les attend pas.
+  const calls = useStatistic('onboarding-contact-attempts', range);
+  const reached = calls.data?.totals;
+  const unlinked = (calls.data?.csm || []).filter((person) => !person.linked).map((person) => person.name);
   const data = state.data;
   const totals = data?.totals || {};
   const reading = ONBOARDING_VIEWS[view];
@@ -270,6 +310,13 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
             <div className="fst-rate-note">
               {plural(totals.no_show || 0, 'client')} en no show sur {count(totals.due || 0)} au rendez-vous passé (tenu ou no show)
               {totals.to_confirm ? ` · ${count(totals.to_confirm)} à confirmer, non compté${totals.to_confirm > 1 ? 's' : ''}` : ''}
+              {reached?.clients > 0 && (
+                <span className="fst-reach">
+                  Appels du Client Success : {count(reached.unreachable)} ne {reached.unreachable > 1 ? 'répondent' : 'répond'} pas
+                  {` · ${count(reached.never_called)} jamais appelé${reached.never_called > 1 ? 's' : ''}`}
+                  {` · ${plural(reached.attempts, 'tentative')} en tout`}
+                </span>
+              )}
             </div>
           ) : (
             <div className="fst-rate-note">
@@ -284,12 +331,15 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
       {people.length === 0 ? <div className="fst-empty">Aucune vente signée sur cette période.</div> : (
         <People key={view} people={people} top={top} numerator={reading.numerator} denominator={reading.denominator} cases={listed} tone={view === 'reports' ? 'amber' : 'red'}
           extra={(person) => (view === 'no_show' && person.to_confirm ? <small className="fst-extra">+ {person.to_confirm} à confirmer</small> : null)}
-          render={(row) => <Onboarding key={row.sale_id} row={row} canOpen={canOpen} onOpenClient={onOpenClient} />} />
+          render={(row) => <Onboarding key={row.sale_id} row={row} calls={view === 'no_show' ? calls : null} canOpen={canOpen} onOpenClient={onOpenClient} />} />
       )}
       <p className="fst-note">
         No show = le dernier rendez-vous du client est passé, sans onboarding tenu ni nouvelle date. Un onboarding finalement tenu n’est jamais un no show ;
         un rendez-vous déplacé est un report, compté à part. Un cas « à confirmer » (rendez-vous passé sans aucune trace) n’entre dans aucun taux.
         {since(data?.traced_since)}
+        {' '}Une tentative = un appel sortant du Client Success vers le numéro du client, à partir du jour du rendez-vous manqué (appels Allo).
+        {unlinked.length > 0 ? ` Client Success sans compte Allo relié (appels non comptés) : ${unlinked.join(', ')}` : ''}
+        {calls.data?.truncated ? ' Période trop large : les appels ne sont lus que pour les premiers clients listés.' : ''}
       </p>
     </Card>
   );

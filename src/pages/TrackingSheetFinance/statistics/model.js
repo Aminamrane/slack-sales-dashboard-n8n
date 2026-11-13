@@ -148,6 +148,37 @@ export function peopleOf(people = [], view) {
     .sort((a, b) => (b.rate || 0) - (a.rate || 0) || (b[denominator] || 0) - (a[denominator] || 0) || String(a.name).localeCompare(String(b.name), 'fr'));
 }
 
+// ── Tentatives de contact du Client Success vers un client en no show ───────────────────────────────
+// Dev 13/11/2026 : « combien de fois le CSM a essayé de contacter le client », « qui fait le mort ».
+export function contactMeta(attempt) {
+  if (!attempt) return null;
+  if (!attempt.has_phone) return { label: 'Pas de numéro', tone: 'ghost' };
+  if (attempt.unreachable) return { label: 'Ne répond pas', tone: 'red' };
+  if (attempt.answered > 0) return { label: 'A décroché', tone: 'green' };
+  if (attempt.called_back > 0) return { label: 'A rappelé', tone: 'green' };
+  return { label: 'Jamais appelé', tone: 'amber' };
+}
+const OUTCOME_WORDS = { conversation: ['décroché', 'décrochés'], voicemail: ['répondeur', 'répondeurs'], not_answered: ['sans réponse', 'sans réponse'] };
+// « 4 tentatives depuis le 10/11/2026 · 3 répondeurs · 1 sans réponse · dernière le 12/11/2026 »
+export function contactLine(attempt) {
+  if (!attempt || !attempt.has_phone) return 'Aucun numéro sur la fiche : les appels ne peuvent pas être rattachés.';
+  const since = attempt.since ? ` depuis le ${dayFR(attempt.since)}` : '';
+  if (!attempt.attempts) {
+    return `Aucun appel du Client Success${since}${attempt.before ? ` (${plural(attempt.before, 'appel')} avant)` : ''}.`;
+  }
+  const parts = [`${plural(attempt.attempts, 'tentative')}${since}`];
+  [['answered', 'conversation'], ['voicemail', 'voicemail'], ['not_answered', 'not_answered']].forEach(([key, word]) => {
+    if (attempt[key]) parts.push(`${count(attempt[key])} ${OUTCOME_WORDS[word][attempt[key] > 1 ? 1 : 0]}`);
+  });
+  if (attempt.inbound) parts.push(`${plural(attempt.inbound, 'appel reçu', 'appels reçus')} du client`);
+  if (attempt.last_attempt) parts.push(`dernière le ${dayFR(attempt.last_attempt)}`);
+  return parts.join(' · ');
+}
+export const CALL_OUTCOME = { conversation: 'décroché', voicemail: 'répondeur', not_answered: 'sans réponse' };
+// « 12/11 à 17:00 » : l'heure de Paris, telle que le serveur la donne.
+export const callMoment = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)} à ${iso.slice(11, 16)}` : '–');
+export const callLength = (seconds) => (seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : null);
+
 // ── Météo d'un client rétracté ──────────────────────────────────────────────────────────────────────
 export const weatherTone = (score) => (score >= 5 ? 'green' : score >= 3 ? 'amber' : 'red');
 

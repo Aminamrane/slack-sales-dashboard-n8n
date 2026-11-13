@@ -342,6 +342,16 @@ button.fst-case-name:hover { background: var(--hover); }
 .fst-noteblock p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
 .fst-noteblock p > span { color: var(--muted); margin-right: 4px; }
 .fst-long { white-space: pre-line; }
+/* Tentatives de contact du Client Success vers un client en no show. */
+.fst-reach { display: block; margin-top: 4px; color: var(--ink-2); }
+.fst-noteblock-head .fst-micro { display: inline-flex; align-items: center; gap: 5px; }
+.fst-calls { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+.fst-calls li { display: grid; grid-template-columns: 96px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.1fr); gap: 10px; align-items: baseline; }
+.fst-calls li > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fst-calls li > span:nth-child(3) { color: var(--muted); }
+.fst-calls li[data-before="true"] { opacity: .55; }
+.fst-calls [data-outcome="conversation"] { color: #0b7a4b; }
+.fst-calls [data-outcome="voicemail"], .fst-calls [data-outcome="not_answered"] { color: #a05a05; }
 .fst-long[data-clamped="true"] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; position: relative; padding-right: 0; }
 .fst-root .fst-more-link { font-size: 12.5px; color: var(--link); margin-left: 6px; }
 .fst-long[data-clamped="true"] .fst-more-link { position: absolute; right: 0; bottom: 0; padding-left: 28px; margin: 0; background: linear-gradient(90deg, transparent, #fff 26px); }
