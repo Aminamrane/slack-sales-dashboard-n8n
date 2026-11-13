@@ -215,6 +215,8 @@ export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
 function Contact({ row, calls }) {
   if (row.status !== 'no_show' && row.status !== 'to_confirm') return null;
   const attempt = calls.data?.clients?.[String(row.client_id)];
+  // Un cas « à confirmer » d'avant les rappels n'est pas lu : rien à montrer.
+  if (!attempt && !calls.loading && !calls.error) return null;
   const meta = contactMeta(attempt);
   return (
     <div className="fst-notes">
@@ -222,7 +224,7 @@ function Contact({ row, calls }) {
         <div className="fst-noteblock-head">
           <span className="fst-micro"><PhoneOutgoing size={11} strokeWidth={2.2} /> Appels du Client Success</span>
           {meta && <Pill tone={meta.tone} plain>{meta.label}</Pill>}
-          {!attempt && <span>{calls.loading ? 'Lecture des appels…' : calls.error ? 'Appels indisponibles pour le moment.' : 'Client hors de la lecture des appels.'}</span>}
+          {!attempt && <span>{calls.loading ? 'Lecture des appels…' : 'Appels indisponibles pour le moment.'}</span>}
         </div>
         {attempt && <p>{contactLine(attempt)}</p>}
         {attempt?.calls?.length > 0 && (
@@ -312,8 +314,9 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
               {totals.to_confirm ? ` · ${count(totals.to_confirm)} à confirmer, non compté${totals.to_confirm > 1 ? 's' : ''}` : ''}
               {reached?.clients > 0 && (
                 <span className="fst-reach">
-                  Appels du Client Success : {count(reached.unreachable)} ne {reached.unreachable > 1 ? 'répondent' : 'répond'} pas
-                  {` · ${count(reached.never_called)} jamais appelé${reached.never_called > 1 ? 's' : ''}`}
+                  Appels du Client Success vers ces no show : {plural(reached.called, 'client appelé', 'clients appelés')} sur {count(reached.clients)}
+                  {` · ${count(reached.unreachable)} ne ${reached.unreachable > 1 ? 'répondent' : 'répond'} pas`}
+                  {` · ${count(reached.never_called)} sans appel`}
                   {` · ${plural(reached.attempts, 'tentative')} en tout`}
                 </span>
               )}
@@ -337,7 +340,8 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
         No show = le dernier rendez-vous du client est passé, sans onboarding tenu ni nouvelle date. Un onboarding finalement tenu n’est jamais un no show ;
         un rendez-vous déplacé est un report, compté à part. Un cas « à confirmer » (rendez-vous passé sans aucune trace) n’entre dans aucun taux.
         {since(data?.traced_since)}
-        {' '}Une tentative = un appel sortant du Client Success vers le numéro du client, à partir du jour du rendez-vous manqué (appels Allo).
+        {' '}Une tentative = un appel sortant du Client Success vers un numéro connu du client, à partir du jour du rendez-vous manqué (appels Allo ;
+        un appel passé d’une autre ligne ou vers un autre numéro n’y figure pas). Décroché bref = moins de 30 secondes.
         {unlinked.length > 0 ? ` Client Success sans compte Allo relié (appels non comptés) : ${unlinked.join(', ')}` : ''}
         {calls.data?.truncated ? ' Période trop large : les appels ne sont lus que pour les premiers clients listés.' : ''}
       </p>

@@ -156,9 +156,13 @@ export function contactMeta(attempt) {
   if (attempt.unreachable) return { label: 'Ne répond pas', tone: 'red' };
   if (attempt.answered > 0) return { label: 'A décroché', tone: 'green' };
   if (attempt.called_back > 0) return { label: 'A rappelé', tone: 'green' };
+  // Décroché quelques secondes seulement : ni un échange, ni un client qui ne décroche jamais.
+  if (attempt.brief > 0) return { label: 'Décroché bref', tone: 'amber' };
   return { label: 'Jamais appelé', tone: 'amber' };
 }
-const OUTCOME_WORDS = { conversation: ['décroché', 'décrochés'], voicemail: ['répondeur', 'répondeurs'], not_answered: ['sans réponse', 'sans réponse'] };
+const OUTCOME_WORDS = {
+  conversation: ['décroché', 'décrochés'], brief: ['décroché bref', 'décrochés brefs'], voicemail: ['répondeur', 'répondeurs'], not_answered: ['sans réponse', 'sans réponse'],
+};
 // « 4 tentatives depuis le 10/11/2026 · 3 répondeurs · 1 sans réponse · dernière le 12/11/2026 »
 export function contactLine(attempt) {
   if (!attempt || !attempt.has_phone) return 'Aucun numéro sur la fiche : les appels ne peuvent pas être rattachés.';
@@ -167,7 +171,7 @@ export function contactLine(attempt) {
     return `Aucun appel du Client Success${since}${attempt.before ? ` (${plural(attempt.before, 'appel')} avant)` : ''}.`;
   }
   const parts = [`${plural(attempt.attempts, 'tentative')}${since}`];
-  [['answered', 'conversation'], ['voicemail', 'voicemail'], ['not_answered', 'not_answered']].forEach(([key, word]) => {
+  [['answered', 'conversation'], ['brief', 'brief'], ['voicemail', 'voicemail'], ['not_answered', 'not_answered']].forEach(([key, word]) => {
     if (attempt[key]) parts.push(`${count(attempt[key])} ${OUTCOME_WORDS[word][attempt[key] > 1 ? 1 : 0]}`);
   });
   if (attempt.inbound) parts.push(`${plural(attempt.inbound, 'appel reçu', 'appels reçus')} du client`);

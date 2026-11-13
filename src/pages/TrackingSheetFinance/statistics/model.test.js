@@ -96,6 +96,9 @@ test('les tentatives du Client Success disent qui ne répond pas', () => {
   assert.deepEqual(contactMeta(dead), { label: 'Ne répond pas', tone: 'red' });
   assert.equal(contactLine(dead), '4 tentatives depuis le 10/11/2026 · 3 répondeurs · 1 sans réponse · dernière le 12/11/2026');
   assert.equal(contactMeta({ ...base, attempts: 2, answered: 1 }).label, 'A décroché');
+  const brief = { ...base, attempts: 2, brief: 2, last_attempt: '2026-11-10' };
+  assert.deepEqual(contactMeta(brief), { label: 'Décroché bref', tone: 'amber' });
+  assert.equal(contactLine(brief), '2 tentatives depuis le 10/11/2026 · 2 décrochés brefs · dernière le 10/11/2026');
   assert.equal(contactMeta({ ...base, attempts: 1, not_answered: 1, inbound: 1, called_back: 1 }).label, 'A rappelé');
   assert.deepEqual(contactMeta(base), { label: 'Jamais appelé', tone: 'amber' });
   assert.equal(contactLine({ ...base, before: 2 }), 'Aucun appel du Client Success depuis le 10/11/2026 (2 appels avant).');
