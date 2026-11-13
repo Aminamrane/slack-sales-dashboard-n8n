@@ -115,6 +115,9 @@ function postOctober(p, plan) {
   ];
 }
 
+/** Arc éducatif de novembre (J+1 à J+5 après l'inscription), commun aux cohortes du 17 et du 24. */
+const NOV17_EDU = ['email_nov17_remuneration', 'email_nov17_decouvrir', 'email_nov17_holding', 'email_nov17_simulateur', 'email_nov17_pertes'];
+
 /** Suivi post-live du 22/10 : dates des lignes `pending` de la file d'envoi (relevé lecture seule du 2026-10-23, envois échelonnés). Heure d'hiver (+01:00) dès le 25/10 à 3 h. */
 const POST22_PLAN = {
   missed: ['2026-10-23T15:02:00+02:00', '23 oct. · 15h02 à 15h40'],
@@ -502,6 +505,7 @@ export const COHORTS = [
       "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
       "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
       "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite.",
+      "Webinaire déplacé au 24 novembre le 10/11 : les inscrits et la suite des envois sont sur la cohorte du 24 novembre. Cette cohorte n'est plus suivie par le CRM.",
     ],
     sequences: {
       pre: {
@@ -517,9 +521,7 @@ export const COHORTS = [
     },
     steps: [
       pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] }),
-      ...['email_nov17_remuneration', 'email_nov17_decouvrir', 'email_nov17_holding', 'email_nov17_simulateur', 'email_nov17_pertes'].map(
-        (kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })
-      ),
+      ...NOV17_EDU.map((kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })),
       pre('email_nov17_j7', 'reminder', cal('2026-11-10T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
       pre('email_nov17_j3', 'reminder', cal('2026-11-14T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
       pre('email_nov17_j1', 'reminder', cal('2026-11-16T18:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
@@ -528,6 +530,60 @@ export const COHORTS = [
       pre('email_nov17_live', 'liveday', cal('2026-11-17T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
       pre('email_nov17_live15', 'liveday', cal('2026-11-17T11:15:00+01:00'), { conditions: [RULE_ANCHOR] }),
       ...postOctober('post17'),
+    ],
+  },
+  {
+    // Le webinaire du 17 novembre, déplacé d'une semaine le 10/11. La landing n'a pas de registre propre à cette cohorte :
+    // elle envoie le registre du 17 (`NOV17_EMAILS`, types `email_nov17_*` / `email_post17_*`) et adapte la date et le lien
+    // au moment de l'envoi, selon la cohorte de l'inscrit (`nov17Cohort`, email.ts). D'où `emailsOf`.
+    id: 'webinar-2026-11-24',
+    emailsOf: 'webinar-2026-11-17',
+    label: 'Webinaire du 24 novembre 2026',
+    short: '24 nov.',
+    audience: 'TPE/PME',
+    liveAt: '2026-11-24T11:00:00+01:00',
+    speakers: ['Paul Faucomprez', 'Maître Bouchareb'],
+    pages: ['/tpe-pme'],
+    era: 'sept',
+    notes: [
+      "Le webinaire prévu le 17 novembre, déplacé d'une semaine le 10/11 : même séquence, mêmes heures, dates décalées de 7 jours. Les inscrits du 17 ont été rattachés à cette cohorte.",
+      "La landing réutilise les e-mails du 17 novembre (mêmes types d'envoi) : la date et le lien de cohorte sont adaptés à l'envoi. Le contenu affiché ici est celui que reçoit un inscrit de cette cohorte.",
+      "Le rappel J-7 est parti le 10/11 à 11h00 pour les inscrits d'alors (85 envois, il annonçait encore le 17 novembre) ; l'avis de changement de date leur a été envoyé le même jour. Les inscrits arrivés ensuite le reçoivent le 17/11.",
+      "Live à 11h00, heure d'hiver : le mail du jour J part à 6h30, la veille à 18h00.",
+      "Deux SMS (Brevo) accompagnent la séquence : 1 h avant le live et au démarrage. Ils n'apparaissent pas dans cette liste, qui ne montre que les e-mails.",
+      "Le suivi post-webinaire est planifié par la landing APRÈS le live, une fois les présents et les absents connus : ses dates apparaîtront ensuite.",
+    ],
+    sequences: {
+      pre: {
+        ...SEQ_PRE,
+        frequency:
+          "Un e-mail éducatif par jour à 11h00 (J+1 à J+5), rappels J-7, J-3 et J-1 (18h00), puis 4 e-mails le jour du live (6h30, 10h00, 11h00, 11h15).",
+      },
+      post: {
+        ...SEQ_POST,
+        frequency:
+          "Planifié après le live : un e-mail par segment (absents / présents), puis 4 e-mails communs à tous les inscrits, un par jour.",
+      },
+      oneshot: { ...SEQ_ONESHOT, frequency: 'Un envoi unique le 10 novembre : avis de changement de date (du 17 au 24 novembre).' },
+    },
+    steps: [
+      pre('email_confirmation', 'confirmation', signupDelay(2), { conditions: [RULE_CONFIRM] }),
+      ...NOV17_EDU.map((kind, i) => pre(kind, 'nurture', signupDays(i + 1), { conditions: [RULE_EDU] })),
+      pre('email_nov17_j7', 'reminder', cal('2026-11-17T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_j3', 'reminder', cal('2026-11-21T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_j1', 'reminder', cal('2026-11-23T18:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_morning', 'liveday', cal('2026-11-24T06:30:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_h1', 'liveday', cal('2026-11-24T10:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_live', 'liveday', cal('2026-11-24T11:00:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      pre('email_nov17_live15', 'liveday', cal('2026-11-24T11:15:00+01:00'), { conditions: [RULE_ANCHOR] }),
+      ...postOctober('post17'),
+      step('email_postponement', 'oneshot', 'oneshot', cal('2026-11-10T16:21:00+01:00'), {
+        atLabel: '10 nov. 2026 · 16h21 à 16h49',
+        conditions: [
+          "Envoyé une seule fois aux 86 inscrits existants, le jour du déplacement du webinaire du 17 au 24 novembre.",
+          "L'e-mail reçu commence par « Bonjour Prénom Nom, » ; cet aperçu, rendu pour un inscrit modèle, affiche « Bonjour, ».",
+        ],
+      }),
     ],
   },
 ];

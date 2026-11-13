@@ -128,7 +128,8 @@ const sampleLead = (webinarId) => ({
 const kindOf = (payload) => payload.tags?.find((t) => t.name === 'kind')?.value;
 
 /** @brief Appelle chaque fonction d'envoi de l'ère pour une cohorte et indexe les charges utiles par kind. */
-async function captureCohort(mod, cohortId, warnings) {
+async function captureCohort(mod, cohort, warnings) {
+  const cohortId = cohort.id;
   const byKind = new Map();
   const lead = sampleLead(cohortId);
   for (const [name, fn] of Object.entries(mod)) {
@@ -149,7 +150,9 @@ async function captureCohort(mod, cohortId, warnings) {
   // Cohortes d'octobre et de novembre : un registre `OCT<jj>_EMAILS` / `NOV<jj>_EMAILS` (sujet + rendu par kind) et
   // `sendOct<jj>Email(kind, lead, outboxId)` / `sendNov<jj>Email(...)`. Ce sont les mêmes fonctions que celles du worker
   // de la landing ; le faux Resend capture la charge utile.
-  const [, month, day] = /^webinar-\d{4}-(\d{2})-(\d{2})$/.exec(cohortId) ?? [];
+  // `emailsOf` : la cohorte envoie le registre d'une autre (le 24 novembre envoie celui du 17) ; le rendu reste celui d'un
+  // inscrit de CETTE cohorte, la landing adaptant la date et le lien selon `lead.webinarId`.
+  const [, month, day] = /^webinar-\d{4}-(\d{2})-(\d{2})$/.exec(cohort.emailsOf || cohortId) ?? [];
   const prefix = { 10: ['OCT', 'Oct'], 11: ['NOV', 'Nov'] }[Number(month)];
   const registry = prefix && mod[`${prefix[0]}${day}_EMAILS`];
   const sender = prefix && `send${prefix[1]}${day}Email`;
@@ -313,7 +316,7 @@ for (const cohort of COHORTS) {
   }
   if (!eraModules.has(cohort.era)) eraModules.set(cohort.era, await loadEra(cohort.era, ERAS[cohort.era]));
   const mod = eraModules.get(cohort.era);
-  const captured = await captureCohort(mod, cohort.id, warnings);
+  const captured = await captureCohort(mod, cohort, warnings);
 
   const missing = cohort.steps.filter((s) => !captured.has(s.kind)).map((s) => s.kind);
   if (missing.length) throw new Error(`${cohort.id} : kinds sans rendu dans l'ère « ${cohort.era} » : ${missing.join(', ')}`);
