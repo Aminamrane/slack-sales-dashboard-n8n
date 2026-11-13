@@ -135,7 +135,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   };
   const act = (gesture) => {
     const text = note.trim().slice(0, NOTE_MAX);
-    if (gesture.needsNote && !text) { setActing({ busy: "", error: "Dites ce qu’il faut modifier : c’est ce que les développeurs liront." }); return; }
+    if (gesture.needsNote && !text) { setActing({ busy: "", error: gesture.missing || "Dites ce qu’il faut modifier : c’est ce que les développeurs liront." }); return; }
     if (gesture.action) send(gesture.key, () => apiClient.post(`${API}/${id}/action`, { action: gesture.action, note: text || null }), gesture.action);
     else send(gesture.key, () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: gesture.step, comment: text || null }), "step");
   };
@@ -194,7 +194,9 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                   <div className="ab-state-since">{[`Étape ${row.step} sur ${last}`, since].filter(Boolean).join(" · ")}</div>
                 </div>
                 <div className="ab-state-act">
-                  {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : <Tag tone={turn.tone}>{turn.tag}</Tag>}
+                  {turn.working && <Tag tone="blue">En cours chez les développeurs</Tag>}
+                  {/* « Chez les développeurs » ne dit rien de plus quand ils y travaillent déjà. */}
+                  {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : !(turn.working && turn.who === "build") && <Tag tone={turn.tone}>{turn.tag}</Tag>}
                 </div>
                 {/* La frise se clique : choisir une étape fait apparaître son enregistrement, juste dessous. */}
                 <StepTrack value={row.step} steps={steps} P={P} onPick={locked ? undefined : setPicked} picked={picked} />
@@ -216,6 +218,13 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                     </div>
                   </div>
                   {turn.quote && <blockquote className="ab-turn-quote">{turn.quote}</blockquote>}
+                  {turn.working && (
+                    <div className="ab-turn-working">
+                      <strong>Les développeurs y travaillent</strong> depuis le {String(turn.working.since).slice(0, 10)}, par {turn.working.by}
+                      {turn.working.updatedAt !== turn.working.since && <> · dernier point le {String(turn.working.updatedAt).slice(0, 10)}, par {turn.working.updatedBy}</>}.
+                    </div>
+                  )}
+                  {turn.working?.text && <blockquote className="ab-turn-quote">{turn.working.text}</blockquote>}
                   <textarea className="ab-turn-note" rows={2} value={note} maxLength={NOTE_MAX} placeholder={turn.placeholder} aria-label="Un mot qui s’inscrit au parcours"
                     onChange={(e) => { setNote(e.target.value); if (acting.error) setActing({ busy: "", error: "" }); }} />
                   <div className="ab-turn-btns">

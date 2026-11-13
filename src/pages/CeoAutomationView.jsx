@@ -21,6 +21,7 @@ import { Card, Empty, OpenCue, Page, Reveal, Segmented, Stat, Stats, TableBox, T
 import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
 import ProcessPage from "../components/automationBoard/ProcessPage";
+import DevBoard from "../components/automationBoard/DevBoard";
 import "../components/automationBoard/automation.css";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
@@ -106,7 +107,8 @@ export default function CeoAutomationView() {
   const [query, setQuery] = useState("");
   const [classification, setClassification] = useState("");
   const [pole, setPole] = useState("");
-  // Vue de la liste : tout, les classements à confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
+  // Vue de la liste : tout, le suivi des développeurs (en cours, en attente du juriste, modification demandée), les classements à
+  // confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
   const [view, setView] = useState("");
   const [closed, setClosed] = useState(() => new Set());
   const seq = useRef(0);
@@ -156,6 +158,11 @@ export default function CeoAutomationView() {
     return next;
   });
   const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); };
+  // Un geste du suivi fait depuis la liste (on y travaille, point d'avancement, version livrée…) : Opti'Lex l'inscrit, la liste se relit.
+  const act = useCallback(async (id, action, note) => {
+    await apiClient.post(`${API}/${id}/action`, { action, note });
+    await load();
+  }, [load]);
 
   if (!authChecked) {
     return (
@@ -254,6 +261,7 @@ export default function CeoAutomationView() {
                     <div className="fst-tools">
                       <div className="fst-tabs" role="group" aria-label="Ce qui attend quelqu’un">
                         {[["", "Toutes", data.totals.lines, "Toutes les missions"],
+                          ["devs", "Suivi des développeurs", data.totals.working ?? 0, "Ce sur quoi les développeurs travaillent, ce qui attend le juriste, ce qu’on leur a demandé de reprendre"],
                           ["lawyer", "À tester par le juriste", data.totals.awaitingLawyer ?? 0, "Une version est livrée : le juriste doit la tester"],
                           ["dev", "Modification demandée", data.totals.awaitingDev ?? 0, "Le juriste a demandé une modification : aux développeurs de reprendre"],
                           ["confirm", "À confirmer", data.totals.toConfirm, "Classement proposé par le logiciel, que personne n’a encore revu"]].map(([value, label, count, title]) => (
@@ -281,7 +289,7 @@ export default function CeoAutomationView() {
                       </label>
                     </div>
 
-                    {lines.length === 0 ? <Empty boxed>Aucune mission ne correspond à ces filtres.{filtering && <> <button type="button" className="ab-textlink" onClick={reset}>Tout afficher</button></>}</Empty> : (
+                    {view === "devs" ? <DevBoard rows={data.rows} onOpen={openProcess} onAct={act} /> : lines.length === 0 ? <Empty boxed>Aucune mission ne correspond à ces filtres.{filtering && <> <button type="button" className="ab-textlink" onClick={reset}>Tout afficher</button></>}</Empty> : (
                       <TableBox minWidth={1020}>
                         <thead>
                           <tr>
@@ -339,6 +347,7 @@ export default function CeoAutomationView() {
                                 <Steps value={row.step} steps={data.steps} P={P} />
                                 {row.awaiting?.who === "lawyer" && <div style={{ marginTop: 6 }}><Tag tone="yellow" title={row.awaiting.text || undefined}>À tester par le juriste</Tag></div>}
                                 {row.awaiting?.who === "dev" && <div style={{ marginTop: 6 }}><Tag tone="peach" title={row.awaiting.text || undefined}>Modification demandée</Tag></div>}
+                                {row.working && <div style={{ marginTop: 6 }}><Tag tone="blue" title={row.working.text || undefined}>En cours chez les développeurs</Tag></div>}
                               </td>
                             </tr>
                           ))}
