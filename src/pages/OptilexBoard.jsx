@@ -19,7 +19,7 @@ import BoardStateDateInput from "../components/BoardStateDateInput";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { DetailText } from "../components/OptilexClientDetail";
 import { MissionsValue } from "../components/BoardMissions.jsx";
-import { BoardCsmContext, CSM_CSS, CsmFace, CsmValue } from "../components/BoardCsm.jsx";
+import { BoardCsmContext, CSM_CSS, CsmFace, CsmValue, useBoardCsm } from "../components/BoardCsm.jsx";
 import { csmIndex, csmMenuEntries, csmTagLabel, matchesCsm } from "../utils/boardCsm.js";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
@@ -90,8 +90,12 @@ const PROGRAM_ICONS = {
   ambassadeur: <><path d="M3 10.4v3.2A1.4 1.4 0 0 0 4.4 15H6l5.5 4.2V4.8L6 9H4.4A1.4 1.4 0 0 0 3 10.4Z" fill="currentColor" fillOpacity=".16" /><path className="pg-wave pg-wave-1" d="M15 9.3a3.8 3.8 0 0 1 0 5.4" /><path className="pg-wave pg-wave-2" d="M17.9 6.6a7.6 7.6 0 0 1 0 10.8" /></>,
   parrainage: <g className="pg-shake"><path d="m11 17 2 2a1 1 0 1 0 3-3" /><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" /><path d="m21 3 1 11h-2" /><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" /><path d="M3 4h8" /></g>,
   temoignage: <><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.3-4.4a8 8 0 1 1 15.2-4.1Z" fill="currentColor" fillOpacity=".14" /><path className="pg-star" d="m12.3 7.8 1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.3-2.2 1.3.4-2.5-1.8-1.7 2.5-.3Z" fill="currentColor" stroke="none" /></>,
+  // Section CSM (dev 13/11/2026) : lettre de mission analysée (feuille et loupe), avis Trustpilot (étoile).
+  lettre: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" fill="currentColor" fillOpacity=".14" /><path d="M14 3v5h5M14 3l5 5v3M8.5 9h3M8.5 13h2" /><circle className="pg-star" cx="16.5" cy="16.5" r="3" /><path d="m18.7 18.7 2.3 2.3" /></>,
+  trustpilot: <path className="pg-star" d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 16.8 6.4 20.1l1.4-6.3L3 9.5l6.4-.6Z" fill="currentColor" fillOpacity=".16" />,
 };
-const PROGRAM_TONES = { ambassadeur: ["#eae9fb", "#4a3fc4"], parrainage: ["#d9f3f7", "#0f7286"], temoignage: ["#fde9da", "#c2500e"] };
+const PROGRAM_TONES = { ambassadeur: ["#eae9fb", "#4a3fc4"], parrainage: ["#d9f3f7", "#0f7286"], temoignage: ["#fde9da", "#c2500e"],
+  lettre: ["#e3f1e6", "#1f7a3a"], trustpilot: ["#e2f4ec", "#0b7a52"] };
 const ProgramIcon = ({ kind, size = 16 }) => (
   <svg className={`pg pg-${kind}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{PROGRAM_ICONS[kind]}</svg>
 );
@@ -3323,6 +3327,8 @@ const PROP_ICONS = {
   missions: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M9 5V3h6v2M8 11l2 2 5-5M8 17h8" /></>,
   ville: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
   csm: <><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></>,
+  lettre: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>,
+  trustpilot: <path d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 16.8 6.4 20.1l1.4-6.3L3 9.5l6.4-.6Z" />,
   periodicite: <><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3.5V8h4.5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20.5V16h-4.5" /></>,
 };
 // `top` : la valeur peut grandir (dates d'effet, alertes) ; le libellé reste en face de sa première ligne,
@@ -3449,6 +3455,67 @@ function ProgramChip({ kind, on, label, hint, editable, onToggle }) {
   );
 }
 
+// ── Onglet CSM (dev 13/11/2026) ─────────────────────────────────────────────────────────────────────────────────
+// Tout ce que le Client Success suit sur un client, au même endroit : le CSM attitré (portefeuille), la lettre de
+// mission analysée, l'avis Trustpilot et les programmes (témoignage, parrainage, ambassadeur), qui étaient dans
+// « Suivi ». Validé d'un clic comme les programmes ; on garde qui et quand. Les programmes gardent leurs droits ;
+// lettre de mission et Trustpilot : CSM et direction (le serveur décide, `permissions.assign_csm`).
+function ValidatedBy({ by, at }) {
+  // Juste validé : l'auteur et la date arrivent au prochain rechargement du board.
+  if (!by && !at) return <span className="ob-pv-sub">à l’instant</span>;
+  return <span className="ob-pv-sub">{by ? `par ${by}` : ""}{by && at ? " · " : ""}{at ? timeAgo(at) : ""}</span>;
+}
+function CsmSection({ row, num, patch, onChanged }) {
+  const { canAssign } = useBoardCsm();
+  const readOnly = isBoardReadOnly();
+  const programmeEditable = !!num && meteoSettable() && !isFinanceTeam() && !readOnly;
+  const followEditable = !!num && canAssign && !readOnly;
+  return (
+    <div className="ob-props">
+      <div className="ob-props-group">
+        <div className="ob-props-title">Portefeuille</div>
+        <PropRow icon="csm" label="CSM attitré"><CsmValue row={row} onAssign={(id) => patch(num, { csm_user_id: id })} /></PropRow>
+      </div>
+      <div className="ob-props-group">
+        <div className="ob-props-title">Suivi Client Success</div>
+        <PropRow icon="lettre" label="Lettre de mission">
+          <span className="ob-pv-line" style={{ gap: 8, flexWrap: "wrap" }}>
+            <ProgramChip kind="lettre" label={row.mission_letter_analyzed ? "Analysée" : "À analyser"} on={!!row.mission_letter_analyzed} editable={followEditable}
+              hint="La lettre de mission du client a été analysée par le Client Success."
+              onToggle={(v) => patch(num, { mission_letter_analyzed: v })} />
+            {row.mission_letter_analyzed && <ValidatedBy by={row.mission_letter_analyzed_by} at={row.mission_letter_analyzed_at} />}
+          </span>
+        </PropRow>
+        <PropRow icon="trustpilot" label="Avis Trustpilot">
+          <span className="ob-pv-line" style={{ gap: 8, flexWrap: "wrap" }}>
+            <ProgramChip kind="trustpilot" label={row.trustpilot_review ? "Avis laissé" : "Pas encore"} on={!!row.trustpilot_review} editable={followEditable}
+              hint="Le client a laissé un avis sur Trustpilot."
+              onToggle={(v) => patch(num, { trustpilot_review: v })} />
+            {row.trustpilot_review && <ValidatedBy by={row.trustpilot_review_by} at={row.trustpilot_review_at} />}
+          </span>
+        </PropRow>
+        <PropRow icon="programmes" label="Éligible témoignage">
+          <span className="ob-pv-line"><TemoignageChip row={row} num={num} editable={programmeEditable} patch={patch} onDone={onChanged} /></span>
+        </PropRow>
+        <PropRow icon="programmes" label="Parrainage">
+          <span className="ob-pv-line">
+            <ProgramChip kind="parrainage" label="Parrainage" on={!!row.parrainage_eligible} editable={programmeEditable}
+              hint="Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées."
+              onToggle={(v) => patch(num, { parrainage_eligible: v })} />
+          </span>
+        </PropRow>
+        <PropRow icon="programmes" label="Ambassadeur">
+          <span className="ob-pv-line">
+            <ProgramChip kind="ambassadeur" label="Ambassadeur" on={!!row.ambassador_eligible} editable={programmeEditable}
+              hint="Client à valoriser, à solliciter pour un témoignage ou une recommandation."
+              onToggle={(v) => patch(num, { ambassador_eligible: v })} />
+          </span>
+        </PropRow>
+      </div>
+    </div>
+  );
+}
+
 function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContactsChanged, recordMeteo }) {
   const [editing, setEditing] = useState(false);
   // E-mails et téléphones par rang (primaire, secondaire…) ; l'e-mail affiché reste celui d'envoi des contrats.
@@ -3476,8 +3543,6 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
     setEditing(false);
   };
   const name = ov(row, "contact_name_ovr", "contact_name");
-  const readOnly = isBoardReadOnly();  // rôles en lecture seule : informations lues, contrôles visibles et désactivés
-  const programmeEditable = !!num && meteoSettable() && !isFinanceTeam() && !readOnly;
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -3515,8 +3580,6 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           <div className="ob-props-group">
             <div className="ob-props-title">Suivi</div>
             <PropRow icon="situation" label="Situation" top={2}><EtatSection row={row} num={num} changeEtat={changeEtat} bare /></PropRow>
-            {/* Portefeuille client (dev 13/11/2026) : le CSM attitré, posé à la main par un CSM ou la direction. */}
-            {num && <PropRow icon="csm" label="CSM"><CsmValue row={row} onAssign={(id) => patch(num, { csm_user_id: id })} /></PropRow>}
             <PropRow icon="meteo" label="Météo">
               <span className="ob-pv-line" title="À mettre à jour à chaque échange avec le client, avant ou après l'onboarding.">
                 <MeteoPicker score={row.meteo_score} context={row.meteo_context} disabled={!num} inline readOnly={isBoardReadOnly()} onSave={(payload) => recordMeteo(num, payload)} />
@@ -3528,19 +3591,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
                 ? <span className="ob-pv-line"><SectorIcon secteur={row.secteur_activite} size={18} />{secteurLabel(row.secteur_activite)}</span>
                 : <span className="ob-pv-none">Non renseigné</span>}
             </PropRow>
-            {num && (
-              <PropRow icon="programmes" label="Programmes">
-                <span className="ob-pv-line" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <ProgramChip kind="ambassadeur" label="Ambassadeur" on={!!row.ambassador_eligible} editable={programmeEditable}
-                    hint="Client à valoriser, à solliciter pour un témoignage ou une recommandation."
-                    onToggle={(v) => patch(num, { ambassador_eligible: v })} />
-                  <ProgramChip kind="parrainage" label="Parrainage" on={!!row.parrainage_eligible} editable={programmeEditable}
-                    hint="Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées."
-                    onToggle={(v) => patch(num, { parrainage_eligible: v })} />
-                  <TemoignageChip row={row} num={num} editable={programmeEditable} patch={patch} onDone={onContactsChanged} />
-                </span>
-              </PropRow>
-            )}
+            {/* Programmes (ambassadeur, parrainage, témoignage) : passés dans l'onglet CSM le 13/11/2026 (CsmSection). */}
             {/* Missions du cabinet (dev 30/10/2026) : une ligne, les nombres par état ; le détail au clic. */}
             {num && <PropRow icon="missions" label="Missions cabinet partenaire" wrap><MissionsValue key={num} numero={num} /></PropRow>}
           </div>
@@ -4424,6 +4475,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const role = (apiClient.getUser() || {}).role;
   const tabs = [
     { key: "echanges", label: "Échanges", count: echangesCount },
+    !!num && { key: "csm", label: "CSM" },
     files.allowed && { key: "appels", label: "Appels" },
     { key: "documents", label: "Documents", count: files.items.filter((i) => i.kind !== "call").length },
     { key: "integration", label: "Intégration" },
@@ -4495,6 +4547,13 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               ? <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} onCount={setEchangesCount} />
               : emptyNote("Contrat en cours d'envoi : les échanges seront disponibles une fois la vente déclarée.")}
           </div>
+
+          {/* CSM (dev 13/11/2026) : portefeuille, lettre de mission, Trustpilot, programmes. */}
+          {!!num && (
+            <div role="tabpanel" id="ob-panel-csm" aria-labelledby="ob-tab-csm" hidden={tab !== "csm"} className="ob-tabpanel">
+              <CsmSection row={row} num={num} patch={patch} onChanged={reload} />
+            </div>
+          )}
 
           {/* Intégration : convention Opti'Lex (forçage, signature), e-mails. La carte convention et la fiche
               d'intégration sont en tête de fiche (29/10/2026), les missions dans les infos client (30/10/2026). */}
