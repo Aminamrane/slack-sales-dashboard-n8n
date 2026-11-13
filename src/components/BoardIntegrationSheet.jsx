@@ -7,6 +7,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Download, FileText, LoaderCircle } from 'lucide-react';
 import apiClient from '../services/apiClient';
 import EarlyDeclarationNote from './EarlyDeclarationNote';
+import ComplicatedClientNote from './ComplicatedClientNote';
 import { METEO_MEANING, MeteoIcon, MeteoPicker, MeteoMeaning } from './meteo.jsx';
 
 const buttonStyle = { display:'inline-flex', alignItems:'center', justifyContent:'center', gap:7, padding:'9px 12px', borderRadius:9, fontSize:12, fontWeight:500, cursor:'pointer', textDecoration:'none' };
@@ -78,7 +79,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
     ? (state.final ? 'Fiche finalisée : périmètre, passage de relais du commercial et météo d’onboarding.' : state.message)
     : state ? state.message : error ? '' : 'Chargement de la fiche…';
   // Portefeuille de la fiche (refonte board) + la note « vente déclarée sans documents » de main (24ac545).
-  if (compact) return <><IntegrationWallet state={state} error={error} busy={busy} pdf={pdf} onPdf={openPdf} /><EarlyDeclarationNote documents={state?.documents} compact/></>;
+  if (compact) return <><IntegrationWallet state={state} error={error} busy={busy} pdf={pdf} onPdf={openPdf} /><ComplicatedClientNote flagged={state?.client_complique} compact/><EarlyDeclarationNote documents={state?.documents} compact/></>;
   return <section aria-label="Fiche d’intégration" style={{ marginBottom:22, padding:16, border:'1px solid #ece9e4', borderRadius:12, background:'#f8faf9', color:'#1c1b19' }}>
     <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
       <FileText size={21} style={{ color:'#526b68', flexShrink:0, marginTop:2 }}/>
@@ -87,6 +88,7 @@ export default function BoardIntegrationSheet({ numero, onRated, compact = false
       </div>
     </div>
     {state && <SalesEntryCard entry={state.sales_entry}/> }
+    <ComplicatedClientNote flagged={state?.client_complique}/>
     <EarlyDeclarationNote documents={state?.documents}/>
     {state?.available && <>
       <div style={{ margin:'10px 0 0', fontSize:11.5, lineHeight:1.6, color:'#8b867e' }}>
