@@ -1380,7 +1380,9 @@ export default function TrackingSheet() {
   // billingStructures ('une'|'plusieurs') + discount (null|false|true) + discountValue (texte
   // libre "5 %") = questions facturation posées à l'étape 'questions' (après les créneaux),
   // destinées à la description de l'event RDV Onboarding (agenda facturation@).
-  const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
+  // complicated = case « Client compliqué » (dev 13/11/2026) : montrée aux CSM, et le lancement fiscal de ce client
+  // reste chez le responsable du pôle fiscal au lieu d'aller chez son référent.
+  const [saleForm, setSaleForm] = useState({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '', complicated: false });
   const [saleSubmitting, setSaleSubmitting] = useState(false);
   // Déclaration en 3 étapes : 'form' -> 'lancement' (créneau Opti'Lex : L. Gentaire, ou H. Moraru si 20+) -> 'onboarding' (créneau facturation@)
   const [saleStep, setSaleStep] = useState('form');
@@ -1402,7 +1404,7 @@ export default function TrackingSheet() {
     if (!preparation) return;
     const p = preparation.payload;
     setSaleForm({email:p.email, paymentModality:p.payment_mode === 'MONTHLY' ? 'M' : 'A', employeeRange:p.employee_band,
-      billingStructures:p.billing_structures, structuresCount:p.structures_count || '', discount:p.discount !== 'Non', discountValue:p.discount === 'Non' ? '' : p.discount});
+      billingStructures:p.billing_structures, structuresCount:p.structures_count || '', discount:p.discount !== 'Non', discountValue:p.discount === 'Non' ? '' : p.discount, complicated:!!p.client_complique});
     setSaleSlots({onboarding:preparation.slot, lancement:null});
     setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation}}));
     setSaleStep('reserved');
@@ -1416,6 +1418,7 @@ export default function TrackingSheet() {
         employee_band:saleForm.employeeRange, billing_structures:saleForm.billingStructures,
         structures_count:saleForm.billingStructures === 'plusieurs' ? saleForm.structuresCount : null,
         discount:saleForm.discount ? saleForm.discountValue.trim() : 'Non',
+        client_complique:!!saleForm.complicated,
       };
       const result = await apiClient.post(`/api/v1/owner-integration/leads/${leadId}/sale-preparation`, {...payload, slot:salePreparation?.slot || saleSlots.onboarding});
       applySalePreparation(leadId, result.preparation);
@@ -1452,6 +1455,7 @@ export default function TrackingSheet() {
           billing_structures: saleForm.billingStructures || null,
           structures_count: saleForm.billingStructures === 'plusieurs' ? (saleForm.structuresCount || null) : null,
           discount: saleForm.discount === true ? ((saleForm.discountValue || '').trim() || 'Oui') : (saleForm.discount === false ? 'Non' : null),
+          client_complique: !!saleForm.complicated,
           // Aucune pièce : motif choisi dans le bloc « Déclarer la vente sans documents » de l'étape documents (J-4 ou moins).
           ...(documentsWaiver ? { documents_waiver: documentsWaiver } : {}),
           ...(documentsWaiverNote ? { documents_waiver_note: documentsWaiverNote } : {}),
@@ -1473,7 +1477,7 @@ export default function TrackingSheet() {
       setSaleSuccess(true);
       if (salePreparation) setIntakeJourneys(previous => ({...previous, [leadId]:{...previous[leadId], preparation:{...salePreparation, status:'finalized'}}}));
       setPortalRevision(value => value + 1);
-      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
+      setTimeout(() => { setSaleSuccess(false); setSaleClientNumero(null); setShowSaleModal(null); setSaleForm({ email: '', paymentModality: 'M', employeeRange: '', billingStructures: '', structuresCount: '', discount: null, discountValue: '', complicated: false }); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null }); }, 2500);
     } catch (e) { console.error('Sale submit error:', e); }
     setSaleSubmitting(false); saleRequestBusy.current = false;
   };
@@ -7675,7 +7679,7 @@ export default function TrackingSheet() {
                           setContractErrorModal({ message: error.message || 'Impossible de vérifier le parcours de ce dossier. Réessayez.', isNdaMissing: false });
                           return;
                         }
-                        setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '', billingStructures: '', structuresCount: '', discount: null, discountValue: '' });
+                        setSaleForm({ email: lead.email || '', paymentModality: 'M', employeeRange: lead.employee_range || '', billingStructures: '', structuresCount: '', discount: null, discountValue: '', complicated: false });
                         setSaleIntake(null); setSaleStep('form'); setSaleSlots({ onboarding: null, lancement: null });
                         setShowSaleModal(lead.id);
                       }}
@@ -9204,6 +9208,17 @@ export default function TrackingSheet() {
                       ))}
                     </div>
                   </div>
+
+                  {/* Case « Client compliqué » (dev 13/11/2026) : visible des CSM ; lancement fiscal chez le responsable du pôle. */}
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 18, padding: '11px 12px', borderRadius: 12, cursor: 'pointer',
+                    border: `1px solid ${saleForm.complicated ? C.text : (darkMode ? C.border : '#e3ded6')}`, background: darkMode ? '#181818' : '#ffffff', transition: 'border-color 0.16s ease' }}>
+                    <input type="checkbox" checked={!!saleForm.complicated} onChange={(e) => setSaleForm(p => ({ ...p, complicated: e.target.checked }))}
+                      style={{ width: 16, height: 16, margin: '1px 0 0', flexShrink: 0, accentColor: C.text, colorScheme: darkMode ? 'dark' : 'light', cursor: 'pointer' }} />
+                    <span style={{ minWidth: 0 }}>
+                      <span style={{ display: 'block', fontSize: 13.5, fontWeight: 500, color: C.text }}>Client compliqué</span>
+                      <span style={{ display: 'block', fontSize: 12, color: C.muted, marginTop: 3, lineHeight: 1.4 }}>À cocher pour un dossier difficile. Son lancement fiscal sera mené par le responsable du pôle fiscal.</span>
+                    </span>
+                  </label>
 
                   {/* Continuer -> choix des créneaux (dispo agenda). Ordre : Lancement d'abord. */}
                   <div style={saleFooter}>
