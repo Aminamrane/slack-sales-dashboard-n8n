@@ -106,22 +106,25 @@ export const OUTCOME = {
   no_show: { label: 'No show', tone: 'red' },
   held: { label: 'Onboarding tenu', tone: 'green' },
   postponed: { label: 'Reporté', tone: 'grey' },
+  // Autre date connue d'avant les rappels, sans trace d'un report : montrée, jamais comptée.
+  unknown: { label: 'Autre date, sans trace', tone: 'grey' },
   upcoming: { label: 'À venir', tone: 'blue' },
   rescheduling: { label: 'À recaler', tone: 'amber' },
 };
-// Quand le rendez-vous a été reporté. Le jour même, après sa date ou signalé par le Client Success : reporté tard.
+// Quand le rendez-vous a été reporté. Le jour même, après sa date, alors que le rappel était parti, ou signalé par le
+// Client Success : reporté tard.
 export const REPORT_WHEN = {
   before: 'avant le jour',
   same_day: 'le jour même',
   after: 'après la date',
+  reminded: 'le jour même ou après',
   flagged: 'signalé « à recaler »',
-  unknown: 'moment inconnu',
 };
-const LATE = new Set(['same_day', 'after', 'flagged']);
+const LATE = new Set(['same_day', 'after', 'reminded', 'flagged']);
 export const outcomeMeta = (step) => {
   if (step.outcome === 'no_show' && step.level === 'to_confirm') return { label: 'À confirmer', tone: 'amber' };
   if (step.outcome === 'postponed') return { label: 'Reporté', tone: LATE.has(step.when) ? 'amber' : 'grey' };
-  return OUTCOME[step.outcome] || OUTCOME.postponed;
+  return OUTCOME[step.outcome] || OUTCOME.unknown;
 };
 export const LEVEL = { certain: 'Certain', probable: 'Probable', to_confirm: 'À confirmer' };
 export const ONBOARDING_STATUS = {
@@ -136,7 +139,7 @@ export const ONBOARDING_STATUS = {
 // Les deux lectures de la carte d'onboarding, jamais mélangées : ce que compte chacune et sur quoi.
 export const ONBOARDING_VIEWS = {
   no_show: { label: 'No show', rate: 'rate', numerator: 'no_show', denominator: 'due', listed: (row) => row.status === 'no_show' || row.status === 'to_confirm' },
-  reports: { label: 'Reports', rate: 'report_rate', numerator: 'reported', denominator: 'dated', listed: (row) => row.reports > 0 },
+  reports: { label: 'Reports', rate: 'report_rate', numerator: 'reported', denominator: 'followed', listed: (row) => row.reports > 0 },
 };
 // Les sales d'une lecture : son taux dans `rate`, du plus haut au plus bas, à taux égal ceux qui ont le plus de clients.
 export function peopleOf(people = [], view) {

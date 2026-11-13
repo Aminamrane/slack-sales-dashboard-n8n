@@ -72,14 +72,15 @@ test('un rendez-vous reporté est un report, jamais un no show', () => {
   assert.deepEqual(outcomeMeta({ outcome: 'postponed', when: 'before' }), { label: 'Reporté', tone: 'grey' });
   assert.deepEqual(outcomeMeta({ outcome: 'postponed', when: 'same_day' }), { label: 'Reporté', tone: 'amber' });
   assert.equal(outcomeMeta({ outcome: 'postponed', when: 'flagged' }).tone, 'amber');
-  // Une réponse d'avant la règle (« moved_before ») se lit encore comme un report.
-  assert.equal(outcomeMeta({ outcome: 'moved_before' }).label, 'Reporté');
+  assert.equal(outcomeMeta({ outcome: 'postponed', when: 'reminded' }).tone, 'amber');
+  // Une autre date d'avant les rappels, sans trace : ce n'est pas un report.
+  assert.deepEqual(outcomeMeta({ outcome: 'unknown' }), { label: 'Autre date, sans trace', tone: 'grey' });
 });
 
 test('no show et reports se lisent à part, chacun avec son taux et ses clients', () => {
   const people = [
-    { name: 'Léo Martin', clients: 4, dated: 4, due: 3, no_show: 0, reported: 2, rate: 0, report_rate: 0.5 },
-    { name: 'Inès Roy', clients: 3, dated: 2, due: 2, no_show: 1, reported: 0, rate: 0.5, report_rate: 0 },
+    { name: 'Léo Martin', clients: 4, dated: 4, followed: 4, due: 3, no_show: 0, reported: 2, rate: 0, report_rate: 0.5 },
+    { name: 'Inès Roy', clients: 3, dated: 2, followed: 2, due: 2, no_show: 1, reported: 0, rate: 0.5, report_rate: 0 },
     { name: 'Sans client', clients: 0, dated: 0, due: 0, no_show: 0, reported: 0, rate: null, report_rate: null },
   ];
   assert.deepEqual(peopleOf(people, 'no_show').map((p) => [p.name, p.rate]), [['Inès Roy', 0.5], ['Léo Martin', 0]]);

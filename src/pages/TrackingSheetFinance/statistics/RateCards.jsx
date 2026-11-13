@@ -5,6 +5,8 @@ import { parisToday } from '../../../utils/parisDates.js';
 import {
   LEVEL, ONBOARDING_STATUS, ONBOARDING_VIEWS, REPORT_WHEN, byPerson, count, dayFR, eur, outcomeMeta, pct, peopleOf, plural, weatherTone,
 } from './model.js';
+
+const since = (iso) => (iso ? ` Les reports laissent une trace depuis le ${dayFR(iso)} : avant, ils ne sont pas comptés.` : '');
 import { dayRange, daysOf, monthLabel, monthShort, rangeFor, rangeLabel } from './period.js';
 import { Avatar, Card, Collapse, Fill, Num, Pill, Segmented } from './parts.jsx';
 import { useStatistic } from './useStatistics.js';
@@ -266,12 +268,12 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
           <Num className="fst-rate-big" value={totals[reading.rate]} format={(n) => pct(n)} />
           {view === 'no_show' ? (
             <div className="fst-rate-note">
-              {plural(totals.no_show || 0, 'client')} en no show sur {count(totals.due || 0)} dont le rendez-vous est passé
+              {plural(totals.no_show || 0, 'client')} en no show sur {count(totals.due || 0)} au rendez-vous passé (tenu ou no show)
               {totals.to_confirm ? ` · ${count(totals.to_confirm)} à confirmer, non compté${totals.to_confirm > 1 ? 's' : ''}` : ''}
             </div>
           ) : (
             <div className="fst-rate-note">
-              {plural(totals.reported || 0, 'client reporté', 'clients reportés')} sur {count(totals.dated || 0)} avec un rendez-vous
+              {plural(totals.reported || 0, 'client reporté', 'clients reportés')} sur {count(totals.followed || 0)} suivis
               {totals.reports ? ` · ${plural(totals.reports, 'report')} en tout` : ''}
               {totals.reported_late ? ` · ${count(totals.reported_late)} le jour même ou après` : ''}
             </div>
@@ -286,7 +288,8 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
       )}
       <p className="fst-note">
         No show = le dernier rendez-vous du client est passé, sans onboarding tenu ni nouvelle date. Un onboarding finalement tenu n’est jamais un no show ;
-        un rendez-vous déplacé est un report, compté à part.
+        un rendez-vous déplacé est un report, compté à part. Un cas « à confirmer » (rendez-vous passé sans aucune trace) n’entre dans aucun taux.
+        {since(data?.traced_since)}
       </p>
     </Card>
   );
