@@ -1,10 +1,11 @@
 // Le parcours d'une mission, en frise verticale (dev 12/11/2026 : « un état clair, c'est à ce moment-là que ça a été créé,
 // validé, et je peux rajouter quelque chose »). Un jalon par ligne, dans l'ordre du temps : atteint (point plein, sa date
 // et son auteur), en cours (point entouré), à venir (point creux). Sous chaque jalon, ce qui s'est passé pendant qu'il
-// était l'étape en cours : documents, décisions, points d'avancement. Tout se commente ; l'étape en cours reçoit les
-// nouveaux points d'avancement ; une étape se choisit d'un geste, confirmé juste dessous.
+// était l'étape en cours : documents, décisions, points d'avancement, gestes du suivi (version livrée, validée,
+// modification demandée). Tout se commente ; l'étape en cours reçoit les nouveaux points d'avancement. L'étape elle-même
+// se change sur la frise du haut, d'un clic (dev 13/11/2026).
 import React from "react";
-import { ArrowRight, FileText, Undo2 } from "lucide-react";
+import { FileText } from "lucide-react";
 import { Tag } from "../../pages/TrackingSheetFinance/components/PageKit.jsx";
 import { dayLabel, eventSentence, sizeLabel } from "../../utils/automationBoard";
 import { Composer, Feedback, Files } from "./Followup.jsx";
@@ -13,19 +14,19 @@ import { partnerFile } from "./followupApi.js";
 const STATES = { done: ["green", "Fait"], now: ["blue", "Étape actuelle"], next: [undefined, "À venir"] };
 
 function when(milestone) {
-  if (milestone.event) return [`le ${dayLabel(milestone.event.day)}${milestone.event.time ? ` à ${milestone.event.time.replace(":", " h ")}` : ""}`, milestone.event.who].filter(Boolean).join(" · ");
+  // Une étape atteinte par un geste du suivi dit lequel : « Nom a livré une version à tester », « Nom a validé la version ».
+  const by = milestone.event && ["delivery", "approved"].includes(milestone.event.kind) ? eventSentence(milestone.event) : milestone.event?.who;
+  if (milestone.event) return [`le ${dayLabel(milestone.event.day)}${milestone.event.time ? ` à ${milestone.event.time.replace(":", " h ")}` : ""}`, by].filter(Boolean).join(" · ");
   if (milestone.kind === "validated" && milestone.date) return [`le ${milestone.date}`, milestone.by].filter(Boolean).join(" · ");
   if (milestone.state === "next") return milestone.kind === "validated" ? "Se décide dans Opti’Lex, par la direction du cabinet." : "";
   return milestone.kind === "created" && milestone.state === "now" ? "Rien n’a encore bougé sur cette mission." : "Date non enregistrée dans Opti’Lex.";
 }
 
-export default function Journey({ processId, milestones, follow, owned, locked, moving, onPick, onMove, onCancel, onUpdate, onChanged }) {
+export default function Journey({ processId, milestones, follow, owned, onUpdate, onChanged }) {
   return (
     <ol className="ab-journey">
       {milestones.map((milestone, index) => {
         const [tone, label] = STATES[milestone.state];
-        const movable = milestone.kind !== "validated";
-        const choosing = Boolean(moving) && movable && moving.step === milestone.step;
         return (
           <li key={`${milestone.kind}-${milestone.step ?? "v"}`} className={`ab-ms is-${milestone.state}`} aria-current={milestone.state === "now" ? "step" : undefined} style={{ "--i": index }}>
             <span className="ab-ms-dot" aria-hidden="true" />
@@ -33,27 +34,9 @@ export default function Journey({ processId, milestones, follow, owned, locked, 
               <div className="ab-ms-head">
                 <span className="ab-ms-label">{milestone.label}</span>
                 <Tag tone={tone}>{label}</Tag>
-                {movable && !locked && !choosing && milestone.state !== "now" && (
-                  <button type="button" className={`ab-quiet ab-ms-act${milestone.state === "next" ? "" : " is-back"}`} onClick={() => onPick(milestone.step)}>
-                    {milestone.state === "next" ? <><ArrowRight size={13} />Passer à cette étape</> : <><Undo2 size={13} />{milestone.kind === "created" ? "Remettre à « Non commencé »" : "Revenir à cette étape"}</>}
-                  </button>
-                )}
               </div>
               {when(milestone) && <div className="ab-ms-meta">{when(milestone)}</div>}
               {milestone.event?.text && <div className="ab-event-text">{milestone.event.text}</div>}
-
-              {choosing && (
-                <form className="ab-move" onSubmit={(e) => { e.preventDefault(); onMove(); }}>
-                  <div className="ab-move-title">{milestone.state === "next" ? "Passer la mission à cette étape ?" : milestone.kind === "created" ? "Remettre la mission à « Non commencé » ?" : "Ramener la mission à cette étape ?"}</div>
-                  <input type="text" className="ab-input" value={moving.comment} maxLength={2000} onChange={(e) => onPick(milestone.step, e.target.value)} autoFocus
-                    placeholder="Pourquoi maintenant ? Ce mot s’inscrit dans le parcours (facultatif)." aria-label="Raison du changement d’étape" />
-                  <div className="ab-actions">
-                    {moving.error && <span role="alert" style={{ color: "#c5221f" }}>{moving.error}</span>}
-                    <button type="button" className="fst-btn" disabled={moving.busy} onClick={onCancel}>Annuler</button>
-                    <button type="submit" className="ab-btn-main" disabled={moving.busy}>{moving.busy ? "Enregistrement…" : "Confirmer"}</button>
-                  </div>
-                </form>
-              )}
 
               {milestone.state !== "next" && <Feedback processId={processId} itemKey={milestone.key} follow={follow} onChanged={onChanged} replyLabel="Commenter cette étape" />}
 

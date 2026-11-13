@@ -172,6 +172,38 @@ html.dark-mode .ab-root .ab-ms.is-now .ab-ms-dot { box-shadow: 0 0 0 5px rgba(23
 .ab-state-act { display: flex; align-items: center; justify-content: flex-end; }
 .ab-state .ab-note { margin-top: 0; }
 .ab-state-saved { grid-column: 1 / -1; margin: 0; font-size: 12.5px; color: var(--green); }
+
+/* Frise cliquable (13/11/2026) : une étape se choisit d'un clic, son enregistrement apparaît juste dessous. */
+.ab-track-pick { display: flex; flex-direction: column; align-items: inherit; gap: 9px; min-width: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: inherit; cursor: pointer; }
+.ab-track-pick:hover .ab-track-dot { border-color: var(--ink-2); }
+.ab-track-pick:focus-visible { outline: 2px solid var(--ink); outline-offset: 4px; border-radius: 8px; }
+.ab-track li.is-picked .ab-track-dot { border-color: var(--orange); background: var(--orange); box-shadow: 0 0 0 4px rgba(240, 138, 36, .2); }
+.ab-track li.is-picked .ab-track-label { font-weight: 500; }
+.ab-pick-save { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 10px 10px 14px; border-radius: 14px; background: #fdf3e3; font-size: 13px; animation: fstRow .3s var(--ease) both; }
+.ab-pick-save > span { margin-right: auto; }
+
+/* À qui de jouer : la situation, le message de l'autre partie, un mot, et le geste en un clic. */
+.ab-turn { grid-column: 1 / -1; padding: 16px 18px 18px; border-radius: 16px; background: var(--hover); }
+.ab-turn.is-lawyer { background: #fbf6dd; }
+.ab-turn.is-dev { background: #fdf0e6; }
+.ab-turn.is-done { background: #edf8f1; }
+.ab-turn-head { display: flex; align-items: flex-start; gap: 12px; }
+.ab-turn-ico { flex: none; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: #fff; color: var(--ink-2); }
+.ab-turn.is-lawyer .ab-turn-ico { color: #7a5a05; }
+.ab-turn.is-dev .ab-turn-ico { color: #c2500e; }
+.ab-turn.is-done .ab-turn-ico { color: #0b7a4b; }
+.ab-turn-title { font-size: 15px; font-weight: 500; letter-spacing: -.01em; line-height: 1.4; }
+.ab-turn-hint { margin-top: 2px; font-size: 13px; color: var(--ink-2); line-height: 1.5; }
+.ab-turn-quote { margin: 12px 0 0; padding: 10px 13px; border-radius: 12px; background: #fff; font-size: 13.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ab-turn-note { display: block; width: 100%; margin-top: 12px; min-height: 58px; resize: vertical; border-radius: 12px; border: 1px solid var(--line); background: #fff; padding: 9px 12px; font: inherit; font-size: 13.5px; line-height: 1.5; color: var(--ink); outline: none; transition: border-color .2s, box-shadow .2s; }
+.ab-turn-note::placeholder { color: var(--faint); }
+.ab-turn-note:focus { border-color: #d6d1c9; box-shadow: 0 0 0 4px rgba(50, 40, 30, .06); }
+.ab-turn-btns { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.ab-turn-btns .ab-state-saved { grid-column: auto; }
+.ab-turn-error { font-size: 12.5px; color: #c5221f; }
+.ab-textlink:disabled { opacity: .55; cursor: default; }
+html.dark-mode .ab-root .ab-turn, html.dark-mode .ab-root .ab-pick-save { background: #1f1f1f; }
+html.dark-mode .ab-root .ab-turn-note, html.dark-mode .ab-root .ab-turn-quote, html.dark-mode .ab-root .ab-turn-ico { background: #161616; color: #f2f2f2; border-color: #2e2e2e; }
 .ab-docs.is-stack { grid-template-columns: minmax(0, 1fr); }
 .ab-docs.is-stack .ab-drop { min-height: 120px; }
 .ab-docs.is-stack .ab-doc { flex-wrap: wrap; }

@@ -106,7 +106,8 @@ export default function CeoAutomationView() {
   const [query, setQuery] = useState("");
   const [classification, setClassification] = useState("");
   const [pole, setPole] = useState("");
-  const [toConfirm, setToConfirm] = useState(false);
+  // Vue de la liste : tout, les classements à confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
+  const [view, setView] = useState("");
   const [closed, setClosed] = useState(() => new Set());
   const seq = useRef(0);
 
@@ -135,10 +136,10 @@ export default function CeoAutomationView() {
 
   const P = useMemo(() => palette(C, darkMode), [C, darkMode]);
   const lines = useMemo(
-    () => visibleRows(data?.rows, { query, classification, pole, toConfirm, closed }),
-    [data, query, classification, pole, toConfirm, closed],
+    () => visibleRows(data?.rows, { query, classification, pole, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
+    [data, query, classification, pole, view, closed],
   );
-  const filtering = Boolean(query.trim() || classification || pole || toConfirm);
+  const filtering = Boolean(query.trim() || classification || pole || view);
   const openId = Number(params.get("process")) || null;
   const openProcess = useCallback((id) => {
     setParams((current) => {
@@ -154,7 +155,7 @@ export default function CeoAutomationView() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const reset = () => { setQuery(""); setClassification(""); setPole(""); setToConfirm(false); };
+  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); };
 
   if (!authChecked) {
     return (
@@ -251,10 +252,13 @@ export default function CeoAutomationView() {
                   <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}
                     hint="Un clic sur une ligne ouvre le suivi de la mission : cahier des charges, avancement, échanges.">
                     <div className="fst-tools">
-                      <div className="fst-tabs" role="group" aria-label="Classements à confirmer">
-                        {[[false, "Toutes", data.totals.lines], [true, "À confirmer", data.totals.toConfirm]].map(([value, label, count]) => (
-                          <button key={label} type="button" className="fst-tab" aria-pressed={toConfirm === value} onClick={() => setToConfirm(value)}>
-                            {toConfirm === value && <Motion.span layoutId="ab-confirm-tab" className="fst-tab-bg" transition={SPRING} />}
+                      <div className="fst-tabs" role="group" aria-label="Ce qui attend quelqu’un">
+                        {[["", "Toutes", data.totals.lines, "Toutes les missions"],
+                          ["lawyer", "À tester par le juriste", data.totals.awaitingLawyer ?? 0, "Une version est livrée : le juriste doit la tester"],
+                          ["dev", "Modification demandée", data.totals.awaitingDev ?? 0, "Le juriste a demandé une modification : aux développeurs de reprendre"],
+                          ["confirm", "À confirmer", data.totals.toConfirm, "Classement proposé par le logiciel, que personne n’a encore revu"]].map(([value, label, count, title]) => (
+                          <button key={label} type="button" className="fst-tab" aria-pressed={view === value} title={title} onClick={() => setView(value)}>
+                            {view === value && <Motion.span layoutId="ab-confirm-tab" className="fst-tab-bg" transition={SPRING} />}
                             <span>{label}</span><span className="fst-tab-count fst-num">{number(count)}</span>
                           </button>
                         ))}
@@ -289,7 +293,7 @@ export default function CeoAutomationView() {
                             <Th Icon={Milestone}>Avancement</Th>
                           </tr>
                         </thead>
-                        <tbody key={`${period}-${classification}-${pole}-${toConfirm}-${query}`}>
+                        <tbody key={`${period}-${classification}-${pole}-${view}-${query}`}>
                           {lines.map(({ row, depth, children, open, dimmed }, index) => (
                             <tr key={row.id} data-open="true" tabIndex={0} aria-label={`Ouvrir le suivi de ${row.name}`} style={{ "--i": index, opacity: dimmed ? 0.6 : 1 }}
                               onClick={() => openProcess(row.id)}
@@ -331,7 +335,11 @@ export default function CeoAutomationView() {
                                   {!row.validated && row.toConfirm && <Tag tone="peach">À confirmer</Tag>}
                                 </div>
                               </td>
-                              <td style={{ minWidth: 150 }}><Steps value={row.step} steps={data.steps} P={P} showLabel={false} /></td>
+                              <td style={{ minWidth: 190 }}>
+                                <Steps value={row.step} steps={data.steps} P={P} />
+                                {row.awaiting?.who === "lawyer" && <div style={{ marginTop: 6 }}><Tag tone="yellow" title={row.awaiting.text || undefined}>À tester par le juriste</Tag></div>}
+                                {row.awaiting?.who === "dev" && <div style={{ marginTop: 6 }}><Tag tone="peach" title={row.awaiting.text || undefined}>Modification demandée</Tag></div>}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
