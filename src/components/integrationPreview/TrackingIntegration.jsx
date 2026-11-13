@@ -376,8 +376,9 @@ export function IntegrationDialog({ context: initialContext, onClose, onSaved, c
         </section>}
         {context.source_changed && !recovery && (
           <p className="ti-source-note">
-            Le NDA a évolué depuis la dernière validation. Vérifiez les sociétés
-            et les dirigeants avant de valider à nouveau.{" "}
+            {context.scope_rebased
+              ? "Le NDA a changé depuis la dernière validation : le périmètre ci-dessous a été repris du NDA. Vérifiez-le, puis validez."
+              : "Le NDA a évolué depuis la dernière validation. Vérifiez les sociétés et les dirigeants avant de valider à nouveau."}{" "}
             <button
               onClick={() => {
                 const next = {
@@ -391,7 +392,7 @@ export function IntegrationDialog({ context: initialContext, onClose, onSaved, c
                 setSourceReset((n) => n + 1);
               }}
             >
-              Reprendre le périmètre NDA
+              {context.scope_rebased ? "Repartir du NDA seul" : "Reprendre le périmètre NDA"}
             </button>
           </p>
         )}
