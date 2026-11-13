@@ -19,6 +19,8 @@ import BoardStateDateInput from "../components/BoardStateDateInput";
 import { appointmentConfirmation, appointmentFailure } from "../utils/appointmentConfirmation";
 import { DetailText } from "../components/OptilexClientDetail";
 import { MissionsValue } from "../components/BoardMissions.jsx";
+import { BoardCsmContext, CSM_CSS, CsmFace, CsmValue, useBoardCsm } from "../components/BoardCsm.jsx";
+import { csmIndex, csmMenuEntries, csmTagLabel, matchesCsm } from "../utils/boardCsm.js";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
@@ -88,8 +90,12 @@ const PROGRAM_ICONS = {
   ambassadeur: <><path d="M3 10.4v3.2A1.4 1.4 0 0 0 4.4 15H6l5.5 4.2V4.8L6 9H4.4A1.4 1.4 0 0 0 3 10.4Z" fill="currentColor" fillOpacity=".16" /><path className="pg-wave pg-wave-1" d="M15 9.3a3.8 3.8 0 0 1 0 5.4" /><path className="pg-wave pg-wave-2" d="M17.9 6.6a7.6 7.6 0 0 1 0 10.8" /></>,
   parrainage: <g className="pg-shake"><path d="m11 17 2 2a1 1 0 1 0 3-3" /><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" /><path d="m21 3 1 11h-2" /><path d="M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3" /><path d="M3 4h8" /></g>,
   temoignage: <><path d="M20.5 11.5a8 8 0 0 1-11.6 7.1L4 20l1.3-4.4a8 8 0 1 1 15.2-4.1Z" fill="currentColor" fillOpacity=".14" /><path className="pg-star" d="m12.3 7.8 1.1 2.3 2.5.3-1.8 1.7.5 2.5-2.3-1.3-2.2 1.3.4-2.5-1.8-1.7 2.5-.3Z" fill="currentColor" stroke="none" /></>,
+  // Section CSM (dev 13/11/2026) : lettre de mission analysée (feuille et loupe), avis Trustpilot (étoile).
+  lettre: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4" fill="currentColor" fillOpacity=".14" /><path d="M14 3v5h5M14 3l5 5v3M8.5 9h3M8.5 13h2" /><circle className="pg-star" cx="16.5" cy="16.5" r="3" /><path d="m18.7 18.7 2.3 2.3" /></>,
+  trustpilot: <path className="pg-star" d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 16.8 6.4 20.1l1.4-6.3L3 9.5l6.4-.6Z" fill="currentColor" fillOpacity=".16" />,
 };
-const PROGRAM_TONES = { ambassadeur: ["#eae9fb", "#4a3fc4"], parrainage: ["#d9f3f7", "#0f7286"], temoignage: ["#fde9da", "#c2500e"] };
+const PROGRAM_TONES = { ambassadeur: ["#eae9fb", "#4a3fc4"], parrainage: ["#d9f3f7", "#0f7286"], temoignage: ["#fde9da", "#c2500e"],
+  lettre: ["#e3f1e6", "#1f7a3a"], trustpilot: ["#e2f4ec", "#0b7a52"] };
 const ProgramIcon = ({ kind, size = 16 }) => (
   <svg className={`pg pg-${kind}`} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{PROGRAM_ICONS[kind]}</svg>
 );
@@ -1199,14 +1205,18 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
 // Ligne du tableau, mémorisée (dev 28/10/2026) : elle ne se redessine que si SES données changent (client,
 // sélection, no show, entrée animée). Avant, tout rendu de la page redessinait les 700 à 900 lignes
 // (400 à 550 ms à chaque onglet, chaque sélection) ; les rappels reçus sont stables (useCallback, setState).
-const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo, readOnly = false }) {
+const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo, readOnly = false, csm = null }) {
   const td = ROW_TD;
   return (
     <tr onClick={() => onSelect(rk)} className={`ob-row${isSel ? " is-sel" : ""}`}
       style={newIdx !== undefined ? { animation: "obRowIn 0.28s cubic-bezier(0.16,1,0.3,1) both", animationDelay: `${Math.min(newIdx, 14) * 20}ms` } : undefined}>
       <td style={td}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
-          <Avatar name={primaryName(r)} n={r.sheet_num} size={32} />
+          {/* CSM attitré (portefeuille client, dev 13/11/2026) : sa photo posée sur le coin de l'avatar du client. */}
+          <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
+            <Avatar name={primaryName(r)} n={r.sheet_num} size={32} />
+            {csm && <span style={{ position: "absolute", right: -5, bottom: -4, display: "inline-flex" }}><CsmFace csm={csm} size={17} ring /></span>}
+          </span>
           <div style={{ minWidth: 0 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
               <div style={{ fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={primaryName(r)}>{primaryName(r)}</div>
@@ -1332,7 +1342,12 @@ export default function OptilexBoard({ embed = false }) {
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
   const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
   const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'confirm' | 'todo' | 'noshow' | 'recaler'
-  const [sortCol, setSortCol] = useState(null);   // tri manuel par en-tête : null | owner_signed | onboarding
+  // Portefeuille client (dev 13/11/2026) : CSM du board (serveur) et CSM cochés dans « Affiner » (union, « none » =
+  // sans CSM). Coché, le board entier se réduit au portefeuille : onglets, compteurs et liste.
+  const [csmList, setCsmList] = useState([]);
+  const [canAssignCsm, setCanAssignCsm] = useState(false);
+  const [csmSel, setCsmSel] = useState([]);
+  const [sortCol, setSortCol] = useState(null);  // tri manuel par en-tête : null | owner_signed | onboarding
   // Largeur disponible du tableau -> part égale du surplus pour chaque colonne (cf. TABLE_COLS).
   const tableWrapRef = useRef(null);
   const [tableW, setTableW] = useState(0);
@@ -1382,32 +1397,44 @@ export default function OptilexBoard({ embed = false }) {
   }, []);
   useEffect(() => () => clearTimeout(errTimer.current), []);
 
+  // La liste des CSM ne change que si son contenu change : la ligne mémorisée ne se redessine pas à chaque polling.
+  const takeCsms = useCallback((r) => {
+    const next = r.csms || [];
+    setCsmList((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
+    setCanAssignCsm(!!r.permissions?.assign_csm);
+  }, []);
   useEffect(() => {
     let alive = true;
     const load = (spinner) => {
       if (spinner) setLoading(true);
       const seq = mutSeq.current;
       apiClient.get("/api/v1/optilex/board")
-        .then((r) => { if (alive && seq === mutSeq.current) setRows(r.clients || []); })
+        .then((r) => { if (alive && seq === mutSeq.current) { setRows(r.clients || []); takeCsms(r); } })
         .catch((e) => console.error("board load failed", e))
         .finally(() => { if (alive && spinner) setLoading(false); });
     };
     load(true);
     const id = setInterval(() => load(false), 30000);   // temps réel : refetch toutes les 30 s
     return () => { alive = false; clearInterval(id); };
-  }, []);
+  }, [takeCsms]);
 
   // Rechargement manuel du board (ex. apres un envoi force) -- additif, ne touche pas le polling.
   const reloadBoard = useCallback(() => {
     const seq = mutSeq.current;
     apiClient.get("/api/v1/optilex/board")
-      .then((r) => { if (seq === mutSeq.current) setRows(r.clients || []); })
+      .then((r) => { if (seq === mutSeq.current) { setRows(r.clients || []); takeCsms(r); } })
       .catch((e) => console.error("board reload failed", e));
-  }, []);
+  }, [takeCsms]);
+
+  const csmById = useMemo(() => csmIndex(csmList), [csmList]);
+  const csmContext = useMemo(() => ({ csms: csmList, byId: csmById, canAssign: canAssignCsm && !readOnly }), [csmList, csmById, canAssignCsm, readOnly]);
+  // Portefeuille coché : socle de tout le board (onglets, compteurs, liste). Sans sélection, toutes les lignes.
+  const portfolioRows = useMemo(() => (csmSel.length ? rows.filter((r) => matchesCsm(r, csmSel, csmById)) : rows), [rows, csmSel, csmById]);
+  const csmEntries = useMemo(() => csmMenuEntries(csmList, rows.filter((r) => !r.is_pending_contract)), [csmList, rows]);
 
   const counts = useMemo(() => {
     const c = { "En cours": 0, "Attente Opti'Lex": 0 };
-    for (const r of rows) {
+    for (const r of portfolioRows) {
       const e = displayEtat(r);   // état effectif (override / Sheet / signé interne / attente / en cours)
       if (e) c[e] = (c[e] || 0) + 1;
       if (e !== "Signé" && matchesSignedClient(r, e)) c["Signé"] = (c["Signé"] || 0) + 1;
@@ -1417,8 +1444,8 @@ export default function OptilexBoard({ embed = false }) {
       if (isRenewalUpcoming(r)) c["Renouvellement client"] = (c["Renouvellement client"] || 0) + 1;
     }
     return c;
-  }, [rows]);
-  const establishedCount = useMemo(() => rows.filter((r) => !r.is_pending_contract).length, [rows]);
+  }, [portfolioRows]);
+  const establishedCount = useMemo(() => portfolioRows.filter((r) => !r.is_pending_contract).length, [portfolioRows]);
   // Changer d'onglet réinitialise le tri manuel -> on retombe sur le défaut intelligent de l'onglet.
   useEffect(() => { setSortCol(null); }, [etatFilter]);
 
@@ -1480,14 +1507,14 @@ export default function OptilexBoard({ embed = false }) {
 
   // Base : toutes les lignes passant les filtres SAUF la météo. Sert de socle à la vue finale
   // ET aux compteurs par bande (qui restent stables quand on coche/décoche une bande météo).
-  const preMeteoRows = useMemo(() => rows.filter((r) => viewFilter.passes(r)), [rows, viewFilter]);
+  const preMeteoRows = useMemo(() => portfolioRows.filter((r) => viewFilter.passes(r)), [portfolioRows, viewFilter]);
 
   // Compteurs du menu Onboarding : sur la vue affichée (onglet, filtres, météo) hors ce menu.
   // « À venir + réalisé + à faire + no show » = clients comptés (`total`, affiché dans le menu) ;
   // « à recaler » est un sous-ensemble de « à faire » et du no show.
   const onboardingCounts = useMemo(() => {
     const c = { venir: 0, done: 0, confirm: 0, todo: 0, noshow: 0, recaler: 0, total: 0 };
-    for (const r of rows) {
+    for (const r of portfolioRows) {
       if (!viewFilter.passes(r, false)) continue;
       if (meteoFilter.length > 0 && !meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context))) continue;
       const situation = viewFilter.situationOf(r);
@@ -1497,7 +1524,7 @@ export default function OptilexBoard({ embed = false }) {
       if (isOnboardingToReschedule(r, situation)) c.recaler += 1;
     }
     return c;
-  }, [rows, viewFilter, meteoFilter]);
+  }, [portfolioRows, viewFilter, meteoFilter]);
 
   // Onboardings restants (dev 29/10/2026, compteur à volets à gauche de la recherche, comme le Suivi des ventes) :
   // exactement les cases « à venir + à confirmer + à faire + no show » du menu Onboarding, sur la même vue (onglet,
@@ -1678,7 +1705,7 @@ export default function OptilexBoard({ embed = false }) {
   // Quand elle change, la liste glisse (VIEW_SLIDE) dans le sens du contrôle cliqué : `navTo(position)` le note
   // (un contrôle plus à droite que le précédent pousse la liste vers la gauche) ; sans clic noté, elle avance.
   const reduceMotion = useReducedMotion();
-  const viewKey = JSON.stringify([etatFilter, multiFilter, meteoFilter, sigRange, dateTarget, onboardingSel, programmeSel]);
+  const viewKey = JSON.stringify([etatFilter, multiFilter, meteoFilter, sigRange, dateTarget, onboardingSel, programmeSel, csmSel]);
   const slideNav = useRef({ pos: 1, dir: 1 });
   const navTo = (pos) => { const n = slideNav.current; n.dir = pos < n.pos ? -1 : 1; n.pos = pos; };
   const [view, setView] = useState({ key: viewKey, dir: 1, limit: ROWS_FIRST });
@@ -1751,6 +1778,7 @@ export default function OptilexBoard({ embed = false }) {
     ...(sigRange.from || sigRange.to ? [{ key: "date", group: dateTarget === "onboarding" ? "Onboarding" : "Signature", label: sigRangeLabel(sigRange.from, sigRange.to), clear: () => setSigRange({ from: "", to: "" }) }] : []),
     ...onboardingSel.map((k) => ({ key: `onb-${k}`, group: "Onboarding", label: ONBOARDING_TAGS[k] || k, clear: () => setOnboardingSel((p) => p.filter((x) => x !== k)) })),
     ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: PROGRAMME_TAGS[k] || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
+    ...csmSel.map((k) => ({ key: `csm-${k}`, group: "CSM", label: csmTagLabel(k, csmById), clear: () => setCsmSel((p) => p.filter((x) => x !== k)) })),
     ...(q ? [{ key: "q", group: "Recherche", label: `« ${q} »`, clear: () => setQ("") }] : []),
   ];
   // Compteur à volets (dev 10/11/2026) : par défaut (onglet Signé, aucun filtre), les onboardings restants ; dès
@@ -1776,6 +1804,7 @@ export default function OptilexBoard({ embed = false }) {
     setSigRange({ from: "", to: "" });
     setOnboardingSel([]);
     setProgrammeSel([]);
+    setCsmSel([]);
     setQ("");
   };
 
@@ -1788,6 +1817,7 @@ export default function OptilexBoard({ embed = false }) {
 
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", fontFeatureSettings: "'cv11','ss01'", color: TEXT }} className="ob-root">
+      <style>{CSM_CSS}</style>
       <style>{`
         .ob-alert-chip .ob-chip-ic{color:var(--al-ink)}
         .ob-alert-chip.is-on{background:var(--al-tile);border-color:transparent;color:var(--al-ink)}
@@ -2481,16 +2511,30 @@ export default function OptilexBoard({ embed = false }) {
               <ChecklistMenu label="Programmes" title="Programmes clients"
                 icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
                 items={[
-                  { key: "ambassadeur", label: "Programme ambassadeur", count: rows.filter((r) => r.ambassador_eligible).length,
+                  { key: "ambassadeur", label: "Programme ambassadeur", count: portfolioRows.filter((r) => r.ambassador_eligible).length,
                     icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="ambassadeur" size={14} /></span> },
-                  { key: "parrainage", label: "Programme de parrainage", count: rows.filter((r) => r.parrainage_eligible).length,
+                  { key: "parrainage", label: "Programme de parrainage", count: portfolioRows.filter((r) => r.parrainage_eligible).length,
                     icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="parrainage" size={14} /></span> },
-                  { key: "temoignage", label: "Témoignage", count: rows.filter((r) => r.temoignage_eligible).length,
+                  { key: "temoignage", label: "Témoignage", count: portfolioRows.filter((r) => r.temoignage_eligible).length,
                     icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="temoignage" size={14} /></span> },
                 ]}
                 selected={programmeSel}
                 onToggle={(k) => setProgrammeSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
                 onClear={() => setProgrammeSel([])} />
+              {/* Portefeuille client (dev 13/11/2026) : un ou plusieurs CSM, ou les clients sans CSM. Nombre de clients
+                  de chaque portefeuille, tous états confondus ; coché, tout le board ne montre plus que ces clients. */}
+              {csmList.length > 0 && (
+                <ChecklistMenu label="CSM" title="Portefeuille du CSM"
+                  icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></svg>}
+                  items={csmEntries.map((e) => ({
+                    key: e.key, label: e.label, count: e.count, hint: e.csm && !e.csm.active ? "n'est plus CSM" : undefined,
+                    icon: e.csm ? <CsmFace csm={e.csm} size={20} title="" />
+                      : <span style={{ width: 20, height: 20, borderRadius: "50%", border: "1.5px dashed #d8d3cb", flexShrink: 0 }} aria-hidden />,
+                  }))}
+                  selected={csmSel}
+                  onToggle={(k) => setCsmSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
+                  onClear={() => setCsmSel([])} />
+              )}
             </div>
           </div>
         </div>
@@ -2608,7 +2652,8 @@ export default function OptilexBoard({ embed = false }) {
                       <BoardRow key={key} r={r} rk={key} isSel={selected === key}
                         newIdx={newIdxByKey.get(key)}   // undefined = déjà vue -> pas d'animation
                         noShow={viewFilter.situationOf(r) === "noshow"} renewal={etatFilter === "Renouvellement client"}
-                        onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} readOnly={readOnly} />
+                        onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} readOnly={readOnly}
+                        csm={r.csm_user_id ? csmById[r.csm_user_id] || null : null} />
                     );
                   })}
                   {filtered.length === 0 && (
@@ -2630,9 +2675,11 @@ export default function OptilexBoard({ embed = false }) {
         )}
       </div>
 
+      <BoardCsmContext.Provider value={csmContext}>
       <AnimatePresence>
         {selRow && <DetailPanel key="detail" row={selRow} onClose={closeDetail} reload={reloadBoard} reloadRatings={() => { mutSeq.current += 1; reloadBoard(); }} patch={patch} changeEtat={changeEtat} etatHistVersion={etatHistVersion} recordMeteo={recordMeteo} meteoHistVersion={meteoHistVersion} />}
       </AnimatePresence>
+      </BoardCsmContext.Provider>
     </div>
   );
 }
@@ -3279,6 +3326,9 @@ const PROP_ICONS = {
   creances: <><ellipse cx="9" cy="6.5" rx="6" ry="2.5" /><path d="M3 6.5v4c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5v-4" /><path d="M9 13v4.5c0 1.4 2.7 2.5 6 2.5s6-1.1 6-2.5V13" /><ellipse cx="15" cy="13" rx="6" ry="2.5" /></>,
   missions: <><rect x="4" y="5" width="16" height="16" rx="3" /><path d="M9 5V3h6v2M8 11l2 2 5-5M8 17h8" /></>,
   ville: <><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z" /><circle cx="12" cy="10" r="3" /></>,
+  csm: <><circle cx="12" cy="8" r="4" /><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" /></>,
+  lettre: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>,
+  trustpilot: <path d="m12 3 2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 16.8 6.4 20.1l1.4-6.3L3 9.5l6.4-.6Z" />,
   periodicite: <><path d="M20 11a8 8 0 0 0-14.3-4.9L4 8" /><path d="M4 3.5V8h4.5" /><path d="M4 13a8 8 0 0 0 14.3 4.9L20 16" /><path d="M20 20.5V16h-4.5" /></>,
 };
 // `top` : la valeur peut grandir (dates d'effet, alertes) ; le libellé reste en face de sa première ligne,
@@ -3405,6 +3455,67 @@ function ProgramChip({ kind, on, label, hint, editable, onToggle }) {
   );
 }
 
+// ── Onglet CSM (dev 13/11/2026) ─────────────────────────────────────────────────────────────────────────────────
+// Tout ce que le Client Success suit sur un client, au même endroit : le CSM attitré (portefeuille), la lettre de
+// mission analysée, l'avis Trustpilot et les programmes (témoignage, parrainage, ambassadeur), qui étaient dans
+// « Suivi ». Validé d'un clic comme les programmes ; on garde qui et quand. Les programmes gardent leurs droits ;
+// lettre de mission et Trustpilot : CSM et direction (le serveur décide, `permissions.assign_csm`).
+function ValidatedBy({ by, at }) {
+  // Juste validé : l'auteur et la date arrivent au prochain rechargement du board.
+  if (!by && !at) return <span className="ob-pv-sub">à l’instant</span>;
+  return <span className="ob-pv-sub">{by ? `par ${by}` : ""}{by && at ? " · " : ""}{at ? timeAgo(at) : ""}</span>;
+}
+function CsmSection({ row, num, patch, onChanged }) {
+  const { canAssign } = useBoardCsm();
+  const readOnly = isBoardReadOnly();
+  const programmeEditable = !!num && meteoSettable() && !isFinanceTeam() && !readOnly;
+  const followEditable = !!num && canAssign && !readOnly;
+  return (
+    <div className="ob-props">
+      <div className="ob-props-group">
+        <div className="ob-props-title">Portefeuille</div>
+        <PropRow icon="csm" label="CSM attitré"><CsmValue row={row} onAssign={(id) => patch(num, { csm_user_id: id })} /></PropRow>
+      </div>
+      <div className="ob-props-group">
+        <div className="ob-props-title">Suivi Client Success</div>
+        <PropRow icon="lettre" label="Lettre de mission">
+          <span className="ob-pv-line" style={{ gap: 8, flexWrap: "wrap" }}>
+            <ProgramChip kind="lettre" label={row.mission_letter_analyzed ? "Analysée" : "À analyser"} on={!!row.mission_letter_analyzed} editable={followEditable}
+              hint="La lettre de mission du client a été analysée par le Client Success."
+              onToggle={(v) => patch(num, { mission_letter_analyzed: v })} />
+            {row.mission_letter_analyzed && <ValidatedBy by={row.mission_letter_analyzed_by} at={row.mission_letter_analyzed_at} />}
+          </span>
+        </PropRow>
+        <PropRow icon="trustpilot" label="Avis Trustpilot">
+          <span className="ob-pv-line" style={{ gap: 8, flexWrap: "wrap" }}>
+            <ProgramChip kind="trustpilot" label={row.trustpilot_review ? "Avis laissé" : "Pas encore"} on={!!row.trustpilot_review} editable={followEditable}
+              hint="Le client a laissé un avis sur Trustpilot."
+              onToggle={(v) => patch(num, { trustpilot_review: v })} />
+            {row.trustpilot_review && <ValidatedBy by={row.trustpilot_review_by} at={row.trustpilot_review_at} />}
+          </span>
+        </PropRow>
+        <PropRow icon="programmes" label="Éligible témoignage">
+          <span className="ob-pv-line"><TemoignageChip row={row} num={num} editable={programmeEditable} patch={patch} onDone={onChanged} /></span>
+        </PropRow>
+        <PropRow icon="programmes" label="Parrainage">
+          <span className="ob-pv-line">
+            <ProgramChip kind="parrainage" label="Parrainage" on={!!row.parrainage_eligible} editable={programmeEditable}
+              hint="Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées."
+              onToggle={(v) => patch(num, { parrainage_eligible: v })} />
+          </span>
+        </PropRow>
+        <PropRow icon="programmes" label="Ambassadeur">
+          <span className="ob-pv-line">
+            <ProgramChip kind="ambassadeur" label="Ambassadeur" on={!!row.ambassador_eligible} editable={programmeEditable}
+              hint="Client à valoriser, à solliciter pour un témoignage ou une recommandation."
+              onToggle={(v) => patch(num, { ambassador_eligible: v })} />
+          </span>
+        </PropRow>
+      </div>
+    </div>
+  );
+}
+
 function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContactsChanged, recordMeteo }) {
   const [editing, setEditing] = useState(false);
   // E-mails et téléphones par rang (primaire, secondaire…) ; l'e-mail affiché reste celui d'envoi des contrats.
@@ -3432,8 +3543,6 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
     setEditing(false);
   };
   const name = ov(row, "contact_name_ovr", "contact_name");
-  const readOnly = isBoardReadOnly();  // rôles en lecture seule : informations lues, contrôles visibles et désactivés
-  const programmeEditable = !!num && meteoSettable() && !isFinanceTeam() && !readOnly;
   return (
     <>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -3482,19 +3591,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
                 ? <span className="ob-pv-line"><SectorIcon secteur={row.secteur_activite} size={18} />{secteurLabel(row.secteur_activite)}</span>
                 : <span className="ob-pv-none">Non renseigné</span>}
             </PropRow>
-            {num && (
-              <PropRow icon="programmes" label="Programmes">
-                <span className="ob-pv-line" style={{ gap: 6, flexWrap: "wrap" }}>
-                  <ProgramChip kind="ambassadeur" label="Ambassadeur" on={!!row.ambassador_eligible} editable={programmeEditable}
-                    hint="Client à valoriser, à solliciter pour un témoignage ou une recommandation."
-                    onToggle={(v) => patch(num, { ambassador_eligible: v })} />
-                  <ProgramChip kind="parrainage" label="Parrainage" on={!!row.parrainage_eligible} editable={programmeEditable}
-                    hint="Le programme vise à encourager les parrains à générer régulièrement de nouvelles opportunités commerciales qualifiées."
-                    onToggle={(v) => patch(num, { parrainage_eligible: v })} />
-                  <TemoignageChip row={row} num={num} editable={programmeEditable} patch={patch} onDone={onContactsChanged} />
-                </span>
-              </PropRow>
-            )}
+            {/* Programmes (ambassadeur, parrainage, témoignage) : passés dans l'onglet CSM le 13/11/2026 (CsmSection). */}
             {/* Missions du cabinet (dev 30/10/2026) : une ligne, les nombres par état ; le détail au clic. */}
             {num && <PropRow icon="missions" label="Missions cabinet partenaire" wrap><MissionsValue key={num} numero={num} /></PropRow>}
           </div>
@@ -4378,6 +4475,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const role = (apiClient.getUser() || {}).role;
   const tabs = [
     { key: "echanges", label: "Échanges", count: echangesCount },
+    !!num && { key: "csm", label: "CSM" },
     files.allowed && { key: "appels", label: "Appels" },
     { key: "documents", label: "Documents", count: files.items.filter((i) => i.kind !== "call").length },
     { key: "integration", label: "Intégration" },
@@ -4449,6 +4547,13 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               ? <MeteoSection key={num} row={row} num={num} recordMeteo={recordMeteo} version={meteoHistVersion} onChanged={reloadRatings} onCount={setEchangesCount} />
               : emptyNote("Contrat en cours d'envoi : les échanges seront disponibles une fois la vente déclarée.")}
           </div>
+
+          {/* CSM (dev 13/11/2026) : portefeuille, lettre de mission, Trustpilot, programmes. */}
+          {!!num && (
+            <div role="tabpanel" id="ob-panel-csm" aria-labelledby="ob-tab-csm" hidden={tab !== "csm"} className="ob-tabpanel">
+              <CsmSection row={row} num={num} patch={patch} onChanged={reload} />
+            </div>
+          )}
 
           {/* Intégration : convention Opti'Lex (forçage, signature), e-mails. La carte convention et la fiche
               d'intégration sont en tête de fiche (29/10/2026), les missions dans les infos client (30/10/2026). */}
