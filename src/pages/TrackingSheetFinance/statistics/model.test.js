@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   eur, pct, dayFR, dayShort, initials, plural, originGroups, originDetail, paymentNote, paymentMeta, filterSales,
-  statusCounts, outcomeMeta, barHeights,
+  statusCounts, outcomeMeta, barHeights, peopleOf, weatherTone, ONBOARDING_VIEWS, contactMeta, contactLine, callMoment, callLength,
 } from './model.js';
 
 const line = (id, origin, status, more = {}) => ({ sale_id: id, origin, client: `Client ${id}`, sales_person: 'Léo Martin', payment: { status }, ...more });
@@ -66,6 +66,51 @@ test('un rendez-vous passé sans trace est « à confirmer », pas un no show', 
   assert.deepEqual(outcomeMeta({ outcome: 'no_show', level: 'to_confirm' }), { label: 'À confirmer', tone: 'amber' });
   assert.equal(outcomeMeta({ outcome: 'no_show', level: 'certain' }).tone, 'red');
   assert.equal(outcomeMeta({ outcome: 'held' }).label, 'Onboarding tenu');
+});
+
+test('un rendez-vous reporté est un report, jamais un no show', () => {
+  assert.deepEqual(outcomeMeta({ outcome: 'postponed', when: 'before' }), { label: 'Reporté', tone: 'grey' });
+  assert.deepEqual(outcomeMeta({ outcome: 'postponed', when: 'same_day' }), { label: 'Reporté', tone: 'amber' });
+  assert.equal(outcomeMeta({ outcome: 'postponed', when: 'flagged' }).tone, 'amber');
+  assert.equal(outcomeMeta({ outcome: 'postponed', when: 'reminded' }).tone, 'amber');
+  // Une autre date d'avant les rappels, sans trace : ce n'est pas un report.
+  assert.deepEqual(outcomeMeta({ outcome: 'unknown' }), { label: 'Autre date, sans trace', tone: 'grey' });
+});
+
+test('no show et reports se lisent à part, chacun avec son taux et ses clients', () => {
+  const people = [
+    { name: 'Léo Martin', clients: 4, dated: 4, followed: 4, due: 3, no_show: 0, reported: 2, rate: 0, report_rate: 0.5 },
+    { name: 'Inès Roy', clients: 3, dated: 2, followed: 2, due: 2, no_show: 1, reported: 0, rate: 0.5, report_rate: 0 },
+    { name: 'Sans client', clients: 0, dated: 0, due: 0, no_show: 0, reported: 0, rate: null, report_rate: null },
+  ];
+  assert.deepEqual(peopleOf(people, 'no_show').map((p) => [p.name, p.rate]), [['Inès Roy', 0.5], ['Léo Martin', 0]]);
+  assert.deepEqual(peopleOf(people, 'reports').map((p) => [p.name, p.rate]), [['Léo Martin', 0.5], ['Inès Roy', 0]]);
+  const rows = [{ status: 'no_show', reports: 0 }, { status: 'held', reports: 1 }, { status: 'to_confirm', reports: 2 }, { status: 'upcoming', reports: 0 }];
+  assert.deepEqual(rows.filter(ONBOARDING_VIEWS.no_show.listed).map((r) => r.status), ['no_show', 'to_confirm']);
+  assert.deepEqual(rows.filter(ONBOARDING_VIEWS.reports.listed).map((r) => r.status), ['held', 'to_confirm']);
+});
+
+test('les tentatives du Client Success disent qui ne répond pas', () => {
+  const base = { has_phone: true, since: '2026-11-10', attempts: 0, answered: 0, voicemail: 0, not_answered: 0, inbound: 0, called_back: 0, before: 0, unreachable: false };
+  const dead = { ...base, attempts: 4, voicemail: 3, not_answered: 1, last_attempt: '2026-11-12', unreachable: true };
+  assert.deepEqual(contactMeta(dead), { label: 'Ne répond pas', tone: 'red' });
+  assert.equal(contactLine(dead), '4 tentatives depuis le 10/11/2026 · 3 répondeurs · 1 sans réponse · dernière le 12/11/2026');
+  assert.equal(contactMeta({ ...base, attempts: 2, answered: 1 }).label, 'A décroché');
+  const brief = { ...base, attempts: 2, brief: 2, last_attempt: '2026-11-10' };
+  assert.deepEqual(contactMeta(brief), { label: 'Décroché bref', tone: 'amber' });
+  assert.equal(contactLine(brief), '2 tentatives depuis le 10/11/2026 · 2 décrochés brefs · dernière le 10/11/2026');
+  assert.equal(contactMeta({ ...base, attempts: 1, not_answered: 1, inbound: 1, called_back: 1 }).label, 'A rappelé');
+  assert.deepEqual(contactMeta(base), { label: 'Jamais appelé', tone: 'amber' });
+  assert.equal(contactLine({ ...base, before: 2 }), 'Aucun appel du Client Success depuis le 10/11/2026 (2 appels avant).');
+  assert.equal(contactMeta({ ...base, has_phone: false }).label, 'Pas de numéro');
+  assert.equal(contactMeta(undefined), null);
+  assert.equal(callMoment('2026-11-12T17:00:00+01:00'), '12/11 à 17:00');
+  assert.equal(callLength(83), '1:23');
+  assert.equal(callLength(0), null);
+});
+
+test('la météo d\'un client rétracté prend la teinte de sa note', () => {
+  assert.deepEqual([5, 4, 3, 2, 1].map(weatherTone), ['green', 'amber', 'amber', 'red', 'red']);
 });
 
 test('les barres d\'un historique sont à l\'échelle de la plus haute', () => {

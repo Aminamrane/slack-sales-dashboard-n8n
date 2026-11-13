@@ -1,12 +1,18 @@
 import React, { useState } from 'react';
-import { CalendarX2, ChevronRight, Undo2 } from 'lucide-react';
+import { CalendarX2, ChevronRight, PhoneOutgoing, Undo2 } from 'lucide-react';
 import { useDrawn } from '../../../components/perfSales/motion.jsx';
-import { LEVEL, ONBOARDING_STATUS, byPerson, count, dayFR, eur, outcomeMeta, pct, plural } from './model.js';
-import { monthLabel, monthShort, rangeFor, rangeLabel } from './period.js';
+import { parisToday } from '../../../utils/parisDates.js';
+import {
+  CALL_OUTCOME, LEVEL, ONBOARDING_STATUS, ONBOARDING_VIEWS, REPORT_WHEN, byPerson, callLength, callMoment, contactLine, contactMeta, count, dayFR, eur,
+  outcomeMeta, pct, peopleOf, plural, weatherTone,
+} from './model.js';
+
+const since = (iso) => (iso ? ` Les reports laissent une trace depuis le ${dayFR(iso)} : avant, ils ne sont pas comptés.` : '');
+import { dayRange, daysOf, monthLabel, monthShort, rangeFor, rangeLabel } from './period.js';
 import { Avatar, Card, Collapse, Fill, Num, Pill, Segmented } from './parts.jsx';
 import { useStatistic } from './useStatistics.js';
 
-const SPANS = [{ key: 'month', label: 'Mois' }, { key: 'quarter', label: '3 mois' }, { key: 'year', label: 'Année' }];
+const SPANS = [{ key: 'month', label: 'Mois' }, { key: 'quarter', label: '3 mois' }, { key: 'year', label: 'Année' }, { key: 'custom', label: 'Période' }];
 
 // Taux mois par mois : la dernière barre est le mois le plus récent.
 function Spark({ months, rateOf }) {
@@ -38,7 +44,7 @@ function Client({ row, canOpen, onOpenClient }) {
 }
 
 // Une ligne par sales : le taux, la fraction qui l'explique, et le détail des cas au clic.
-function People({ people, top, cases, render, numerator, denominator, extra }) {
+function People({ people, top, cases, render, numerator, denominator, extra, tone = 'red' }) {
   const [open, setOpen] = useState(null);
   return (
     <div>
@@ -50,7 +56,7 @@ function People({ people, top, cases, render, numerator, denominator, extra }) {
               onClick={() => setOpen(open === person.name ? null : person.name)}>
               <Avatar name={person.name} />
               <span className="fst-person-name">{person.name}{extra?.(person)}</span>
-              <Fill value={top ? (person.rate || 0) / top : 0} tone={person.rate ? 'red' : 'zero'} />
+              <Fill value={top ? (person.rate || 0) / top : 0} tone={person.rate ? tone : 'zero'} />
               <span className="fst-person-frac fst-num">{count(person[numerator])} / {count(person[denominator])}</span>
               <span className="fst-person-rate fst-num">{pct(person.rate)}</span>
               <ChevronRight size={14} className="fst-chev" />
@@ -65,14 +71,95 @@ function People({ people, top, cases, render, numerator, denominator, extra }) {
   );
 }
 
+// Fenêtre d'une carte : un mois, trois mois, l'année, ou deux jours choisis (dev 13/11/2026 : « une période définie,
+// choisie »). Les jours tapés (`draft`) ne deviennent la période lue (`days`) qu'une fois valides : un champ vidé
+// laisse les chiffres en place.
 function useSpan(anchor, current) {
   const [span, setSpan] = useState('quarter');
-  return { span, setSpan, range: rangeFor(span, anchor, current) };
+  const [draft, setDraft] = useState(null);
+  const [days, setDays] = useState(null);
+  const today = parisToday();
+  const months = rangeFor(span === 'custom' ? 'quarter' : span, anchor, current);
+  const range = span === 'custom' && days ? days : months;
+  const pick = (next) => {
+    if (next === 'custom') {
+      const start = daysOf(range, today);
+      setDraft(start);
+      setDays(start);
+    }
+    setSpan(next);
+  };
+  const type = (edge, value) => {
+    const next = { ...draft, [edge]: value };
+    setDraft(next);
+    const valid = dayRange(next, today);
+    if (valid) setDays(valid);
+  };
+  return { span, pick, range, draft, type, today };
+}
+
+function Days({ win: w, label }) {
+  if (w.span !== 'custom' || !w.draft) return null;
+  return (
+    <div className="fst-days" role="group" aria-label={label}>
+      du
+      <input type="date" className="fst-select" value={w.draft.from} max={w.today} onChange={(e) => w.type('from', e.target.value)} aria-label="Premier jour" />
+      au
+      <input type="date" className="fst-select" value={w.draft.to} max={w.today} onChange={(e) => w.type('to', e.target.value)} aria-label="Dernier jour" />
+    </div>
+  );
+}
+
+// Texte long du board : quatre lignes, le reste au clic.
+function Long({ text }) {
+  const [open, setOpen] = useState(false);
+  const long = String(text || '').length > 280;
+  return (
+    <p className="fst-long" data-clamped={long && !open ? 'true' : undefined}>
+      {text}
+      {long && <button type="button" className="fst-more-link" onClick={() => setOpen(!open)}>{open ? 'Réduire' : 'Lire la suite'}</button>}
+    </p>
+  );
+}
+
+// Ce que le board disait du client : sa météo au moment de la rétractation (avec le motif quand elle le porte) et
+// le dernier message posé sur son dossier.
+function BoardNotes({ item }) {
+  const { weather, last_message: message } = item;
+  return (
+    <div className="fst-notes">
+      <div className="fst-noteblock">
+        <div className="fst-noteblock-head">
+          <span className="fst-micro">Météo à la rétractation</span>
+          {weather ? (
+            <>
+              <Pill tone={weatherTone(weather.score)} plain>{weather.score}/5 · {weather.label}</Pill>
+              <span>{[weather.author, weather.on ? `le ${dayFR(weather.on)}` : null].filter(Boolean).join(' · ')}{weather.after ? ' (notée après la rétractation)' : ''}</span>
+            </>
+          ) : <span>Aucune météo notée sur ce client.</span>}
+        </div>
+        {weather?.reason && <p><span>Motif</span> {weather.reason}</p>}
+        {weather?.expectation && <p><span>Attente du client</span> {weather.expectation}</p>}
+        {weather?.actions && <p><span>Action envisagée</span> {weather.actions}</p>}
+        {weather?.note && <Long text={weather.note} />}
+      </div>
+      {message && (
+        <div className="fst-noteblock">
+          <div className="fst-noteblock-head">
+            <span className="fst-micro">Dernier message</span>
+            <span>{[message.author, message.role, message.on ? `le ${dayFR(message.on)}` : null].filter(Boolean).join(' · ')}</span>
+          </div>
+          <Long text={message.body} />
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Rétractations ───────────────────────────────────────────────────────────────────────────────────
 export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
-  const { span, setSpan, range } = useSpan(anchor, current);
+  const win = useSpan(anchor, current);
+  const { span, range } = win;
   const state = useStatistic('retractions', range);
   const data = state.data;
   const totals = data?.totals || {};
@@ -81,7 +168,8 @@ export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
 
   return (
     <Card title="Taux de rétractation par sales" Icon={Undo2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${rangeLabel(range)}`}
-      actions={<Segmented small options={SPANS} value={span} onChange={setSpan} label="Période des rétractations" />}>
+      actions={<Segmented small options={SPANS} value={span} onChange={win.pick} label="Période des rétractations" />}>
+      <Days win={win} label="Jours des rétractations" />
       <div className="fst-rate-top">
         <div>
           <Num className="fst-rate-big" value={totals.rate} format={(n) => pct(n)} />
@@ -106,24 +194,67 @@ export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
                 {item.effective_on && <div><span>Rétractation le</span> {dayFR(item.effective_on)}{item.days_after_signature != null ? ` (J+${item.days_after_signature})` : ''}</div>}
                 {item.declared_by && <div><span>Déclarée par</span> {item.declared_by}{item.declared_on ? ` le ${dayFR(item.declared_on)}` : ''}</div>}
                 {item.amount_eur ? <div><span>Contrat</span> {eur(item.amount_eur)} par an HT</div> : null}
+                {item.source === 'crm' && <div><span>État lu sur</span> la fiche CRM (client absent du board)</div>}
               </div>
+              {data.notes && <BoardNotes item={item} />}
             </div>
           )} />
       )}
-      <p className="fst-note">Taux = ventes rétractées ÷ ventes signées sur la période. Une rétractation en cours est listée mais n’entre dans le taux qu’une fois confirmée.</p>
+      <p className="fst-note">
+        Taux = ventes rétractées ÷ ventes signées sur la période. Une vente est rétractée quand son client est à l’état « Rétractation » sur le board.
+        Une rétractation en cours est listée mais n’entre dans le taux qu’une fois confirmée.
+        {totals.from_crm ? ` ${plural(totals.from_crm, 'client absent', 'clients absents')} du board : état lu sur la fiche CRM.` : ''}
+      </p>
     </Card>
   );
 }
 
-// ── No show d'onboarding ────────────────────────────────────────────────────────────────────────────
-function Onboarding({ row, canOpen, onOpenClient }) {
+// ── No show et reports d'onboarding ─────────────────────────────────────────────────────────────────
+// Ce que disent les appels Allo du Client Success vers un client en no show (dev 13/11/2026 : « combien de fois le CSM
+// a essayé de contacter le client », « qui fait le mort »). `calls` : la lecture des tentatives, chargée à part.
+function Contact({ row, calls }) {
+  if (row.status !== 'no_show' && row.status !== 'to_confirm') return null;
+  const attempt = calls.data?.clients?.[String(row.client_id)];
+  // Un cas « à confirmer » d'avant les rappels n'est pas lu : rien à montrer.
+  if (!attempt && !calls.loading && !calls.error) return null;
+  const meta = contactMeta(attempt);
+  return (
+    <div className="fst-notes">
+      <div className="fst-noteblock">
+        <div className="fst-noteblock-head">
+          <span className="fst-micro"><PhoneOutgoing size={11} strokeWidth={2.2} /> Appels du Client Success</span>
+          {meta && <Pill tone={meta.tone} plain>{meta.label}</Pill>}
+          {!attempt && <span>{calls.loading ? 'Lecture des appels…' : 'Appels indisponibles pour le moment.'}</span>}
+        </div>
+        {attempt && <p>{contactLine(attempt)}</p>}
+        {attempt?.calls?.length > 0 && (
+          <ul className="fst-calls">
+            {attempt.calls.map((call, i) => (
+              <li key={`${call.at}-${i}`} data-before={call.after ? undefined : 'true'}>
+                <span className="fst-num">{callMoment(call.at)}</span>
+                <span>{call.by || 'Client Success'}</span>
+                <span>{call.direction === 'outbound' ? 'appel sortant' : 'appel du client'}</span>
+                <span data-outcome={call.outcome}>{CALL_OUTCOME[call.outcome]}{callLength(call.duration) ? ` · ${callLength(call.duration)}` : ''}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Onboarding({ row, calls, canOpen, onOpenClient }) {
   const status = ONBOARDING_STATUS[row.status] || ONBOARDING_STATUS.none;
+  const reach = contactMeta(calls?.data?.clients?.[String(row.client_id)]);
   return (
     <div className="fst-case">
       <div className="fst-case-head">
         <Client row={row} canOpen={canOpen} onOpenClient={onOpenClient} />
-        <Pill tone={status.tone}>{row.status === 'no_show' && row.no_shows > 1 ? `${row.no_shows} no show` : status.label}</Pill>
-        {row.status === 'no_show' && row.level && <Pill tone="ghost" plain title="Certain : une trace écrite le dit. Probable : les traces le laissent penser.">{LEVEL[row.level]}</Pill>}
+        <Pill tone={status.tone}>{status.label}</Pill>
+        {row.status === 'no_show' && row.level && <Pill tone="ghost" plain title="Certain : le Client Success l’a signalé. Probable : le rappel était parti, le rendez-vous tenait.">{LEVEL[row.level]}</Pill>}
+        {row.reports > 0 && <Pill tone="ghost" plain>{plural(row.reports, 'report')}</Pill>}
+        {reach?.tone === 'red' && <Pill tone="red" plain>{reach.label}</Pill>}
       </div>
       <div className="fst-case-facts">
         <div><span>Vente signée le</span> {dayFR(row.signed_on)}</div>
@@ -139,43 +270,81 @@ function Onboarding({ row, canOpen, onOpenClient }) {
                 <span className="fst-step-day fst-num">{dayFR(step.day)}</span>
                 <Pill tone={meta.tone} plain>{meta.label}</Pill>
                 {step.outcome === 'no_show' && step.level && step.level !== 'to_confirm' && <span className="fst-case-num">{LEVEL[step.level]}</span>}
+                {step.outcome === 'postponed' && REPORT_WHEN[step.when] && <span className="fst-case-num">{REPORT_WHEN[step.when]}</span>}
               </div>
               {step.proofs?.length > 0 && <ul className="fst-proofs">{step.proofs.map((proof, n) => <li key={n}>{proof}</li>)}</ul>}
             </li>
           );
         })}
       </ol>
+      {calls && <Contact row={row} calls={calls} />}
     </div>
   );
 }
 
 export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
-  const { span, setSpan, range } = useSpan(anchor, current);
+  const win = useSpan(anchor, current);
+  const { span, range } = win;
+  const [view, setView] = useState('no_show');
   const state = useStatistic('onboarding-no-shows', range);
+  // Les appels du Client Success vers les clients en no show : lus à part dans Allo, la carte ne les attend pas.
+  const calls = useStatistic('onboarding-contact-attempts', range);
+  const reached = calls.data?.totals;
+  const unlinked = (calls.data?.csm || []).filter((person) => !person.linked).map((person) => person.name);
   const data = state.data;
   const totals = data?.totals || {};
-  const people = (data?.by_sales_person || []).filter((p) => p.clients > 0);
+  const reading = ONBOARDING_VIEWS[view];
+  const people = peopleOf(data?.by_sales_person, view);
   const top = Math.max(0, ...people.map((p) => p.rate || 0));
-  const listed = (name) => byPerson(data.clients, name).filter((c) => c.status === 'no_show' || c.status === 'to_confirm');
+  const listed = (name) => byPerson(data.clients, name).filter(reading.listed);
+  // Les deux taux côte à côte, jamais mélangés : on bascule de l'un à l'autre, le détail suit.
+  const views = Object.entries(ONBOARDING_VIEWS).map(([key, v]) => ({ key, label: <>{v.label} <b className="fst-num">{pct(totals[v.rate])}</b></> }));
 
   return (
     <Card title="No show d’onboarding par sales" Icon={CalendarX2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${rangeLabel(range)}`}
-      actions={<Segmented small options={SPANS} value={span} onChange={setSpan} label="Période des no show" />}>
+      actions={<Segmented small options={SPANS} value={span} onChange={win.pick} label="Période des onboardings" />}>
+      <Days win={win} label="Jours des onboardings" />
+      <div className="fst-views"><Segmented small options={views} value={view} onChange={setView} label="No show ou reports" /></div>
       <div className="fst-rate-top">
         <div>
-          <Num className="fst-rate-big" value={totals.rate} format={(n) => pct(n)} />
-          <div className="fst-rate-note">
-            {plural(totals.no_show || 0, 'client')} en no show sur {count(totals.due || 0)} dont le rendez-vous est passé
-            {totals.to_confirm ? ` · ${count(totals.to_confirm)} à confirmer, non compté${totals.to_confirm > 1 ? 's' : ''}` : ''}
-          </div>
+          <Num className="fst-rate-big" value={totals[reading.rate]} format={(n) => pct(n)} />
+          {view === 'no_show' ? (
+            <div className="fst-rate-note">
+              {plural(totals.no_show || 0, 'client')} en no show sur {count(totals.due || 0)} au rendez-vous passé (tenu ou no show)
+              {totals.to_confirm ? ` · ${count(totals.to_confirm)} à confirmer, non compté${totals.to_confirm > 1 ? 's' : ''}` : ''}
+              {reached?.clients > 0 && (
+                <span className="fst-reach">
+                  Appels du Client Success vers ces no show : {plural(reached.called, 'client appelé', 'clients appelés')} sur {count(reached.clients)}
+                  {` · ${count(reached.unreachable)} ne ${reached.unreachable > 1 ? 'répondent' : 'répond'} pas`}
+                  {` · ${count(reached.never_called)} sans appel`}
+                  {` · ${plural(reached.attempts, 'tentative')} en tout`}
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="fst-rate-note">
+              {plural(totals.reported || 0, 'client reporté', 'clients reportés')} sur {count(totals.followed || 0)} suivis
+              {totals.reports ? ` · ${plural(totals.reports, 'report')} en tout` : ''}
+              {totals.reported_late ? ` · ${count(totals.reported_late)} le jour même ou après` : ''}
+            </div>
+          )}
         </div>
-        <Spark months={data?.by_month} rateOf={(m) => m.rate} />
+        <Spark months={data?.by_month} rateOf={(m) => m[reading.rate]} />
       </div>
       {people.length === 0 ? <div className="fst-empty">Aucune vente signée sur cette période.</div> : (
-        <People people={people} top={top} numerator="no_show" denominator="due" cases={listed}
-          extra={(person) => (person.to_confirm ? <small className="fst-extra">+ {person.to_confirm} à confirmer</small> : null)}
-          render={(row) => <Onboarding key={row.sale_id} row={row} canOpen={canOpen} onOpenClient={onOpenClient} />} />
+        <People key={view} people={people} top={top} numerator={reading.numerator} denominator={reading.denominator} cases={listed} tone={view === 'reports' ? 'amber' : 'red'}
+          extra={(person) => (view === 'no_show' && person.to_confirm ? <small className="fst-extra">+ {person.to_confirm} à confirmer</small> : null)}
+          render={(row) => <Onboarding key={row.sale_id} row={row} calls={view === 'no_show' ? calls : null} canOpen={canOpen} onOpenClient={onOpenClient} />} />
       )}
+      <p className="fst-note">
+        No show = le dernier rendez-vous du client est passé, sans onboarding tenu ni nouvelle date. Un onboarding finalement tenu n’est jamais un no show ;
+        un rendez-vous déplacé est un report, compté à part. Un cas « à confirmer » (rendez-vous passé sans aucune trace) n’entre dans aucun taux.
+        {since(data?.traced_since)}
+        {' '}Une tentative = un appel sortant du Client Success vers un numéro connu du client, à partir du jour du rendez-vous manqué (appels Allo ;
+        un appel passé d’une autre ligne ou vers un autre numéro n’y figure pas). Décroché bref = moins de 30 secondes.
+        {unlinked.length > 0 ? ` Client Success sans compte Allo relié (appels non comptés) : ${unlinked.join(', ')}` : ''}
+        {calls.data?.truncated ? ' Période trop large : les appels ne sont lus que pour les premiers clients listés.' : ''}
+      </p>
     </Card>
   );
 }
