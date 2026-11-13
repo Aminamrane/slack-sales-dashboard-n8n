@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { EASE, ITEM, Reveal } from '../perfSales/motion';
 import ErrorBoundary from '../ErrorBoundary.jsx';
@@ -7,9 +7,7 @@ import Tabs from '../perfSales/v2/Tabs';
 import Controls from '../perfSales/v2/Controls';
 import useAvatarMap from '../perfSales/v2/useAvatarMap';
 import { getCanonicalKey } from '../../utils/salesNames';
-import SettersStats from '../../pages/SettersStats/index.jsx';
 import SettersTab from './SettersTab';
-import RdvSetterSales from './RdvSetterSales';
 import SetterKpis from './SetterKpis';
 import { monthFigures } from './figures';
 import { monthOptions, parisMonth } from './months';
@@ -31,6 +29,12 @@ const firstTab = () => {
   try { return new URLSearchParams(window.location.search).get('setter') ? 'ranking' : 'setters'; } catch { return 'setters'; }
 };
 
+// « Classement » et « RDV Setter → Sales » ne se chargent qu'à l'ouverture de leur onglet : le premier affichage (onglet « Setters ») n'embarque plus leur code
+// (classement, fiche d'un setter, appels Allo, attribution des RDV) ; un fond de chargement identique à celui des données prend le relais le temps du téléchargement.
+const SettersStats = lazy(() => import('../../pages/SettersStats/index.jsx'));
+const RdvSetterSales = lazy(() => import('./RdvSetterSales'));
+const TabLoading = <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>;
+
 // Couleurs de la fiche et du classement : les jetons de la charte Owner (même vocabulaire que la Performance Sales), qui suivent le mode sombre.
 const PS2_COLORS = { bg: 'var(--card)', surface: 'var(--bg)', border: 'var(--line)', text: 'var(--ink)', muted: 'var(--muted)', subtle: 'var(--grey-bg)', secondary: 'var(--soft)', accent: 'var(--navy)', shadow: 'none' };
 
@@ -47,12 +51,12 @@ export default function PerfSetter({ darkMode = false }) {
   const [month, setMonth] = useState(parisMonth);
   const [refreshKey, setRefreshKey] = useState(0);
   const [tab, setTab] = useState(firstTab);
-  const rankingCache = useRef({ overview: new Map(), calls: new Map() });   // lectures du classement, gardées le temps de la page (changer d'onglet ne relit pas Allo)
+  const rankingCache = useRef({ overview: new Map(), calls: new Map() });   // lectures du classement, gardées 60 s au plus (changer d'onglet ne relit pas Allo à chaque fois, mais rien de plus ancien n'est montré comme à jour)
   const options = useMemo(() => monthOptions(), []);
   const avatarMap = useAvatarMap(true);
   const avatarFor = useMemo(() => (name) => avatarMap[getCanonicalKey(name)]?.av || null, [avatarMap]);
   const { data, calls, error } = useSetterMonth(month, refreshKey);
-  const days = useMonthDays(month, refreshKey);
+  const days = useMonthDays(month, refreshKey, data);
   const figures = useMemo(() => (data ? monthFigures(data, calls, days) : null), [data, calls, days]);
   const controls = { value: month, options, onChange: setMonth, onRefresh: () => setRefreshKey((k) => k + 1), loading: !data && !error };
 
@@ -81,8 +85,8 @@ export default function PerfSetter({ darkMode = false }) {
               {/* Une charge utile inattendue n'efface pas la page : la vue concernée le dit, le bandeau et les autres onglets restent. « Actualiser » (refreshKey) relance la vue. */}
               <ErrorBoundary key={tab} resetKey={refreshKey} fallback={<div className="ps2-empty" role="alert">Cette vue n’a pas pu être chargée. Utilisez « Actualiser » pour réessayer.</div>}>
                 {tab === 'setters' && <SettersTab month={month} figures={figures} calls={calls} error={error} avatarFor={avatarFor} dark={darkMode} refreshKey={refreshKey} />}
-                {tab === 'ranking' && <SettersStats C={PS2_COLORS} darkMode={darkMode} refreshKey={refreshKey} cache={rankingCache.current} avatarFor={avatarFor} />}
-                {tab === 'rdv' && <RdvSetterSales month={month} avatarFor={avatarFor} refreshKey={refreshKey} />}
+                {tab === 'ranking' && <Suspense fallback={TabLoading}><SettersStats C={PS2_COLORS} darkMode={darkMode} refreshKey={refreshKey} cache={rankingCache.current} avatarFor={avatarFor} /></Suspense>}
+                {tab === 'rdv' && <Suspense fallback={TabLoading}><RdvSetterSales month={month} avatarFor={avatarFor} refreshKey={refreshKey} /></Suspense>}
               </ErrorBoundary>
             </Motion.div>
           </AnimatePresence>

@@ -15,15 +15,16 @@ import { monthRange, usePlacements } from './setterApi';
 export default function SettersTab({ month, figures, calls, error, avatarFor, dark, refreshKey = 0 }) {
   const [placed] = usePlacements(...(/^\d{4}-\d{2}$/.test(month || '') ? monthRange(month) : [null, null]), refreshKey);
   const [target, setTarget] = useState(3);
-  if (error) return <div className="ps2-empty" role="alert">Setters non chargés</div>;
-  if (!figures) return <div className="ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>;
-  const { rows, team, callsPerSaleTeam, remaining, elapsed } = figures;
+  // Affichage progressif : « RDV posés par jour » (lecture légère, à elle) apparaît dès qu'elle arrive, sans attendre le calcul des setters du mois ;
+  // le tableau « Chaque setter » prend sa place (fond de chargement, ou message d'erreur) en dessous. Une erreur des setters n'efface plus les poses.
+  const { rows, team, callsPerSaleTeam, remaining, elapsed } = figures || {};
 
   return (
     <div className="ps2-grid">
-      <SetterPlacements period={month} dark={dark} avatarFor={avatarFor} rdvMonth={team.rdv?.total} refreshKey={refreshKey} />
-
-      <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-setters-title">
+      <SetterPlacements period={month} dark={dark} avatarFor={avatarFor} rdvMonth={team?.rdv?.total} refreshKey={refreshKey} />
+      {error && <div className="ps2-span-12 ps2-empty" role="alert">Setters non chargés</div>}
+      {!error && !figures && <div className="ps2-span-12 ps2-loading" aria-label="Chargement"><i /><i /><i /><i /></div>}
+      {!error && figures && <Reveal as="section" className="ps2-card ps2-span-12" aria-labelledby="ps2-setters-title">
         <Motion.div className="ps2-card-head" variants={ITEM}>
           <h2 id="ps2-setters-title">Chaque setter, des appels aux ventes</h2>
           <span className="ps2-target">
@@ -46,7 +47,7 @@ export default function SettersTab({ month, figures, calls, error, avatarFor, da
             </tbody>
           </table>
         </div>
-      </Reveal>
+      </Reveal>}
     </div>
   );
 }
