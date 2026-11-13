@@ -118,6 +118,8 @@ function SituationStep({ brief, row }) {
           <ListRow icon="email" label="E-mail d'envoi">{brief.client.email || "—"}{emailFixed && <Tag tone={AMBER}>corrigée</Tag>}</ListRow>
           <ListRow icon="phone" label="Téléphone">{brief.client.phone || "—"}</ListRow>
         </div>
+        {/* Case cochée par le sales à la déclaration (dev 13/11/2026). */}
+        {brief.client.client_complique && <p className="ofd-note is-warn" style={{ marginTop: 10 }}><b>Client compliqué</b>, signalé par le commercial. Son lancement fiscal se fait avec le responsable du pôle fiscal.</p>}
       </Panel>
       <Panel title="Finance" aside={<Tag tone={tone}>{f?.is_late ? "Impayé en cours" : brief.phase_label}</Tag>}>
         <p className="ofd-note">
