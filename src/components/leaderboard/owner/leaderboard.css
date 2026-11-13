@@ -1,0 +1,152 @@
+/* Suivi des ventes au style Owner (dev 12/11/2026). PEAU SEULEMENT : la page garde son visage (cadre, bascule, titre au
+   logo, barre d'objectif à la fusée, trois compteurs à volets, tableaux à médailles, trophées, couronne, cartes d'équipe).
+   Première version refusée par le dev le soir même : elle redessinait la page (« t'as trop changé la gueule du
+   classement […] t'as retiré les médailles […] fallait la rendre meilleure »). Ici on ne change que les teintes
+   (toile grège, cartes blanches à trait fin, encre et gris chauds, anthracite à la place du bleu, un seul accent rose :
+   la flamme de la fusée), les graisses (500) et le mouvement. Les classes de index.css sont reteintées sous .lb-root ;
+   beaucoup y sont en !important, d'où les !important d'ici. Seule la fenêtre « Déclarer une vente » est redessinée,
+   sur le modèle des fenêtres de la tracking sheet (une question par ligne, choix en pastilles). */
+html:not(.dark-mode) body:has(.lb-root) { background: #f4f2ef !important; }
+.lb-root { font-feature-settings: 'cv11', 'ss01'; }
+.lb-root .lb-press:hover { filter: brightness(.97); }
+.lb-root .lb-press:active { transform: scale(.975); }
+
+/* ── Cadre et titre ─────────────────────────────────────────────────────────────────────── */
+.lb-root .board-frame { background: #ffffff; border: 1px solid #ece9e4; border-radius: 22px; box-shadow: none; }
+.lb-root .leaderboard-title { font-weight: 500 !important; letter-spacing: -.02em !important; }
+
+/* ── Tableaux de classement : mêmes lignes, mêmes médailles, teintes chaudes ─────────────── */
+.lb-root .leaderboard thead th { background: #f4f2ee !important; border-bottom: 1px solid #e8e4de !important; color: #55514b !important; font-weight: 500 !important; }
+.lb-root .leaderboard tbody tr { border-bottom: 1px solid #f1eee9 !important; }
+.lb-root .leaderboard tbody tr:nth-child(n+3):nth-child(odd) { background: #fbfaf8; }
+.lb-root .leaderboard tbody tr:first-child { background: #f6f4f0 !important; font-weight: 500; }
+.lb-root .leaderboard tbody tr:first-child td:nth-child(2), .lb-root .leaderboard tbody tr:first-child td:nth-child(3) { color: #1c1b19; }
+.lb-root .leaderboard tbody tr:hover td { background-color: #f1eee9 !important; }
+.lb-root .leaderboard tbody td:nth-child(3) { font-weight: 500; }
+.lb-root .leaderboard td { font-variant-numeric: tabular-nums; }
+.lb-root .name-cell span { letter-spacing: -.01em; }
+/* Les lignes arrivent en cascade, une fois (35 ms d'écart, 14 lignes au plus). */
+.lb-root .leaderboard tbody tr { animation: lbRowIn .5s cubic-bezier(.22, 1, .36, 1) both; }
+.lb-root .leaderboard tbody tr:nth-child(1) { animation-delay: .06s; } .lb-root .leaderboard tbody tr:nth-child(2) { animation-delay: .095s; }
+.lb-root .leaderboard tbody tr:nth-child(3) { animation-delay: .13s; } .lb-root .leaderboard tbody tr:nth-child(4) { animation-delay: .165s; }
+.lb-root .leaderboard tbody tr:nth-child(5) { animation-delay: .2s; } .lb-root .leaderboard tbody tr:nth-child(6) { animation-delay: .235s; }
+.lb-root .leaderboard tbody tr:nth-child(7) { animation-delay: .27s; } .lb-root .leaderboard tbody tr:nth-child(8) { animation-delay: .305s; }
+.lb-root .leaderboard tbody tr:nth-child(9) { animation-delay: .34s; } .lb-root .leaderboard tbody tr:nth-child(10) { animation-delay: .375s; }
+.lb-root .leaderboard tbody tr:nth-child(11) { animation-delay: .41s; } .lb-root .leaderboard tbody tr:nth-child(12) { animation-delay: .445s; }
+.lb-root .leaderboard tbody tr:nth-child(13) { animation-delay: .48s; } .lb-root .leaderboard tbody tr:nth-child(n+14) { animation-delay: .515s; }
+@keyframes lbRowIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+/* Les médailles du podium répondent au survol de la ligne. */
+.lb-root .leaderboard tbody tr td:first-child img { transition: transform .35s cubic-bezier(.34, 1.56, .64, 1); }
+.lb-root .leaderboard tbody tr:hover td:first-child img { transform: translateY(-1px) rotate(-8deg) scale(1.08); }
+
+/* ── Graphiques : les mêmes cartes, réchauffées ─────────────────────────────────────────── */
+.lb-root .chart-card.kpi-card { background: #ffffff !important; border: 1px solid #ece9e4 !important; border-radius: 22px !important; box-shadow: none !important; }
+.lb-root .chart-card { --cb-text: #1c1b19; --cb-muted: #9d9890; --cb-track: #ebe8e3; --cb-row-hover: #f4f2ee; --cb-bar: #ebe8e3;
+  --rp-text: #1c1b19; --rp-muted: #9d9890; --rp-up: #0b7a4b; --rp-up-bg: #e2f6ea; --rp-down: #c5221f; --rp-down-bg: #fde6e6; --rp-line: #e8e4de; }
+.lb-root .gauge-title, .lb-root .team-title { color: #1c1b19; font-weight: 500; }
+.lb-root .gauge-subtitle, .lb-root .team-subtitle, .lb-root .team-meta, .lb-root .tile-count { color: #9d9890; }
+.lb-root .team-captain, .lb-root .tile-label, .lb-root .tile-value { color: #1c1b19; }
+.lb-root .team-rank { color: #55514b; }
+.lb-root .gauge-sep { background: #f1eee9; }
+.lb-root .cb-total, .lb-root .cb-count, .lb-root .rp-value, .lb-root .rp-projection strong, .lb-root .rp-chip b { font-weight: 500; letter-spacing: -.02em; }
+.lb-root .cb-label, .lb-root .rp-label, .lb-root .team-captain, .lb-root .team-rank { font-weight: 500; }
+.lb-root .channel-pill { border-color: #e8e4de; color: #55514b; background: #ffffff; }
+.lb-root .channel-pill span { color: #9d9890; }
+.lb-root .channel-pill.is-active { border-color: #2b2927; background: #f4f2ee; color: #1c1b19; }
+.lb-root .channel-detail__table th { color: #9d9890; font-weight: 500; border-color: #e8e4de; }
+.lb-root .channel-detail__table td { color: #1c1b19; border-color: #f1eee9; }
+.lb-root .channel-detail__empty { color: #9d9890; }
+/* Pilotage du mois (CEO et admins) */
+.lb-root .pace { --pace-text: #1c1b19; --pace-muted: #9d9890; --pace-up: #0b7a4b; --pace-up-bg: #e2f6ea; --pace-down: #c2500e; --pace-down-bg: #fde9da; }
+.lb-root .pace-kpi span, .lb-root .pace-kpi em { font-weight: 500; }
+.lb-root .pace-kpi strong, .lb-root .pace-reach { font-weight: 500; }
+
+/* ── Fenêtre « Déclarer une vente » : une feuille, une question par ligne ───────────────── */
+.lb-veil { position: fixed; inset: 0; z-index: 9999; display: grid; place-items: center; padding: 20px; background: rgba(28, 27, 25, .22); }
+.lb-sheet { position: relative; width: 100%; max-width: 460px; max-height: 92vh; overflow-y: auto; background: #fff; border-radius: 22px; padding: 28px 28px 24px; color: #1c1b19;
+  box-shadow: 0 24px 60px rgba(28, 27, 25, .14); font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; font-feature-settings: 'cv11', 'ss01'; }
+.lb-sheet *, .lb-sheet *::before, .lb-sheet *::after { box-sizing: border-box; }
+.lb-sheet button { font: inherit; cursor: pointer; }
+.lb-sheet h2 { margin: 0; font-size: 20px; font-weight: 500; letter-spacing: -.02em; }
+.lb-sheet-sub { margin: 6px 0 22px; font-size: 13.5px; color: #9d9890; }
+.lb-close { position: absolute; top: 18px; right: 18px; width: 32px; height: 32px; border-radius: 10px; border: 0; background: #f4f2ee; color: #8b867e; display: grid; place-items: center; transition: background .15s, color .15s, transform .18s; }
+.lb-close:hover { background: #ebe8e3; color: #1c1b19; }
+.lb-close:active { transform: scale(.92); }
+.lb-field { margin-bottom: 20px; }
+.lb-field > label, .lb-field > .lb-label { display: block; margin-bottom: 9px; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: .09em; color: #a8a39b; }
+.lb-input { width: 100%; height: 44px; padding: 0 14px; border-radius: 12px; border: 1px solid #e8e4de; background: #fff; font: inherit; font-size: 14px; color: #1c1b19; transition: border-color .15s, box-shadow .15s; }
+.lb-input::placeholder { color: #c9c4bc; }
+.lb-input:focus { outline: none; border-color: #2b2927; box-shadow: 0 0 0 4px rgba(50, 40, 30, .06); }
+.lb-choices { display: flex; flex-wrap: wrap; gap: 7px; }
+.lb-choice { height: 34px; padding: 0 14px; border-radius: 999px; border: 1px solid #e8e4de; background: #fff; color: #55514b; font-size: 13px; font-weight: 450; font-variant-numeric: tabular-nums;
+  display: inline-flex; align-items: center; gap: 7px; transition: background .15s, border-color .15s, color .15s, transform .18s; }
+.lb-choice:hover { border-color: #cfc9c0; color: #1c1b19; }
+.lb-choice:active { transform: scale(.96); }
+.lb-choice[aria-pressed="true"] { background: #2b2927; border-color: #2b2927; color: #fff; }
+.lb-sheet-foot { display: flex; justify-content: flex-end; gap: 10px; margin-top: 26px; }
+.lb-sheet-foot button { height: 40px; padding: 0 18px; border-radius: 999px; font-size: 13.5px; font-weight: 500; transition: background .15s, transform .18s, opacity .15s; }
+.lb-ghost { border: 0; background: none; color: #55514b; }
+.lb-ghost:hover:not(:disabled) { background: #f4f2ee; }
+.lb-submit { border: 0; background: #2b2927; color: #fff; display: inline-flex; align-items: center; gap: 8px; }
+.lb-submit:hover:not(:disabled) { background: #3d3a37; }
+.lb-submit:active:not(:disabled), .lb-ghost:active:not(:disabled) { transform: scale(.975); }
+.lb-submit:disabled, .lb-ghost:disabled { opacity: .45; cursor: not-allowed; }
+.lb-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .35); border-top-color: #fff; animation: lbSpin .8s linear infinite; }
+@keyframes lbSpin { to { transform: rotate(360deg); } }
+.lb-done { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 18px 0 10px; }
+.lb-done svg { color: #0b7a4b; }
+.lb-done circle { stroke-dasharray: 151; stroke-dashoffset: 151; animation: lbDraw .5s cubic-bezier(.22, 1, .36, 1) forwards; }
+.lb-done path { stroke-dasharray: 34; stroke-dashoffset: 34; animation: lbDraw .35s cubic-bezier(.22, 1, .36, 1) .35s forwards; }
+@keyframes lbDraw { to { stroke-dashoffset: 0; } }
+.lb-done h2 { margin-top: 14px; }
+
+/* ── Barre de défilement : la pilule de 4 px (STYLE-OWNER §8) ───────────────────────────── */
+html:not(.dark-mode) body:has(.lb-root) *::-webkit-scrollbar { width: 10px !important; height: 10px !important; }
+html:not(.dark-mode) body:has(.lb-root) *::-webkit-scrollbar-track, html:not(.dark-mode) body:has(.lb-root) *::-webkit-scrollbar-corner { background: transparent !important; }
+html:not(.dark-mode) body:has(.lb-root) *::-webkit-scrollbar-thumb { background: #e3ded6 !important; border: 3px solid transparent !important; border-radius: 999px !important; background-clip: padding-box !important; }
+html:not(.dark-mode) body:has(.lb-root) *:hover::-webkit-scrollbar-thumb { background-color: #cfc9c0 !important; }
+html:not(.dark-mode) body:has(.lb-root) *::-webkit-scrollbar-thumb:hover { background-color: #a8a39b !important; }
+
+/* ── Mode sombre : noirs et gris neutres (STYLE-OWNER §17), plus de bleu nuit ───────────── */
+html.dark-mode body:has(.lb-root) { background: #141414 !important; }
+html.dark-mode body .lb-root .board-frame { background: #1f1f1f !important; border: 1px solid #2e2e2e !important; border-radius: 22px !important; box-shadow: none !important; }
+html.dark-mode body .lb-root .leaderboard thead th { background: #1a1a1a !important; color: #a3a3a3 !important; border: 0 !important; border-bottom: 1px solid #2e2e2e !important; }
+html.dark-mode body .lb-root .leaderboard tbody tr { border-color: #262626 !important; }
+html.dark-mode body .lb-root .leaderboard tbody tr:nth-child(n+3):nth-child(odd) { background: rgba(255, 255, 255, .02) !important; }
+html.dark-mode body .lb-root .leaderboard tbody tr:first-child { background: rgba(255, 255, 255, .05) !important; }
+html.dark-mode body .lb-root .leaderboard tbody tr:first-child td:nth-child(2), html.dark-mode body .lb-root .leaderboard tbody tr:first-child td:nth-child(3) { color: #f2f2f2 !important; }
+html.dark-mode body .lb-root .leaderboard tbody tr:hover td { background-color: #262626 !important; }
+html.dark-mode body .lb-root .leaderboard td { color: #f2f2f2 !important; }
+html.dark-mode body .lb-root .avatar { border: 2px solid #2e2e2e !important; }
+html.dark-mode body .lb-root select { background: #1f1f1f !important; color: #f2f2f2 !important; border-color: #2e2e2e !important; }
+html.dark-mode body .lb-root .chart-card.kpi-card { background: #1f1f1f !important; border-color: #2e2e2e !important; box-shadow: none !important; }
+html.dark-mode body .lb-root .chart-card { --cb-text: #f2f2f2; --cb-muted: #7d7d7d; --cb-track: #2e2e2e; --cb-row-hover: #262626; --cb-bar: #2e2e2e;
+  --rp-text: #f2f2f2; --rp-muted: #7d7d7d; --rp-up: #7cc49b; --rp-up-bg: rgba(16, 185, 129, .14); --rp-down: #f3a6a3; --rp-down-bg: rgba(239, 68, 68, .14); --rp-line: #2e2e2e; }
+html.dark-mode body .lb-root .gauge-title, html.dark-mode body .lb-root .team-title, html.dark-mode body .lb-root .team-captain,
+html.dark-mode body .lb-root .tile-label, html.dark-mode body .lb-root .tile-value { color: #f2f2f2 !important; }
+html.dark-mode body .lb-root .gauge-subtitle, html.dark-mode body .lb-root .team-subtitle, html.dark-mode body .lb-root .team-meta, html.dark-mode body .lb-root .tile-count { color: #7d7d7d !important; }
+html.dark-mode body .lb-root .gauge-sep { background: #2e2e2e !important; }
+html.dark-mode body .lb-root .channel-pill { background: transparent; border-color: #3a3a3a; color: #a3a3a3; }
+html.dark-mode body .lb-root .channel-pill.is-active { background: #262626; border-color: #ededed; color: #f2f2f2; }
+html.dark-mode body .lb-root .channel-detail__table th { color: #7d7d7d; border-color: #2e2e2e; }
+html.dark-mode body .lb-root .channel-detail__table td { color: #f2f2f2; border-color: #262626; }
+html.dark-mode body .lb-root .pace { --pace-text: #f2f2f2; --pace-muted: #7d7d7d; --pace-up: #7cc49b; --pace-up-bg: rgba(16, 185, 129, .14); --pace-down: #e8a877; --pace-down-bg: rgba(251, 146, 60, .14); }
+html.dark-mode .lb-veil { background: rgba(0, 0, 0, .6); }
+html.dark-mode .lb-sheet { background: #1f1f1f; color: #f2f2f2; box-shadow: 0 24px 64px rgba(0, 0, 0, .55); }
+html.dark-mode .lb-sheet-sub { color: #7d7d7d; }
+html.dark-mode .lb-close { background: #262626; color: #a3a3a3; }
+html.dark-mode .lb-close:hover { background: #343434; color: #f2f2f2; }
+html.dark-mode .lb-input, html.dark-mode .lb-choice { background: #1f1f1f; border-color: #3a3a3a; color: #f2f2f2; }
+html.dark-mode .lb-input:focus { border-color: #ededed; }
+html.dark-mode .lb-choice[aria-pressed="true"], html.dark-mode .lb-submit { background: #ededed; border-color: #ededed; color: #141414; }
+html.dark-mode .lb-submit:hover:not(:disabled) { background: #ffffff; }
+html.dark-mode .lb-ghost { color: #a3a3a3; }
+html.dark-mode .lb-ghost:hover:not(:disabled) { background: #262626; }
+html.dark-mode .lb-spin { border-color: rgba(20, 20, 20, .25); border-top-color: #141414; }
+html.dark-mode .lb-done svg { color: #7cc49b; }
+
+
+@media (prefers-reduced-motion: reduce) {
+  .lb-root .leaderboard tbody tr, .lb-done circle, .lb-done path { animation: none; stroke-dashoffset: 0; }
+  .lb-root .leaderboard tbody tr td:first-child img, .lb-root .lb-press { transition: none; }
+}

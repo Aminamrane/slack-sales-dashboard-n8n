@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useNavigate } from "react-router-dom";
 
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, MotionConfig } from "framer-motion";
 
 // import { supabase } from "../lib/supabaseClient"; // No longer needed - using API backend
 
@@ -41,6 +41,10 @@ import airportFont from "../assets/Airport.otf";
 import shipIcon from "../assets/ship.png";
 import flameIcon from "../assets/flame.png";
 import PageWithSidebar from "../components/shared/Sidebar/PageWithSidebar.jsx";
+import { EASE } from "../components/perfSales/motion.jsx";
+import { DoneCheck } from "../components/leaderboard/owner/icons.jsx";
+import { CalendarDays, CalendarRange, X } from "lucide-react";
+import "../components/leaderboard/owner/leaderboard.css";
 import ChannelBreakdown from "../components/leaderboard/ChannelBreakdown.jsx";
 import RevenuePace from "../components/leaderboard/RevenuePace.jsx";
 import PacePanel from "../components/leaderboard/PacePanel.jsx";
@@ -889,8 +893,8 @@ function ChefCallout({ text, darkMode, show }) {
     }
   }, [typed]);
 
-  const GLASS_BG = darkMode ? 'rgba(30, 31, 40, 0.72)' : 'rgba(255, 255, 255, 0.68)';
-  const GLASS_BORDER = darkMode ? 'rgba(53, 54, 71, 0.6)' : 'rgba(223, 226, 235, 0.7)';
+  const GLASS_BG = darkMode ? 'rgba(31, 31, 31, 0.86)' : 'rgba(255, 255, 255, 0.82)';
+  const GLASS_BORDER = darkMode ? 'rgba(58, 58, 58, 0.7)' : 'rgba(232, 228, 222, 0.9)';
 
   return (
     <AnimatePresence>
@@ -917,8 +921,8 @@ function ChefCallout({ text, darkMode, show }) {
             borderRadius: '10px',
             padding: '0 14px',
             boxShadow: darkMode
-              ? '0 4px 24px rgba(0,0,0,0.4), 0 0 0 1px rgba(124,138,219,0.10)'
-              : '0 4px 24px rgba(0,0,0,0.06), 0 0 0 1px rgba(91,106,191,0.05)',
+              ? '0 4px 24px rgba(0,0,0,0.4)'
+              : '0 4px 24px rgba(28,27,25,0.07)',
             minWidth: 200,
             maxWidth: 300,
             overflow: 'hidden',
@@ -946,7 +950,7 @@ function ChefCallout({ text, darkMode, show }) {
                   <motion.span
                     animate={{ opacity: [1, 0] }}
                     transition={{ duration: 0.5, repeat: Infinity, repeatType: 'reverse' }}
-                    style={{ color: darkMode ? '#7c8adb' : '#5b6abf', fontWeight: 300 }}
+                    style={{ color: darkMode ? '#a3a3a3' : '#9d9890', fontWeight: 300 }}
                   >|</motion.span>
                 </span>
               </div>
@@ -1035,10 +1039,10 @@ function TeamCard({ team, darkMode, isTopTeam, chefPhrase }) {
   const closedH = SIZE + 16;
   const openH = ROW_Y + rowCount * (SIZE + ROW_GAP + 14) - ROW_GAP + 2;
 
-  const BG = darkMode ? '#1e1f28' : '#ffffff';
-  const BORDER = darkMode ? '#2a2b36' : '#e2e6ef';
-  const TEXT = darkMode ? '#eef0f6' : '#1e2330';
-  const MUTED = darkMode ? '#5e6273' : '#9ca3af';
+  const BG = darkMode ? '#1f1f1f' : '#ffffff';
+  const BORDER = darkMode ? '#2e2e2e' : '#ece9e4';
+  const TEXT = darkMode ? '#f2f2f2' : '#1c1b19';
+  const MUTED = darkMode ? '#7d7d7d' : '#9d9890';
 
   return (
     <div
@@ -1091,7 +1095,7 @@ function TeamCard({ team, darkMode, isTopTeam, chefPhrase }) {
               : <div style={{
                   width: '100%', height: '100%',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: darkMode ? '#27272a' : '#e4e4e7',
+                  background: darkMode ? '#262626' : '#f1eee9',
                   fontSize: '13px', fontWeight: 700, color: team.color,
                 }}>{getInitials(m.name)}</div>
             }
@@ -1200,7 +1204,7 @@ function TeamCard({ team, darkMode, isTopTeam, chefPhrase }) {
           whiteSpace: 'nowrap',
         }}
       >
-        <span style={{ fontSize: '13px', fontWeight: 600, color: TEXT }}>
+        <span style={{ fontSize: '13px', fontWeight: 500, color: TEXT }}>
           Équipe {(captain?.name || team.captain).split(' ')[0]}
         </span>
         <span style={{
@@ -1446,6 +1450,14 @@ export default function Leaderboard() {
       setSaleSuccess(false);
     }
   };
+
+  // Échap ferme la fenêtre de déclaration (pas pendant l'envoi : closeSaleModal le refuse déjà).
+  useEffect(() => {
+    if (!showSaleModal) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') closeSaleModal(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showSaleModal, saleSubmitting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── AUTH ────────────────────────────────────────────────────────────────────
 
@@ -2203,24 +2215,24 @@ export default function Leaderboard() {
 
   // Progress percentage for objective
   const progressPct = Math.min((totals.ventes / monthlyObjective) * 100, 100);
+  // Palette de la page au style Owner (dev 12/11/2026, peau seulement : la page garde son visage). Clair : toile grège,
+  // cartes blanches à trait fin, encre et gris chauds, anthracite à la place du bleu. Sombre : noirs et gris neutres.
   const CARD = {
-    bg: darkMode ? '#1e1f28' : '#ffffff',
-    border: darkMode ? '#2a2b36' : '#e2e6ef',
-    surface: darkMode ? '#13141b' : '#edf0f8',
-    text: darkMode ? '#eef0f6' : '#1e2330',
-    muted: darkMode ? '#5e6273' : '#9ca3af',
-    subtle: darkMode ? '#252636' : '#f4f6fb',
-    secondary: darkMode ? '#8b8fa0' : '#6b7280',
-    accent: darkMode ? '#7c8adb' : '#5b6abf',
-    shadow: darkMode
-      ? '0 1px 3px rgba(0,0,0,0.2), 0 4px 16px rgba(0,0,0,0.15)'
-      : '0 1px 2px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.03)',
+    bg: darkMode ? '#1f1f1f' : '#ffffff',
+    border: darkMode ? '#2e2e2e' : '#ece9e4',
+    surface: darkMode ? '#141414' : '#f4f2ef',
+    text: darkMode ? '#f2f2f2' : '#1c1b19',
+    muted: darkMode ? '#7d7d7d' : '#9d9890',
+    subtle: darkMode ? '#262626' : '#f4f2ee',
+    secondary: darkMode ? '#a3a3a3' : '#55514b',
+    accent: darkMode ? '#ededed' : '#2b2927',
+    shadow: darkMode ? 'none' : '0 1px 2px rgba(50,40,30,0.04)',
   };
 
   return (
     // Menu de gauche à la place de la navbar (09/11/2026) ; intégré dans un tableau de bord, la page s'affiche seule.
     <PageWithSidebar enabled={!embedMode} darkMode={darkMode} setDarkMode={setDarkMode}>
-    <div style={{
+    <div className="lb-root" style={{
       padding: 0,
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif",
       background: CARD.surface,
@@ -2236,7 +2248,7 @@ export default function Leaderboard() {
         maxWidth: 1400,
         margin: '32px auto 64px',
         padding: '18px',
-        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(190,197,215,0.20)',
+        background: darkMode ? 'rgba(0,0,0,0.10)' : 'rgba(28,27,25,0.045)',
         borderRadius: '32px',
       }}>
       <div className="board-frame" style={{ margin: 0 }}>
@@ -2256,10 +2268,10 @@ export default function Leaderboard() {
             {/* Pill toggle */}
             <div style={{
               display: 'inline-flex',
-              background: darkMode ? '#252636' : '#eef1f6',
+              background: darkMode ? '#262626' : '#f4f2ee',
               borderRadius: '10px',
               padding: '3px',
-              border: `1px solid ${darkMode ? '#2a2b36' : '#dfe3ed'}`,
+              border: `1px solid ${darkMode ? '#2e2e2e' : '#ece9e4'}`,
             }}>
               {[{ key: 'table', label: 'Tableaux' }, { key: 'charts', label: 'Charts' }, { key: 'setters', label: 'Setters' }].map(t => (
                 <button
@@ -2270,19 +2282,25 @@ export default function Leaderboard() {
                     setView(t.key);
                   }}
                   style={{
+                    position: 'relative',
                     padding: '6px 16px',
                     borderRadius: '8px',
                     border: 'none',
-                    background: view === t.key ? (darkMode ? '#1e1f28' : '#ffffff') : 'transparent',
+                    background: 'transparent',
                     color: view === t.key ? CARD.text : CARD.muted,
                     fontSize: '13px',
-                    fontWeight: view === t.key ? 600 : 500,
+                    fontWeight: 500,
                     cursor: 'pointer',
-                    transition: 'all 0.15s ease',
-                    boxShadow: view === t.key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+                    transition: 'color 0.2s ease',
                   }}
                 >
-                  {t.label}
+                  {view === t.key && (
+                    <motion.span layoutId="lb-view-thumb" transition={{ type: 'spring', stiffness: 520, damping: 40 }} style={{
+                      position: 'absolute', inset: 0, borderRadius: '8px', background: darkMode ? '#343434' : '#ffffff',
+                      boxShadow: darkMode ? 'none' : '0 1px 2px rgba(28,27,25,0.10), 0 0 0 1px rgba(28,27,25,0.03)',
+                    }} />
+                  )}
+                  <span style={{ position: 'relative' }}>{t.label}</span>
                 </button>
               ))}
             </div>
@@ -2339,19 +2357,17 @@ export default function Leaderboard() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <button
               onClick={() => navigate("/contracts/new")}
+              className="lb-press"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
                 fontFamily: "'Inter', system-ui, sans-serif",
-                fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
-                color: darkMode ? '#9ca3b8' : '#464b65',
+                fontSize: '13px', fontWeight: 500, letterSpacing: '-0.01em',
+                color: darkMode ? '#f2f2f2' : '#1c1b19',
                 padding: '8px 18px',
-                background: darkMode ? '#2a2b36' : '#dfdfe5',
+                background: darkMode ? '#262626' : '#ffffff',
                 borderRadius: '10px',
-                border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
-                borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
-                boxShadow: darkMode
-                  ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
-                  : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+                border: darkMode ? '1px solid #3a3a3a' : '1px solid #e8e4de',
+                boxShadow: darkMode ? 'none' : '0 1px 2px rgba(50,40,30,0.06)',
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
@@ -2360,19 +2376,17 @@ export default function Leaderboard() {
             </button>
             <button
               onClick={() => setShowSaleModal(true)}
+              className="lb-press"
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: '6px',
                 fontFamily: "'Inter', system-ui, sans-serif",
-                fontSize: '13px', fontWeight: 700, letterSpacing: '-0.01em',
-                color: darkMode ? '#9ca3b8' : '#464b65',
+                fontSize: '13px', fontWeight: 500, letterSpacing: '-0.01em',
+                color: darkMode ? '#141414' : '#ffffff',
                 padding: '8px 18px',
-                background: darkMode ? '#2a2b36' : '#dfdfe5',
+                background: darkMode ? '#ededed' : '#2b2927',
                 borderRadius: '10px',
-                border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
-                borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
-                boxShadow: darkMode
-                  ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
-                  : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+                border: darkMode ? '1px solid #ededed' : '1px solid #2b2927',
+                boxShadow: 'none',
                 cursor: 'pointer',
                 userSelect: 'none',
               }}
@@ -2395,7 +2409,7 @@ export default function Leaderboard() {
             letterSpacing: '-0.5px',
             margin: 0,
             fontSize: 'clamp(1.1rem, 2.8vw, 1.5rem)',
-            fontWeight: 700,
+            fontWeight: 500,
             color: CARD.text,
           }}>Suivi des ventes</h1>
         </div>
@@ -2414,7 +2428,7 @@ export default function Leaderboard() {
           }}>
             <span style={{
               fontSize: '11px',
-              fontWeight: 600,
+              fontWeight: 500,
               color: CARD.muted,
               textTransform: 'uppercase',
               letterSpacing: '0.8px',
@@ -2423,7 +2437,7 @@ export default function Leaderboard() {
             </span>
             <span style={{
               fontSize: '13px',
-              fontWeight: 700,
+              fontWeight: 500,
               color: CARD.accent,
             }}>
               {totals.ventes} / {monthlyObjective}
@@ -2432,7 +2446,7 @@ export default function Leaderboard() {
           <div style={{
             width: '100%',
             height: '5px',
-            background: darkMode ? '#252636' : '#e2e6ef',
+            background: darkMode ? '#262626' : '#ece9e4',
             borderRadius: '3px',
             position: 'relative',
             overflow: 'visible',
@@ -2440,9 +2454,7 @@ export default function Leaderboard() {
             <div style={{
               width: `${progressPct}%`,
               height: '100%',
-              background: darkMode
-                ? 'linear-gradient(90deg, #5b6abf, #7c8adb)'
-                : 'linear-gradient(90deg, #5b6abf, #7c8adb)',
+              background: CARD.accent,
               borderRadius: '3px',
               transition: 'width 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94)',
               minWidth: '4px',
@@ -2459,11 +2471,12 @@ export default function Leaderboard() {
               transition: 'left 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94), opacity 1s ease',
               opacity: (totals.ventes / monthlyObjective) >= 0.9 ? Math.max(0, 1 - ((totals.ventes / monthlyObjective) - 0.9) / 0.1) : 1,
             }}>
-              <img src={flameIcon} alt="" style={{
-                width: '20px', height: '20px', objectFit: 'contain', marginRight: '-8px',
-                filter: darkMode
-                  ? 'brightness(0) saturate(100%) invert(60%) sepia(30%) saturate(800%) hue-rotate(200deg) brightness(120%)'
-                  : 'brightness(0) saturate(100%) invert(30%) sepia(50%) saturate(1200%) hue-rotate(210deg) brightness(95%)',
+              {/* La flamme : la forme de l'image, teinte par l'accent (masque), sans filtre approximatif. */}
+              <span aria-hidden="true" style={{
+                width: '20px', height: '20px', marginRight: '-8px', display: 'inline-block', background: '#ff1f7a',
+                WebkitMaskImage: `url(${flameIcon})`, maskImage: `url(${flameIcon})`,
+                WebkitMaskSize: 'contain', maskSize: 'contain', WebkitMaskRepeat: 'no-repeat', maskRepeat: 'no-repeat',
+                WebkitMaskPosition: 'center', maskPosition: 'center',
               }} />
               <img src={shipIcon} alt="" style={{
                 width: '30px', height: '30px', objectFit: 'contain', marginLeft: '-4px',
@@ -2524,23 +2537,23 @@ export default function Leaderboard() {
               { label: 'Total Revenu', value: totals.revenu, digits: Math.max(5, String(Math.floor(totals.revenu || 0)).length), suffix: '€' },
             ]).map((kpi) => (
               <div key={kpi.label} style={{
-                background: darkMode ? '#16171f' : CARD.bg,
-                border: `1px solid ${darkMode ? '#2a2b36' : CARD.border}`,
-                borderTop: darkMode ? '1px solid rgba(124, 138, 219, 0.25)' : `1px solid ${CARD.border}`,
-                borderBottom: darkMode ? '1px solid #0c0d12' : `1px solid ${CARD.border}`,
-                borderRadius: '14px',
+                background: darkMode ? '#1a1a1a' : CARD.bg,
+                border: `1px solid ${darkMode ? '#2e2e2e' : CARD.border}`,
+                borderTop: darkMode ? '1px solid rgba(255,255,255,0.08)' : `1px solid ${CARD.border}`,
+                borderBottom: darkMode ? '1px solid #101010' : `1px solid ${CARD.border}`,
+                borderRadius: '18px',
                 padding: '18px 14px 16px',
                 display: 'flex',
                 flexDirection: 'column',
                 alignItems: 'center',
                 gap: '8px',
                 boxShadow: darkMode
-                  ? '0 -1px 12px rgba(124, 138, 219, 0.08), 0 4px 10px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)'
+                  ? '0 -1px 12px rgba(255,255,255,0.03), 0 4px 10px rgba(0,0,0,0.4), 0 1px 3px rgba(0,0,0,0.3)'
                   : CARD.shadow,
               }}>
                 <span style={{
                   fontSize: '11px',
-                  fontWeight: 600,
+                  fontWeight: 500,
                   color: CARD.muted,
                   textTransform: 'uppercase',
                   letterSpacing: '0.8px',
@@ -2553,7 +2566,7 @@ export default function Leaderboard() {
           </div>
         </div>
 
-        {view !== "setters" && loading && <p style={{ textAlign: 'center', color: CARD.muted }}>Loading...</p>}
+        {view !== "setters" && loading && <p style={{ textAlign: 'center', color: CARD.muted }}>Chargement des ventes…</p>}
         {view !== "setters" && !loading && rows.length === 0 && <p style={{ textAlign: 'center', color: CARD.muted }}>Aucune vente ce mois-ci pour l'instant.</p>}
 
         {view === "table" && !loading && rows.length > 0 && (() => {
@@ -2562,17 +2575,14 @@ export default function Leaderboard() {
             display: 'inline-block',
             fontFamily: "'Inter', system-ui, sans-serif",
             fontSize: '13px',
-            fontWeight: 700,
+            fontWeight: 500,
             letterSpacing: '-0.01em',
-            color: darkMode ? '#9ca3b8' : '#464b65',
+            color: darkMode ? '#a3a3a3' : '#55514b',
             padding: '8px 18px',
-            background: darkMode ? '#2a2b36' : '#dfdfe5',
+            background: darkMode ? '#262626' : '#f4f2ee',
             borderRadius: '14px',
-            border: darkMode ? '1px solid #353647' : '1px solid #c3c3c3',
-            borderBottom: darkMode ? '1px solid #252636' : '1px solid #a5a5a5',
-            boxShadow: darkMode
-              ? 'inset 0 2px 0 rgba(255,255,255,0.12), inset 0 -3px 4px rgba(0,0,0,0.3), 0 3px 6px rgba(0,0,0,0.25)'
-              : 'inset 0 2px 0 rgba(255,255,255,0.9), inset 0 -3px 4px #d0d1d8, 0 3px 6px rgba(0,0,0,0.1)',
+            border: darkMode ? '1px solid #2e2e2e' : '1px solid #e8e4de',
+            boxShadow: 'none',
             cursor: 'default',
             userSelect: 'none',
           });
@@ -2595,10 +2605,10 @@ export default function Leaderboard() {
               <div className="leaderboard-wrapper" style={{ margin: 0 }}>
                 <table className="leaderboard" style={{ maxWidth: '100%' }}>
                   <thead><tr>
-                    <th style={{ width: '36px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>#</th>
-                    <th style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Nom</th>
-                    <th align="center" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Ventes</th>
-                    <th align="right" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600 }}>Revenu</th>
+                    <th style={{ width: '36px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500 }}>#</th>
+                    <th style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500 }}>Nom</th>
+                    <th align="center" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500 }}>Ventes</th>
+                    <th align="right" style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500 }}>Revenu</th>
                   </tr></thead>
                   <tbody>
                     {rows.map((r, i) => (
@@ -2631,7 +2641,7 @@ export default function Leaderboard() {
                           />
                         </td>
                         <td align="center" style={{
-                          fontWeight: 700,
+                          fontWeight: 500,
                           fontSize: '15px',
                           color: CARD.text,
                         }}>{r.sales}</td>
@@ -2657,9 +2667,9 @@ export default function Leaderboard() {
                 <div className="leaderboard-wrapper" style={{ margin: 0 }}>
                   <table className="leaderboard" style={{ maxWidth: '100%' }}>
                     <thead><tr>
-                      <th style={{ width: '60%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'left' }}><span style={{ marginLeft: '54px' }}>Équipe</span></th>
-                      <th style={{ width: '18%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'center' }}>Ventes</th>
-                      <th style={{ width: '22%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 600, textAlign: 'center' }}>Revenu</th>
+                      <th style={{ width: '60%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500, textAlign: 'left' }}><span style={{ marginLeft: '54px' }}>Équipe</span></th>
+                      <th style={{ width: '18%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500, textAlign: 'center' }}>Ventes</th>
+                      <th style={{ width: '22%', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: CARD.muted, fontWeight: 500, textAlign: 'center' }}>Revenu</th>
                     </tr></thead>
                     <tbody>
                       {teamStats.map((team, i) => (
@@ -2668,7 +2678,7 @@ export default function Leaderboard() {
                             <TeamCard key={team.id} team={team} darkMode={darkMode} isTopTeam={i === 0} chefPhrase={i === 0 ? chefPhrase : ''} />
                           </td>
                           <td style={{
-                            fontWeight: 700,
+                            fontWeight: 500,
                             fontSize: '15px',
                             color: CARD.text,
                             textAlign: 'center',
@@ -2976,334 +2986,63 @@ export default function Leaderboard() {
       </div>
       </div>{/* /outer wrapper */}
 
-      {/* ═══════════════════════════════════════════════════════════════════
-          SALE DECLARATION MODAL
-      ═══════════════════════════════════════════════════════════════════ */}
-      {showSaleModal && (
-        <div 
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            background: darkMode ? 'rgba(0, 0, 0, 0.5)' : 'rgba(0, 0, 0, 0.25)',
-            backdropFilter: 'blur(10px)',
-            WebkitBackdropFilter: 'blur(10px)',
-            transform: 'translateZ(0)',
-            willChange: 'opacity',
-            contain: 'layout paint',
-            animation: 'modalBackdropIn 0.3s ease-out forwards'
-          }}
-          onClick={closeSaleModal}
-        >
-          
-          {/* Modal card */}
-          <div 
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              position: 'relative',
-              width: '100%',
-              maxWidth: '420px',
-              background: darkMode ? '#242428' : '#ffffff',
-              borderRadius: '20px',
-              border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-              boxShadow: darkMode 
-                ? '0 24px 80px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255,255,255,0.05) inset' 
-                : '0 24px 80px rgba(0, 0, 0, 0.2)',
-              overflow: 'hidden',
-              animation: 'modalSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards',
-              transform: 'translateZ(0)',
-              isolation: 'isolate'
-            }}
-          >
-            {/* Header */}
-            <div style={{
-              padding: '24px 24px 0',
-              textAlign: 'center'
-            }}>
-              <div style={{
-                width: '56px',
-                height: '56px',
-                borderRadius: '16px',
-                background: `linear-gradient(135deg, ${COLORS.primary}, ${COLORS.primary}dd)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                margin: '0 auto 16px',
-                fontSize: '24px',
-                boxShadow: `0 8px 24px ${COLORS.primary}40`
-              }}>
-                {saleSuccess ? '✓' : '💼'}
-    </div>
-              <h2 style={{
-                margin: '0 0 6px',
-                fontSize: '22px',
-                fontWeight: 600,
-                color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                letterSpacing: '-0.3px'
-              }}>
-                {saleSuccess ? 'Vente déclarée !' : 'Déclarer une vente'}
-              </h2>
-              <p style={{
-                margin: 0,
-                fontSize: '14px',
-                color: darkMode ? '#8b8d93' : '#86868b'
-              }}>
-                {saleSuccess ? 'La vente a été enregistrée avec succès' : 'Renseignez les informations client'}
-              </p>
-            </div>
-
-            {/* Form */}
-            {!saleSuccess && (
-              <form onSubmit={handleSaleSubmit} style={{ padding: '24px' }}>
-                {/* Email */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                  }}>
-                    Adresse email
-                  </label>
-                  <input
-                    type="email"
-                    value={saleForm.email}
-                    onChange={(e) => handleSaleFormChange('email', e.target.value)}
-                    required
-                    placeholder="client@exemple.com"
-                    style={{
-                      width: '100%',
-                      padding: '14px 16px',
-                      borderRadius: '12px',
-                      border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                      background: darkMode ? '#1a1a1e' : '#f5f5f7',
-                      color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                      fontSize: '15px',
-                      outline: 'none',
-                      transition: 'border-color 0.2s, box-shadow 0.2s',
-                      boxSizing: 'border-box'
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = COLORS.primary;
-                      e.target.style.boxShadow = `0 0 0 4px ${COLORS.primary}20`;
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = darkMode ? '#333338' : '#e5e5e5';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                  />
+      {/* ── Déclarer une vente : la fenêtre (le formulaire et son envoi sont inchangés) ── */}
+      <MotionConfig reducedMotion="user">
+      <AnimatePresence>
+        {showSaleModal && (
+          <motion.div className="lb-veil" onClick={closeSaleModal} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.2 }}>
+            <motion.div className="lb-sheet" role="dialog" aria-modal="true" aria-labelledby="lb-sale-title" onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, y: 14, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 8, scale: 0.985 }}
+              transition={{ duration: 0.32, ease: EASE }}>
+              <button type="button" className="lb-close" onClick={closeSaleModal} aria-label="Fermer"><X size={16} /></button>
+              {saleSuccess ? (
+                <div className="lb-done" role="status">
+                  <DoneCheck />
+                  <h2 id="lb-sale-title">Vente déclarée</h2>
+                  <p className="lb-sheet-sub" style={{ marginBottom: 0 }}>La vente a été enregistrée avec succès.</p>
                 </div>
-
-                {/* Payment Modality */}
-                <div style={{ marginBottom: '16px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '8px',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                  }}>
-                    Modalité de paiement
-                  </label>
-                  <div style={{
-                    display: 'flex',
-                    gap: '10px'
-                  }}>
-                    <button
-                      type="button"
-                      onClick={() => handleSaleFormChange('paymentModality', 'M')}
-                      style={{
-                        flex: 1,
-                        padding: '14px 16px',
-                        borderRadius: '12px',
-                        border: `2px solid ${saleForm.paymentModality === 'M' ? COLORS.primary : (darkMode ? '#333338' : '#e5e5e5')}`,
-                        background: saleForm.paymentModality === 'M' 
-                          ? (darkMode ? `${COLORS.primary}20` : `${COLORS.primary}15`) 
-                          : (darkMode ? '#1a1a1e' : '#f5f5f7'),
-                        color: saleForm.paymentModality === 'M' ? COLORS.primary : (darkMode ? '#f5f5f7' : '#1d1d1f'),
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <span style={{ fontSize: '18px', marginRight: '6px' }}>📅</span>
-                      Mensuel
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleSaleFormChange('paymentModality', 'A')}
-                      style={{
-                        flex: 1,
-                        padding: '14px 16px',
-                        borderRadius: '12px',
-                        border: `2px solid ${saleForm.paymentModality === 'A' ? COLORS.primary : (darkMode ? '#333338' : '#e5e5e5')}`,
-                        background: saleForm.paymentModality === 'A' 
-                          ? (darkMode ? `${COLORS.primary}20` : `${COLORS.primary}15`) 
-                          : (darkMode ? '#1a1a1e' : '#f5f5f7'),
-                        color: saleForm.paymentModality === 'A' ? COLORS.primary : (darkMode ? '#f5f5f7' : '#1d1d1f'),
-                        fontSize: '14px',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s'
-                      }}
-                    >
-                      <span style={{ fontSize: '18px', marginRight: '6px' }}>📆</span>
-                      Annuel
+              ) : (
+                <form onSubmit={handleSaleSubmit}>
+                  <h2 id="lb-sale-title">Déclarer une vente</h2>
+                  <p className="lb-sheet-sub">Renseignez les informations du client.</p>
+                  <div className="lb-field">
+                    <label htmlFor="lb-sale-email">Adresse e-mail du client</label>
+                    <input id="lb-sale-email" className="lb-input" type="email" value={saleForm.email} required placeholder="client@exemple.com"
+                      onChange={(e) => handleSaleFormChange('email', e.target.value)} />
+                  </div>
+                  <div className="lb-field">
+                    <span className="lb-label">Modalité de paiement</span>
+                    <div className="lb-choices">
+                      <button type="button" className="lb-choice" aria-pressed={saleForm.paymentModality === 'M'} onClick={() => handleSaleFormChange('paymentModality', 'M')}>
+                        <CalendarDays size={14} strokeWidth={1.8} />Mensuel
+                      </button>
+                      <button type="button" className="lb-choice" aria-pressed={saleForm.paymentModality === 'A'} onClick={() => handleSaleFormChange('paymentModality', 'A')}>
+                        <CalendarRange size={14} strokeWidth={1.8} />Annuel
+                      </button>
+                    </div>
+                  </div>
+                  <div className="lb-field" style={{ marginBottom: 0 }}>
+                    <span className="lb-label">Nombre de salariés</span>
+                    <div className="lb-choices">
+                      {EMPLOYEE_RANGES.map(band => (
+                        <button key={band.id} type="button" className="lb-choice" aria-pressed={saleForm.employeeRange === band.id} title={band.label}
+                          onClick={() => handleSaleFormChange('employeeRange', band.id)}>{band.min}-{band.max}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="lb-sheet-foot">
+                    <button type="button" className="lb-ghost" onClick={closeSaleModal} disabled={saleSubmitting}>Annuler</button>
+                    <button type="submit" className="lb-submit" disabled={saleSubmitting || !saleForm.email || !saleForm.employeeRange}>
+                      {saleSubmitting ? <><span className="lb-spin" />Envoi…</> : 'Déclarer la vente'}
                     </button>
                   </div>
-                </div>
-
-                {/* Employee Range Selection - Clean Grid */}
-                <div style={{ marginBottom: '24px' }}>
-                  <label style={{
-                    display: 'block',
-                    marginBottom: '10px',
-                    fontSize: '13px',
-                    fontWeight: 500,
-                    color: darkMode ? '#f5f5f7' : '#1d1d1f'
-                  }}>
-                    Nombre de salariés
-                  </label>
-                  
-                  {/* Grid of options */}
-                  <div style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(5, 1fr)',
-                    gap: '6px'
-                  }}>
-                    {EMPLOYEE_RANGES.map(range => {
-                      const isSelected = saleForm.employeeRange === range.id;
-                      return (
-                        <button
-                          key={range.id}
-                          type="button"
-                          onClick={() => handleSaleFormChange('employeeRange', range.id)}
-                          style={{
-                            padding: '8px 4px',
-                            borderRadius: '8px',
-                            border: `2px solid ${isSelected ? COLORS.primary : 'transparent'}`,
-                            background: isSelected 
-                              ? (darkMode ? `${COLORS.primary}20` : `${COLORS.primary}10`)
-                              : (darkMode ? '#1a1a1e' : '#f9f9f9'),
-                            color: isSelected ? COLORS.primary : (darkMode ? '#f5f5f7' : '#1d1d1f'),
-                            fontSize: '12px',
-                            fontWeight: isSelected ? 600 : 500,
-                            cursor: 'pointer',
-                            transition: 'all 0.15s ease',
-                            textAlign: 'center',
-                            boxShadow: isSelected ? 'none' : `inset 0 0 0 1px ${darkMode ? '#333338' : '#e5e5e5'}`
-                          }}
-                        >
-                          {range.min}-{range.max}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Buttons */}
-                <div style={{ display: 'flex', gap: '10px' }}>
-                  <button
-                    type="button"
-                    onClick={closeSaleModal}
-                    disabled={saleSubmitting}
-                    style={{
-                      flex: 1,
-                      padding: '14px 20px',
-                      borderRadius: '12px',
-                      border: `1px solid ${darkMode ? '#333338' : '#e5e5e5'}`,
-                      background: darkMode ? '#1a1a1e' : '#ffffff',
-                      color: darkMode ? '#f5f5f7' : '#1d1d1f',
-                      fontSize: '15px',
-                      fontWeight: 500,
-                      cursor: saleSubmitting ? 'not-allowed' : 'pointer',
-                      opacity: saleSubmitting ? 0.5 : 1,
-                      transition: 'background 0.2s'
-                    }}
-                    onMouseEnter={(e) => !saleSubmitting && (e.target.style.background = darkMode ? '#242428' : '#f5f5f7')}
-                    onMouseLeave={(e) => e.target.style.background = darkMode ? '#1a1a1e' : '#ffffff'}
-                  >
-                    Annuler
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={saleSubmitting || !saleForm.email || !saleForm.employeeRange}
-                    style={{
-                      flex: 1,
-                      padding: '14px 20px',
-                      borderRadius: '12px',
-                      border: 'none',
-                      background: COLORS.primary,
-                      color: '#ffffff',
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      cursor: (saleSubmitting || !saleForm.email || !saleForm.employeeRange) ? 'not-allowed' : 'pointer',
-                      opacity: (saleSubmitting || !saleForm.email || !saleForm.employeeRange) ? 0.6 : 1,
-                      transition: 'all 0.2s',
-                      boxShadow: `0 4px 12px ${COLORS.primary}40`
-                    }}
-                  >
-                    {saleSubmitting ? (
-                      <span style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                        <span style={{ 
-                          width: '16px', 
-                          height: '16px', 
-                          border: '2px solid rgba(255,255,255,0.3)', 
-                          borderTopColor: '#fff',
-                          borderRadius: '50%',
-                          animation: 'spin 0.8s linear infinite'
-                        }} />
-                        Envoi...
-                      </span>
-                    ) : 'Déclarer la vente'}
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* Success state padding */}
-            {saleSuccess && <div style={{ height: '40px' }} />}
-
-            {/* Close button */}
-            <button
-              onClick={closeSaleModal}
-              style={{
-                position: 'absolute',
-                top: '16px',
-                right: '16px',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%',
-                border: 'none',
-                background: darkMode ? '#333338' : '#f5f5f7',
-                color: darkMode ? '#8b8d93' : '#86868b',
-                fontSize: '18px',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                transition: 'all 0.2s'
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.background = darkMode ? '#444' : '#e5e5e5';
-                e.target.style.color = darkMode ? '#fff' : '#1d1d1f';
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.background = darkMode ? '#333338' : '#f5f5f7';
-                e.target.style.color = darkMode ? '#8b8d93' : '#86868b';
-              }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
-      )}
+                </form>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      </MotionConfig>
 
       {/* Modal animations */}
 

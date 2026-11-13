@@ -5,7 +5,8 @@ import { monthClock, projectToMonthEnd } from '../../utils/salesPace';
 // Rythme du mois (dev 13/10/2026) : où en est le mois, comparé aux deux précédents AU MÊME JOUR, et où il finira au
 // rythme actuel. Données : /api/v1/leaderboard/chart (cumul jour par jour de chaque mois, `current_day`).
 // L'ancien badge comparait le cumul du mois en cours au TOTAL du mois précédent entier.
-const COLORS = { current: '#6366f1', previous: '#fb923c', older: '#94a3b8' };
+// Tons Owner (dev 12/11/2026) : le mois en cours en anthracite (clair sur fond sombre), le précédent en pêche, l'ancien en gris chaud.
+const tones = (dark) => ({ current: dark ? '#ededed' : '#2b2927', previous: '#f08a24', older: dark ? '#6b6b6b' : '#a8a39b' });
 const euro = (n) => `${Math.round(n).toLocaleString('fr-FR')} €`;
 const compact = (n) => (Math.abs(n) >= 1000 ? `${Math.round(n / 1000).toLocaleString('fr-FR')} k€` : `${Math.round(n)} €`);
 const monthName = (offset) => {
@@ -83,20 +84,20 @@ export default function RevenuePace({ chart, dark = false }) {
   const data = useMemo(() => view && ({
     labels: Array.from({ length: view.length }, (_, i) => String(i + 1)),
     datasets: [
-      { label: view.names.older, data: view.n2, borderColor: COLORS.older, borderWidth: 1.5, borderDash: [4, 4],
+      { label: view.names.older, data: view.n2, borderColor: tones(dark).older, borderWidth: 1.5, borderDash: [4, 4],
         pointRadius: 0, tension: 0.35, fill: false, markToday: 'soft' },
-      { label: view.names.previous, data: view.n1, borderColor: COLORS.previous, borderWidth: 2,
+      { label: view.names.previous, data: view.n1, borderColor: tones(dark).previous, borderWidth: 2,
         pointRadius: 0, tension: 0.35, fill: false, markToday: 'soft' },
-      { label: 'Projection', data: view.projection, borderColor: 'rgba(99,102,241,.55)', borderWidth: 2, borderDash: [6, 5],
+      { label: 'Projection', data: view.projection, borderColor: dark ? 'rgba(237,237,237,.5)' : 'rgba(43,41,39,.45)', borderWidth: 2, borderDash: [6, 5],
         pointRadius: 0, tension: 0, fill: false, spanGaps: false },
-      { label: view.names.current, data: view.n0, borderColor: COLORS.current, borderWidth: 3, pointRadius: 0, tension: 0.35,
+      { label: view.names.current, data: view.n0, borderColor: tones(dark).current, borderWidth: 3, pointRadius: 0, tension: 0.35,
         fill: 'origin', markToday: 'strong',
         backgroundColor: (context) => {
           const { ctx, chartArea } = context.chart;
-          if (!chartArea) return 'rgba(99,102,241,.12)';
+          if (!chartArea) return dark ? 'rgba(237,237,237,.08)' : 'rgba(43,41,39,.06)';
           const gradient = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
-          gradient.addColorStop(0, dark ? 'rgba(129,140,248,.35)' : 'rgba(99,102,241,.22)');
-          gradient.addColorStop(1, 'rgba(99,102,241,0)');
+          gradient.addColorStop(0, dark ? 'rgba(237,237,237,.16)' : 'rgba(43,41,39,.12)');
+          gradient.addColorStop(1, dark ? 'rgba(237,237,237,0)' : 'rgba(43,41,39,0)');
           return gradient;
         } },
     ],
@@ -111,7 +112,7 @@ export default function RevenuePace({ chart, dark = false }) {
     plugins: {
       legend: { display: false },
       datalabels: { display: false },
-      ownerTodayMarker: { index: view.day - 1, color: dark ? '#cbd5e1' : '#475569', surface: dark ? '#020617' : '#ffffff' },
+      ownerTodayMarker: { index: view.day - 1, color: dark ? '#a3a3a3' : '#55514b', surface: dark ? '#1f1f1f' : '#ffffff' },
       tooltip: {
         filter: (item) => item.dataset.label !== 'Projection' || item.dataIndex === view.daysInMonth - 1,
         callbacks: {
@@ -121,17 +122,17 @@ export default function RevenuePace({ chart, dark = false }) {
       },
     },
     scales: {
-      x: { grid: { display: false }, ticks: { color: dark ? '#9ca3af' : '#6b7280', autoSkip: true, maxTicksLimit: 8, font: { size: 10 } } },
-      y: { beginAtZero: true, border: { display: false }, grid: { color: dark ? 'rgba(148,163,184,.12)' : '#eef2f7' },
-        ticks: { color: dark ? '#9ca3af' : '#6b7280', maxTicksLimit: 5, font: { size: 10 }, callback: (v) => compact(v) } },
+      x: { grid: { display: false }, ticks: { color: dark ? '#7d7d7d' : '#9d9890', autoSkip: true, maxTicksLimit: 8, font: { size: 10 } } },
+      y: { beginAtZero: true, border: { display: false }, grid: { color: dark ? '#2e2e2e' : '#f1eee9' },
+        ticks: { color: dark ? '#7d7d7d' : '#9d9890', maxTicksLimit: 5, font: { size: 10 }, callback: (v) => compact(v) } },
     },
   }), [view, dark]);
 
   if (!view) return <div className="rp-empty">Chargement du rythme du mois…</div>;
 
   const chips = [
-    { name: view.names.previous, value: view.previous, color: COLORS.previous },
-    { name: view.names.older, value: view.older, color: COLORS.older },
+    { name: view.names.previous, value: view.previous, color: tones(dark).previous },
+    { name: view.names.older, value: view.older, color: tones(dark).older },
   ];
   const projectionGap = view.previousTotal ? gapLabel(view.projected, view.previousTotal) : null;
 
@@ -167,10 +168,10 @@ export default function RevenuePace({ chart, dark = false }) {
         <Line data={data} options={options} plugins={[todayMarker]} />
       </div>
       <div className="rp-key">
-        <span><i style={{ background: COLORS.current }} />{capitalized(view.names.current)}</span>
-        <span><i style={{ background: COLORS.previous }} />{capitalized(view.names.previous)}</span>
-        <span><i className="is-dashed" style={{ borderColor: COLORS.older }} />{capitalized(view.names.older)}</span>
-        {view.day < view.daysInMonth && <span><i className="is-dashed" style={{ borderColor: COLORS.current }} />Projection au rythme actuel</span>}
+        <span><i style={{ background: tones(dark).current }} />{capitalized(view.names.current)}</span>
+        <span><i style={{ background: tones(dark).previous }} />{capitalized(view.names.previous)}</span>
+        <span><i className="is-dashed" style={{ borderColor: tones(dark).older }} />{capitalized(view.names.older)}</span>
+        {view.day < view.daysInMonth && <span><i className="is-dashed" style={{ borderColor: tones(dark).current }} />Projection au rythme actuel</span>}
       </div>
     </div>
   );
