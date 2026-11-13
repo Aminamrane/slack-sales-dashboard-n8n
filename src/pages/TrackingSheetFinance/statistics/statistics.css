@@ -298,6 +298,7 @@
 .fst-person-rate { font-size: 14px; font-weight: 500; text-align: right; }
 .fst-extra { color: #b9660d; font-size: 12px; margin-left: 8px; }
 .fst-fill[data-tone="red"] { background: #ee8f8a; }
+.fst-fill[data-tone="amber"] { background: #f0c27e; }
 .fst-fill[data-tone="zero"] { background: var(--faint); }
 .fst-cases { margin: 6px 0 12px 13px; padding-left: 18px; border-left: 1px solid var(--rail); display: grid; gap: 10px; }
 .fst-case { border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; background: #fff; transition: box-shadow .3s var(--ease); }
@@ -330,6 +331,21 @@ button.fst-case-name:hover { background: var(--hover); }
 .fst-step[data-old="true"] .fst-step-day { text-decoration: line-through; text-decoration-color: var(--faint); color: var(--muted); font-weight: 400; }
 .fst-proofs { margin: 5px 0 0; padding: 0; list-style: none; display: grid; gap: 3px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
 .fst-note { font-size: 12.5px; color: var(--muted); line-height: 1.55; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+/* Période au jour près et bascule no show / reports des deux taux par sales. */
+.fst-days { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+.fst-days input { height: 32px; font-variant-numeric: tabular-nums; }
+.fst-views { margin-bottom: 14px; }
+.fst-views .fst-seg-btn b { font-weight: 500; margin-left: 4px; color: inherit; }
+/* Ce que le board disait d'un client rétracté : météo du moment et dernier message. */
+.fst-notes { display: grid; gap: 12px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
+.fst-noteblock-head { display: flex; align-items: center; gap: 6px 9px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); }
+.fst-noteblock p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); overflow-wrap: anywhere; }
+.fst-noteblock p > span { color: var(--muted); margin-right: 4px; }
+.fst-long { white-space: pre-line; }
+.fst-long[data-clamped="true"] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; position: relative; padding-right: 0; }
+.fst-root .fst-more-link { font-size: 12.5px; color: var(--link); margin-left: 6px; }
+.fst-long[data-clamped="true"] .fst-more-link { position: absolute; right: 0; bottom: 0; padding-left: 28px; margin: 0; background: linear-gradient(90deg, transparent, #fff 26px); }
+.fst-root .fst-more-link:hover { text-decoration: underline; }
 
 @media (prefers-reduced-motion: reduce) {
   .fst-root *, .fst-root *::before, .fst-root *::after { animation: none !important; transition: none !important; }
