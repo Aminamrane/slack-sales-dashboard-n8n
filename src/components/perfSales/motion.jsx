@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { motion as Motion } from 'framer-motion';
+import { inView } from './inView.js';
 
 // Primitives de mouvement de la Performance Sales (dev 14/10/2026) : chiffres qui défilent, jauges en anneau, et la
 // chorégraphie de la page (« tout doit être motion design, automatique, satisfaisant à regarder ») : chaque section se
@@ -16,14 +17,14 @@ export const reducedMotion = () => typeof window !== 'undefined' && window.match
 const RevealContext = createContext(true);
 export const useRevealed = () => useContext(RevealContext);
 
-// Vrai dès que l'élément a été vu une fois (au moins `amount` de sa hauteur dans l'écran).
+// Vrai dès que l'élément a été vu une fois (au moins `amount` de sa hauteur dans l'écran, ou dès son entrée s'il le dépasse).
 export function useInViewOnce(ref, amount = 0.15) {
   const [seen, setSeen] = useState(() => reducedMotion() || typeof IntersectionObserver === 'undefined');
   useEffect(() => {
     if (seen || !ref.current) return undefined;
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) { setSeen(true); observer.disconnect(); }
-    }, { threshold: amount });
+      if (inView(entry, amount, entry.rootBounds?.height || window.innerHeight)) { setSeen(true); observer.disconnect(); }
+    }, { threshold: amount > 0 ? [0, amount] : 0 });
     observer.observe(ref.current);
     return () => observer.disconnect();
   }, [seen, amount, ref]);
