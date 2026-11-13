@@ -7,10 +7,15 @@
 // commentables) ; les commentaires de la mission. À droite : le cahier des charges, le classement, puis les chiffres.
 // Une étape, un classement ou un commentaire partagé posé ici est enregistré dans Opti'Lex au nom de la personne
 // connectée ; la validation par la direction du cabinet reste dans Opti'Lex.
+//
+// Refonte du 13/11/2026 (« je ne peux pas passer aux autres étapes, elle n'est pas intuitive du tout ») : la carte d'état
+// dit à qui c'est de jouer et porte son geste en un clic (version livrée, version validée, modification demandée) ; la
+// frise se clique pour changer d'étape ; le classement suit l'étape tout seul (règle tenue par Opti'Lex). Plus aucun
+// formulaire replié à confirmer. Un commentaire part au cabinet par défaut : c'est un échange avec lui.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../../services/apiClient";
-import { countLabel, dayLabel, journey, missionComments, periodHint, periodLabel, sizeLabel } from "../../utils/automationBoard";
-import { ArrowLeft, ArrowRight, BarChart3, CloudUpload, FileText, Gauge, Layers, ListTree, Lock, MessageCircle, Milestone, Route, Tags, Users } from "lucide-react";
+import { countLabel, dayLabel, errorText, journey, missionComments, periodHint, periodLabel, sizeLabel, turnOf } from "../../utils/automationBoard";
+import { ArrowLeft, BarChart3, Check, CloudUpload, Code2, FileText, FlaskConical, Gauge, Layers, ListTree, Lock, MessageCircle, Milestone, Route, Send, Tags, Users, Wrench } from "lucide-react";
 import { Card, Empty, Page, Reveal, Tag } from "../../pages/TrackingSheetFinance/components/PageKit.jsx";
 import "../../pages/TrackingSheetFinance/components/ExchangeThread.css";
 import { ExternalIcon, Face, StepTrack, Usage } from "./parts";
@@ -22,16 +27,19 @@ import { TONE_OF, number } from "./theme";
 const API = "/api/v1/optilex/automation-board";
 const NO_FOLLOW = { available: false, entries: [], reactions: {} };
 const NOTE_MAX = 2000;
+const TURN_ICON = { lawyer: FlaskConical, dev: Wrench, done: Check, idle: Code2, build: Code2 };
 
 export default function ProcessPage({ id, period, frame, onClose, onOpen, onChanged, P }) {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   // Suivi côté Owner : points d'avancement, documents, commentaires, réactions. Absent tant que le serveur ne le sert pas.
   const [follow, setFollow] = useState(NO_FOLLOW);
-  const [audience, setAudience] = useState("owner");
+  const [audience, setAudience] = useState("shared");
   const [drop, setDrop] = useState({ busy: false, error: "", over: false });
-  // Changement d'étape en cours de confirmation : { step, comment, from: "state" | "journey", busy, error }.
-  const [moving, setMoving] = useState(null);
+  // À qui de jouer : le mot qui accompagne le geste, l'étape choisie sur la frise, et l'envoi en cours.
+  const [note, setNote] = useState("");
+  const [picked, setPicked] = useState(null);
+  const [acting, setActing] = useState({ busy: "", error: "" });
   // Classement : la valeur choisie tant qu'elle n'est pas enregistrée.
   const [rank, setRank] = useState(null);
   const [saved, setSaved] = useState("");
@@ -57,7 +65,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   }, [id]);
 
   // Changement de process : la fiche repart de zéro.
-  useEffect(() => { setData(null); setError(""); setMoving(null); setRank(null); setSaved(""); setFollow(NO_FOLLOW); }, [id]);
+  useEffect(() => { setData(null); setError(""); setNote(""); setPicked(null); setActing({ busy: "", error: "" }); setRank(null); setSaved(""); setFollow(NO_FOLLOW); }, [id]);
   useEffect(() => { load(); loadFollow(); }, [load, loadFollow]);
   useEffect(() => {
     const timer = setInterval(() => { if (!document.hidden) { load(); loadFollow(); } }, 60000);
@@ -81,7 +89,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   const locked = Boolean(row?.validated);
   const last = Math.max(1, steps.length - 1);
   const stepNow = steps.find((item) => item.value === row?.step);
-  const stepNext = steps.find((item) => item.value === (row?.step ?? 0) + 1);
+  const turn = useMemo(() => turnOf(row, steps, locked), [row, steps, locked]);
   const reached = milestones.find((item) => item.state === "now")?.event;
   const since = reached ? `depuis le ${dayLabel(reached.day)}${reached.who ? `, par ${reached.who}` : ""}` : row?.reviewed ? `revu le ${row.reviewed.at} par ${row.reviewed.by}` : "";
 
@@ -106,22 +114,34 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
     catch (failure) { setDrop({ busy: false, error: failure?.message || "Le document n’a pas pu être déposé.", over: false }); }
   };
 
-  // Étape et classement partent par la même route d'Opti'Lex : on n'y change qu'une chose à la fois, l'autre reste telle quelle.
-  const pick = (from) => (step, comment = "") => { setSaved(""); setMoving({ step, comment, from, busy: false, error: "" }); };
-  const move = async () => {
-    if (!moving || moving.busy || !row) return;
-    setMoving({ ...moving, busy: true, error: "" });
+  // Un geste du suivi, ou une étape choisie sur la frise : un clic l'enregistre dans Opti'Lex, qui fait suivre le
+  // classement. Le mot écrit au-dessus part avec ; il est obligatoire pour demander une modification.
+  const send = async (key, call, done) => {
+    if (acting.busy || !row) return;
+    setSaved("");
+    setActing({ busy: key, error: "" });
     try {
-      await apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: moving.step, comment: moving.comment.trim() || null });
-      setMoving(null);
-      setSaved("step");
+      await call();
+      setNote("");
+      setPicked(null);
+      setActing({ busy: "", error: "" });
+      setSaved(done);
       await load();
       onChanged();
     } catch (err) {
-      setMoving((state) => state && { ...state, busy: false, error: err?.message || "L’étape n’a pas été enregistrée." });
+      setActing({ busy: "", error: errorText(err, "Le geste n’a pas été enregistré.") });
       if (err?.status === 409) load();
     }
   };
+  const act = (gesture) => {
+    const text = note.trim().slice(0, NOTE_MAX);
+    if (gesture.needsNote && !text) { setActing({ busy: "", error: "Dites ce qu’il faut modifier : c’est ce que les développeurs liront." }); return; }
+    if (gesture.action) send(gesture.key, () => apiClient.post(`${API}/${id}/action`, { action: gesture.action, note: text || null }), gesture.action);
+    else send(gesture.key, () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: gesture.step, comment: text || null }), "step");
+  };
+  const savePicked = () => send("pick", () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: picked, comment: note.trim().slice(0, NOTE_MAX) || null }), "step");
+  // « À confirmer » : le classement proposé par le logiciel, que personne n'a revu. Le renvoyer tel quel le confirme.
+  const confirmRank = () => send("confirm", () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: row.step, comment: null }), "confirm");
   const saveRank = async (e) => {
     e.preventDefault();
     if (!rank || rank.busy || !row || rank.value === row.classification) return;
@@ -133,7 +153,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
       await load();
       onChanged();
     } catch (err) {
-      setRank((state) => state && { ...state, busy: false, error: err?.message || "Le classement n’a pas été enregistré." });
+      setRank((state) => state && { ...state, busy: false, error: errorText(err, "Le classement n’a pas été enregistré.") });
       if (err?.status === 409) load();
     }
   };
@@ -146,19 +166,6 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
     ...(data?.attachments || []).map((file, i) => ({ key: `x${i}`, name: file.name, meta: [sizeLabel(file.size), file.by, file.at, "déposé dans Opti’Lex"], file: partnerFile(file) })),
   ];
   const fileInput = useRef(null);
-  const confirm = (state, onChange) => (
-    <form className="ab-move" onSubmit={(e) => { e.preventDefault(); move(); }}>
-      <div className="ab-move-title">Passer la mission à « {steps.find((item) => item.value === state.step)?.label} » ?</div>
-      <input type="text" className="ab-input" value={state.comment} maxLength={NOTE_MAX} onChange={(e) => onChange(state.step, e.target.value)} autoFocus
-        placeholder="Pourquoi maintenant ? Ce mot s’inscrit dans le parcours (facultatif)." aria-label="Raison du changement d’étape" />
-      <div className="ab-actions">
-        {state.error && <span role="alert" style={{ color: "#c5221f" }}>{state.error}</span>}
-        <button type="button" className="fst-btn" disabled={state.busy} onClick={() => setMoving(null)}>Annuler</button>
-        <button type="submit" className="ab-btn-main" disabled={state.busy}>{state.busy ? "Enregistrement…" : "Confirmer"}</button>
-      </div>
-    </form>
-  );
-
   return (
     <Page title={row?.name || (error ? "Fiche indisponible" : "Chargement…")}
       sub={data?.parent ? `Mission du process « ${data.parent.name} »` : row?.isParent ? `Process qui regroupe ${countLabel(row.members, "mission", "missions")}` : row ? "Mission de la nomenclature d’Opti’Lex" : undefined}
@@ -168,7 +175,8 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
           <Tag tone={TONE_OF[row.classification]} title={classification?.help}>{classification?.label || "Non classée"}</Tag>
           {row.pole?.label && <Tag>{row.pole.label}</Tag>}
           {row.validated && <Tag tone="green">Validé par la direction</Tag>}
-          {!row.validated && row.toConfirm && <Tag tone="peach">Classement à confirmer</Tag>}
+          {!row.validated && row.toConfirm && <Tag tone="peach" title="Classement proposé par le logiciel, que personne n’a encore revu.">Classement à confirmer</Tag>}
+          {!row.validated && row.toConfirm && <button type="button" className="ab-textlink" style={{ fontSize: 12.5 }} disabled={Boolean(acting.busy)} onClick={confirmRank}>{acting.busy === "confirm" ? "Confirmation…" : "Confirmer ce classement"}</button>}
           {data.parent && <button type="button" className="ab-textlink" style={{ fontSize: 12.5, marginLeft: 4 }} onClick={() => onOpen(data.parent.id)}>Voir le process</button>}
         </div>
       )}
@@ -186,15 +194,48 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                   <div className="ab-state-since">{[`Étape ${row.step} sur ${last}`, since].filter(Boolean).join(" · ")}</div>
                 </div>
                 <div className="ab-state-act">
-                  {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag>
-                    : stepNext && moving?.from !== "state" ? <button type="button" className="ab-btn-main" onClick={() => pick("state")(stepNext.value)}>Passer à « {stepNext.label} »<ArrowRight size={15} /></button>
-                    : !stepNext ? <Tag tone="blue">Dernière étape atteinte</Tag> : null}
+                  {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : <Tag tone={turn.tone}>{turn.tag}</Tag>}
                 </div>
-                <StepTrack value={row.step} steps={steps} P={P} />
-                {moving?.from === "state" && confirm(moving, pick("state"))}
-                {saved === "step" && !moving && <p className="ab-state-saved" role="status">Étape enregistrée dans Opti’Lex et inscrite au parcours.</p>}
+                {/* La frise se clique : choisir une étape fait apparaître son enregistrement, juste dessous. */}
+                <StepTrack value={row.step} steps={steps} P={P} onPick={locked ? undefined : setPicked} picked={picked} />
+                {picked != null && (
+                  <div className="ab-pick-save" role="group" aria-label="Changer l’étape">
+                    <span>Passer la mission à « {steps.find((item) => item.value === picked)?.label} » ? Le classement suivra tout seul.</span>
+                    <button type="button" className="fst-btn" disabled={Boolean(acting.busy)} onClick={() => setPicked(null)}>Annuler</button>
+                    <button type="button" className="ab-btn-main" disabled={Boolean(acting.busy)} onClick={savePicked}><Check size={15} />{acting.busy === "pick" ? "Enregistrement…" : "Enregistrer l’étape"}</button>
+                  </div>
+                )}
+
+                {/* À qui de jouer, et son geste : un clic enregistre, le mot écrit part avec. */}
+                <div className={`ab-turn is-${turn.who}`}>
+                  <div className="ab-turn-head">
+                    <span className="ab-turn-ico" aria-hidden="true">{React.createElement(TURN_ICON[turn.who], { size: 16, strokeWidth: 1.9 })}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="ab-turn-title">{turn.title}</div>
+                      <div className="ab-turn-hint">{turn.hint}</div>
+                    </div>
+                  </div>
+                  {turn.quote && <blockquote className="ab-turn-quote">{turn.quote}</blockquote>}
+                  <textarea className="ab-turn-note" rows={2} value={note} maxLength={NOTE_MAX} placeholder={turn.placeholder} aria-label="Un mot qui s’inscrit au parcours"
+                    onChange={(e) => { setNote(e.target.value); if (acting.error) setActing({ busy: "", error: "" }); }} />
+                  <div className="ab-turn-btns">
+                    {turn.actions.map((gesture) => (
+                      <button key={gesture.key} type="button" className={gesture.primary ? "ab-btn-main" : "fst-btn"} disabled={Boolean(acting.busy)} onClick={() => act(gesture)}>
+                        {gesture.primary && (gesture.action === "approve" ? <Check size={15} /> : <Send size={15} />)}
+                        {acting.busy === gesture.key ? "Enregistrement…" : gesture.label}
+                      </button>
+                    ))}
+                    {acting.error && <span className="ab-turn-error" role="alert">{acting.error}</span>}
+                    {!acting.error && saved && saved !== "rank" && (
+                      <span className="ab-state-saved" role="status">
+                        {{ deliver: "Version livrée : le juriste est attendu.", approve: "Version validée.", request_change: "Modification demandée : les développeurs sont attendus.",
+                          step: "Étape enregistrée ; le classement a suivi.", confirm: "Classement confirmé." }[saved]} Inscrit au parcours, dans Opti’Lex.
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {locked && <p className="ab-note" style={{ gridColumn: "1 / -1", marginTop: 0 }}>Validé par la direction du cabinet ({row.validated.by}) : l’étape et le classement ne changent plus. La direction peut lever la validation dans Opti’Lex.</p>}
-                {!locked && !stepNext && <p className="ab-note" style={{ gridColumn: "1 / -1", marginTop: 0 }}>Il reste la validation, qui se fait dans Opti’Lex par la direction du cabinet.</p>}
+                {!locked && row.step === last && !row.awaiting && <p className="ab-note" style={{ gridColumn: "1 / -1", marginTop: 0 }}>Il reste la validation, qui se fait dans Opti’Lex par la direction du cabinet.</p>}
               </div>
             </Card>
           </Reveal>
@@ -203,9 +244,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
             <div className="ab-col">
               <Card title="Parcours de l’automatisation" Icon={Route}
                 hint="Chaque étape, quand elle a été franchie et par qui, avec ce qui s’est passé entre-temps. Tout se commente.">
-                <Journey processId={id} milestones={milestones} follow={follow} owned={owned} locked={locked}
-                  moving={moving?.from === "journey" ? moving : null} onPick={pick("journey")} onMove={move} onCancel={() => setMoving(null)}
-                  onUpdate={sendUpdate} onChanged={loadFollow} />
+                <Journey processId={id} milestones={milestones} follow={follow} owned={owned} onUpdate={sendUpdate} onChanged={loadFollow} />
               </Card>
 
               <Card title="Commentaires de la mission" Icon={MessageCircle}
@@ -285,7 +324,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                 </div>
               </Card>
 
-              <Card title="Classement" Icon={Tags} hint={classification?.help || "Ce que la mission est aujourd’hui pour le cabinet."}>
+              <Card title="Classement" Icon={Tags} hint={`${classification?.help || "Ce que la mission est aujourd’hui pour le cabinet."} Il suit l’étape tout seul ; le changer ici fait suivre l’étape.`}>
                 {locked ? (
                   <p className="ab-note" style={{ marginTop: 0 }}>{classification?.label}. Validé par la direction : le classement ne change plus.</p>
                 ) : (

@@ -18,14 +18,16 @@ export function fold(text) {
 
 // Lignes à afficher : un process et ses missions restent ensemble. Un process qui correspond montre toutes ses
 // missions ; une mission qui correspond garde son process au-dessus d'elle, pour qu'on sache d'où elle vient.
-export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, closed = new Set() } = {}) {
+// `awaiting` : ne garder que les lignes où quelqu'un est attendu, "lawyer" (version à tester) ou "dev" (modification demandée).
+export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, awaiting = "", closed = new Set() } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const needle = fold(query);
-  const filtering = Boolean(needle || classification || pole || toConfirm);
+  const filtering = Boolean(needle || classification || pole || toConfirm || awaiting);
   const match = (row) => (!needle || fold(row.name).includes(needle))
     && (!classification || row.classification === classification)
     && (!pole || row.pole?.group === pole)
-    && (!toConfirm || row.toConfirm === true);
+    && (!toConfirm || row.toConfirm === true)
+    && (!awaiting || row.awaiting?.who === awaiting);
   const children = new Map();
   list.forEach((row) => {
     if (row.parentId != null) children.set(row.parentId, [...(children.get(row.parentId) || []), row]);
@@ -205,6 +207,60 @@ export function journey(row, steps, history, entries) {
     (host || (dated.length ? milestones[0] : fallback)).items.push(event);
   });
   return milestones;
+}
+
+// ── À qui de jouer (dev 13/11/2026 : « que nous, les devs, ce soit intuitif de mettre le suivi, que pour les juristes, ce
+// soit intuitif d'aller mettre si c'est validé ou pas, ou s'ils veulent une update ») ────────────────────────────────
+// Opti'Lex dit qui est attendu sur une ligne (`row.awaiting.who`) : "lawyer" quand une version attend le test du juriste,
+// "dev" quand il a demandé une modification. Sinon l'étape parle : avant toute version, c'est aux développeurs ; une
+// version validée n'attend personne. Chaque situation a son geste, enregistré d'un clic ; le classement suit tout seul.
+// Un geste est une action du suivi (`action`) ou un changement d'étape (`step`) ; `needsNote` : le mot est obligatoire.
+export function turnOf(row, steps, locked = false) {
+  const step = Number(row?.step) || 0;
+  const awaiting = row?.awaiting?.who === "lawyer" || row?.awaiting?.who === "dev" ? row.awaiting : null;
+  const who = awaiting ? awaiting.who : step < 2 ? "build" : step === 2 ? "idle" : "done";
+  const from = awaiting?.by ? ` par ${awaiting.by}${awaiting.since ? ` le ${String(awaiting.since).slice(0, 10)}` : ""}` : "";
+  const label = (value) => (Array.isArray(steps) ? steps : []).find((item) => item.value === value)?.label || "";
+  const change = { key: "request_change", action: "request_change", label: "Demander une modification", needsNote: true };
+  if (who === "lawyer") return {
+    who, tone: "yellow", tag: "À tester par le juriste", title: "Au juriste de jouer : la version est à tester",
+    hint: `${from ? `Livrée${from}. ` : ""}Une fois testée : la valider, ou dire ce qu’il faut modifier.`,
+    placeholder: "Un mot (obligatoire pour demander une modification) : ce qui va, ce qui ne va pas…", quote: awaiting.text || "",
+    actions: [{ key: "approve", action: "approve", label: "Version validée par le juriste", primary: true }, change],
+  };
+  if (who === "dev") return {
+    who, tone: "peach", tag: "Modification demandée", title: "Aux développeurs de jouer : une modification est demandée",
+    hint: `${from ? `Demandée${from}. ` : ""}Une fois corrigé, dites-le : le juriste retestera.`,
+    placeholder: "Ce qui a été corrigé (facultatif)…", quote: awaiting.text || "",
+    actions: [{ key: "deliver", action: "deliver", label: "Version corrigée, à retester", primary: true }, { ...change, label: "Compléter la demande" }],
+  };
+  if (who === "done") return {
+    who, tone: "green", tag: "Version validée", title: "Personne n’attend : la version est validée",
+    hint: "Un souci ou une évolution à demander ? Écrivez-le : les développeurs seront attendus.",
+    placeholder: "Ce qu’il faut modifier…", quote: "",
+    actions: [change, ...(!locked && step === 3 && label(4) ? [{ key: "step-4", step: 4, label: `Passer à « ${label(4)} »` }] : [])],
+  };
+  if (who === "idle") return {
+    who, tone: undefined, tag: "Version disponible", title: "Une version existe, personne ne l’attend",
+    hint: "Une nouvelle version à faire tester, ou une modification à demander ?",
+    placeholder: "Ce qu’il faut tester, ou ce qu’il faut modifier…", quote: "",
+    actions: [{ key: "deliver", action: "deliver", label: "Nouvelle version livrée, à tester", primary: true }, change],
+  };
+  return {
+    who, tone: undefined, tag: "Chez les développeurs", title: "Aux développeurs de jouer : aucune version n’est encore livrée",
+    hint: "Dès qu’une version tourne, dites-le ici : le juriste saura qu’il doit la tester.",
+    placeholder: "Ce qu’il faut tester (facultatif)…", quote: "",
+    actions: [{ key: "deliver", action: "deliver", label: "Version livrée, à tester", primary: true },
+      ...(!locked && step === 0 && label(1) ? [{ key: "step-1", step: 1, label: label(1) }] : [])],
+  };
+}
+
+// Le message d'une erreur du serveur, tel qu'on peut le lire : une saisie refusée par le serveur arrive en liste.
+export function errorText(error, fallback) {
+  const detail = error?.data?.detail;
+  if (Array.isArray(detail)) return detail.map((item) => item?.msg).filter(Boolean).join(" ") || fallback;
+  const message = typeof detail === "string" ? detail : error?.message;
+  return message && message !== "[object Object]" ? message : fallback;
 }
 
 // La phrase d'un évènement d'Opti'Lex : « Nom a changé l'étape ». Sans auteur, le libellé seul.

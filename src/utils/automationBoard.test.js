@@ -131,3 +131,90 @@ test("ce que le cabinet pose dans Opti'Lex : l'étape atteinte vient du logiciel
   assert.equal(path.flatMap((milestone) => milestone.items).find((item) => item.file)?.file.id, "a".repeat(32));
   assert.deepEqual(missionComments(history, []).map((item) => [item.text, item.target]), [["À revoir avant la V1.", 1]]);
 });
+
+// ── À qui de jouer (13/11/2026) ───────────────────────────────────────────────────────────────────────
+const STEPS = [
+  { value: 0, label: 'Non commencé' }, { value: 1, label: 'Cahier des charges envoyé' }, { value: 2, label: 'V1 réalisée, non testée' },
+  { value: 3, label: 'V1 testée et approuvée' }, { value: 4, label: 'Version maximale optimisée' },
+];
+
+test("à qui de jouer : avant toute version, c'est aux développeurs, et leur geste est « version livrée »", async () => {
+  const { turnOf } = await import('./automationBoard.js');
+  const start = turnOf({ step: 0, awaiting: null }, STEPS);
+  assert.equal(start.who, 'build');
+  assert.deepEqual(start.actions.map((a) => [a.key, a.label, Boolean(a.primary)]), [['deliver', 'Version livrée, à tester', true], ['step-1', 'Cahier des charges envoyé', false]]);
+  assert.equal(start.actions[1].step, 1);
+  // Cahier des charges déjà envoyé : il ne reste que la livraison.
+  assert.deepEqual(turnOf({ step: 1 }, STEPS).actions.map((a) => a.key), ['deliver']);
+});
+
+test('à qui de jouer : une version livrée attend le juriste, qui valide ou demande une modification', async () => {
+  const { turnOf } = await import('./automationBoard.js');
+  const waiting = turnOf({ step: 2, awaiting: { who: 'lawyer', by: 'Personne Owner', since: '13/11/2026 à 10:12', text: 'Le modèle est en place.' } }, STEPS);
+  assert.equal(waiting.who, 'lawyer');
+  assert.equal(waiting.tag, 'À tester par le juriste');
+  assert.equal(waiting.quote, 'Le modèle est en place.');
+  assert.match(waiting.hint, /^Livrée par Personne Owner le 13\/11\/2026\. /);
+  assert.deepEqual(waiting.actions.map((a) => [a.action, Boolean(a.primary), Boolean(a.needsNote)]), [['approve', true, false], ['request_change', false, true]]);
+});
+
+test('à qui de jouer : une modification demandée attend les développeurs, avec le message du juriste', async () => {
+  const { turnOf } = await import('./automationBoard.js');
+  const asked = turnOf({ step: 2, awaiting: { who: 'dev', by: 'Juriste Exemple', since: null, text: 'Il manque la période d’essai.' } }, STEPS);
+  assert.equal(asked.who, 'dev');
+  assert.equal(asked.title, 'Aux développeurs de jouer : une modification est demandée');
+  assert.equal(asked.quote, 'Il manque la période d’essai.');
+  assert.deepEqual(asked.actions.map((a) => [a.action, a.label]), [['deliver', 'Version corrigée, à retester'], ['request_change', 'Compléter la demande']]);
+});
+
+test("à qui de jouer : une version validée n'attend personne ; on peut demander une évolution ou passer à la version maximale", async () => {
+  const { turnOf } = await import('./automationBoard.js');
+  const approved = turnOf({ step: 3, awaiting: null }, STEPS);
+  assert.equal(approved.who, 'done');
+  assert.deepEqual(approved.actions.map((a) => a.key), ['request_change', 'step-4']);
+  assert.equal(approved.actions[1].label, 'Passer à « Version maximale optimisée »');
+  // Dernière étape, ou process validé par la direction : plus de changement d'étape proposé.
+  assert.deepEqual(turnOf({ step: 4 }, STEPS).actions.map((a) => a.key), ['request_change']);
+  assert.deepEqual(turnOf({ step: 3 }, STEPS, true).actions.map((a) => a.key), ['request_change']);
+  assert.deepEqual(turnOf({ step: 0 }, STEPS, true).actions.map((a) => a.key), ['deliver']);
+  // Une version existe sans être attendue (« non utilisée ») : livrer une nouvelle version ou demander une modification.
+  const idle = turnOf({ step: 2, awaiting: null }, STEPS);
+  assert.deepEqual([idle.who, ...idle.actions.map((a) => a.action)], ['idle', 'deliver', 'request_change']);
+  // Une valeur inconnue venue d'Opti'Lex ne casse rien : l'étape parle.
+  assert.equal(turnOf({ step: 1, awaiting: { who: 'autre' } }, STEPS).who, 'build');
+});
+
+test('la liste se filtre sur « à qui de jouer », en gardant le process au-dessus de sa mission', () => {
+  const rows = [
+    { id: 1, name: 'Process REM', parentId: null, awaiting: null },
+    { id: 2, name: 'Note de rémunération', parentId: 1, awaiting: { who: 'lawyer' } },
+    { id: 3, name: 'Promesse d’embauche', parentId: null, awaiting: { who: 'dev' } },
+    { id: 4, name: 'Question juridique', parentId: null, awaiting: null },
+  ];
+  assert.deepEqual(ids(visibleRows(rows, { awaiting: 'lawyer' })), [1, 2]);
+  assert.deepEqual(ids(visibleRows(rows, { awaiting: 'dev' })), [3]);
+  assert.deepEqual(ids(visibleRows(rows, {})), [1, 2, 3, 4]);
+});
+
+test("le parcours : un geste du suivi date l'étape qu'il fait atteindre", async () => {
+  const { journey } = await import('./automationBoard.js');
+  const history = [{ day: '2026-11-13', items: [
+    { time: '10:40', filter: 'decisions', kind: 'approved', what: 'a validé la version', who: 'Juriste Exemple', detail: 'V1 réalisée, non testée → V1 testée et approuvée', step: 3, target: null },
+    { time: '10:20', filter: 'decisions', kind: 'change-request', what: 'a demandé une modification', who: 'Juriste Exemple', text: 'Il manque la période d’essai.', step: null, target: null },
+    { time: '10:05', filter: 'decisions', kind: 'delivery', what: 'a livré une version à tester', who: 'Personne Owner', detail: 'Non commencé → V1 réalisée, non testée', step: 2, target: null },
+  ] }];
+  const milestones = journey({ step: 3 }, STEPS, history, []);
+  const byStep = Object.fromEntries(milestones.filter((m) => m.kind === 'step').map((m) => [m.step, m]));
+  assert.deepEqual([byStep[2].state, byStep[2].event.kind, byStep[2].event.who], ['done', 'delivery', 'Personne Owner']);
+  assert.deepEqual([byStep[3].state, byStep[3].event.kind], ['now', 'approved']);
+  // La demande de modification ne date aucune étape : elle se range sous celle qui était en cours.
+  assert.deepEqual(byStep[2].items.map((item) => item.kind), ['change-request']);
+});
+
+test("une erreur du serveur se lit, même quand il renvoie une liste", async () => {
+  const { errorText } = await import('./automationBoard.js');
+  assert.equal(errorText({ message: 'Ce process est validé par la direction.' }, 'x'), 'Ce process est validé par la direction.');
+  assert.equal(errorText({ message: '[object Object]', data: { detail: [{ msg: 'Input should be less than or equal to 4' }] } }, 'x'), 'Input should be less than or equal to 4');
+  assert.equal(errorText({ message: '[object Object]', data: { detail: [] } }, 'Le geste n’a pas été enregistré.'), 'Le geste n’a pas été enregistré.');
+  assert.equal(errorText(null, 'Indisponible.'), 'Indisponible.');
+});

@@ -24,17 +24,27 @@ export function Steps({ value, steps, P, showLabel = true }) {
 // Avancement en grand, sur la page d'un process : un fil, un point par étape, l'étape en cours en point plein et en toutes
 // lettres. Les étapes passées sont cochées par le trait plein qui les relie.
 // `compact` : dans une carte étroite, seule l'étape en cours est écrite ; les autres se lisent au survol de leur point.
-export function StepTrack({ value, steps, P, compact = false }) {
+// `onPick` : la frise se clique (dev 13/11/2026). Un clic sur une étape la choisit (`picked`), l'enregistrement se fait
+// juste dessous ; recliquer l'étape en cours annule le choix.
+export function StepTrack({ value, steps, P, compact = false, onPick, picked = null }) {
   const list = Array.isArray(steps) ? steps : [];
   const last = Math.max(1, list.length - 1);
   return (
-    <ol className={`ab-track${compact ? " is-compact" : ""}`} aria-label={`Étape ${value} sur ${last}`} style={{ "--ab-done-ratio": Math.min(value, last) / last }}>
+    <ol className={`ab-track${compact ? " is-compact" : ""}${onPick ? " is-pick" : ""}`} aria-label={`Étape ${value} sur ${last}`} style={{ "--ab-done-ratio": Math.min(value, last) / last }}>
       {list.map((step, index) => {
         const state = step.value < value ? "done" : step.value === value ? "now" : "next";
-        return (
-          <li key={step.value} className={`is-${state}`} aria-current={state === "now" ? "step" : undefined} title={step.label} style={{ "--i": index }}>
+        const inner = (
+          <>
             <span className="ab-track-dot" aria-hidden="true" />
-            <span className="ab-track-label" style={{ color: state === "next" ? P.faint : P.text }}>{step.label}</span>
+            <span className="ab-track-label" style={{ color: state === "next" && picked !== step.value ? P.faint : P.text }}>{step.label}</span>
+          </>
+        );
+        return (
+          <li key={step.value} className={`is-${state}${picked === step.value ? " is-picked" : ""}`} aria-current={state === "now" ? "step" : undefined} title={onPick ? undefined : step.label} style={{ "--i": index }}>
+            {onPick ? (
+              <button type="button" className="ab-track-pick" aria-pressed={picked === step.value} onClick={() => onPick(step.value === value ? null : step.value)}
+                title={step.value === value ? "Étape actuelle" : `Passer à « ${step.label} »`}>{inner}</button>
+            ) : inner}
           </li>
         );
       })}
