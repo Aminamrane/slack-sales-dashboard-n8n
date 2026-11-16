@@ -52,3 +52,53 @@ export function initials(name) {
   if (parts.length === 0) return "?";
   return ((parts[0][0] || "") + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
 }
+
+// ── Attribution groupée (dev 16/11/2026) ─────────────────────────────────────────────────────────────────────
+// Depuis l'étiquette « Sans CSM » : appui long sur un client = mode sélection, puis un CSM pour tous les clients
+// choisis. Rien de nouveau côté serveur : chaque client part par le même PATCH /optilex/board-tracking que la fiche.
+
+// Le mode sélection n'existe que sur « Sans CSM », pour qui a le droit d'attribuer.
+export function pickModeAvailable(selectedCsm, canAssign) {
+  return !!canAssign && Array.isArray(selectedCsm) && selectedCsm.includes(NO_CSM);
+}
+
+// Un client se sélectionne s'il a un numéro (contrat établi) et pas de CSM connu (même règle que matchesCsm).
+export function isPickable(row, index) {
+  return !!(row && row.numero_client && !(row.csm_user_id && index[row.csm_user_id]));
+}
+
+// Appui long : se déclenche après `delay` ms sans bouger de plus de `slop` pixels. Un défilement au doigt ou un
+// glissé à la souris l'annule ; `end()` dit si l'appui long a eu lieu (pour ignorer le clic qui suit).
+export function createLongPress({ delay = 450, slop = 8, onFire, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
+  let timer = null, origin = null, fired = false;
+  const stop = () => { if (timer !== null) { clearTimer(timer); timer = null; } origin = null; };
+  return {
+    start(x, y) { stop(); fired = false; origin = { x, y }; timer = setTimer(() => { timer = null; origin = null; fired = true; onFire(); }, delay); },
+    move(x, y) { if (origin && Math.hypot(x - origin.x, y - origin.y) > slop) stop(); },
+    cancel: stop,
+    end() { stop(); const was = fired; fired = false; return was; },
+    get pending() { return timer !== null; },
+  };
+}
+
+// Envoie les attributions par petits paquets en parallèle (un PATCH par client, comme la fiche) ; un échec n'arrête
+// pas les autres. Renvoie { ok: [numéros], failed: [{ numero, error }] } dans l'ordre d'entrée.
+export async function assignInBatches(patchOne, numbers, csmId, concurrency = 4) {
+  const list = [...new Set(numbers)];
+  const results = new Array(list.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < list.length) {
+      const at = next++;
+      try { await patchOne(list[at], csmId); results[at] = { numero: list[at], ok: true }; }
+      catch (error) { results[at] = { numero: list[at], ok: false, error }; }
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, list.length) }, worker));
+  return { ok: results.filter((r) => r.ok).map((r) => r.numero), failed: results.filter((r) => !r.ok).map((r) => ({ numero: r.numero, error: r.error })) };
+}
+
+// Phrase de l'action, au singulier ou au pluriel.
+export function assignLabel(count) {
+  return `Attribuer à ${count} client${count > 1 ? "s" : ""}`;
+}
