@@ -371,3 +371,73 @@ button.fst-stat:active { transform: scale(.985); }
 .fst-empty.is-box { border: 1px dashed #e3ded6; border-radius: 14px; background: #fff; padding: 34px 16px; }
 .fst-section-title { font-size: 16px; font-weight: 500; letter-spacing: -.012em; margin: 0; }
 .fst-micro { font-size: 10.5px; font-weight: 500; letter-spacing: .09em; text-transform: uppercase; color: #a8a39b; }
+
+/* ── Période en jours : le bouton des deux taux par sales dans la Performance Sales (dev 13/11/2026) ──────────────────────
+   Même langage que le choix Mois / 3 mois / Année : fond « piste » grège, pastille blanche relevée quand une période est choisie. */
+.fst-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.fst-pp-btn { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 10px; border-radius: 11px; background: var(--track); color: var(--ink-2); font-size: 12.5px; font-weight: 450;
+  white-space: nowrap; transition: color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease), transform .18s var(--ease); }
+.fst-pp-btn:hover, .fst-pp-btn[aria-expanded="true"] { color: var(--ink); }
+.fst-pp-btn:active { transform: scale(.95); }
+.fst-pp-btn[data-active="true"] { background: #faf9f8; color: var(--ink); font-weight: 500;
+  box-shadow: inset 0 0 0 1px #fff, 0 1px 2px rgba(50, 40, 30, .12), 0 3px 8px -3px rgba(50, 40, 30, .14); }
+.fst-pp-btn svg { flex: none; }
+/* Le menu vit dans le <body> (une carte coupe ce qui dépasse) : il reprend les jetons par la classe de la racine. */
+.fst-pp-panel { position: fixed; z-index: 3000; width: 556px; max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); overflow-y: auto; padding: 10px; border-radius: 20px; background: #fff;
+  border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(50, 40, 30, .06), 0 18px 40px -14px rgba(50, 40, 30, .28); animation: fstPpIn .22s var(--ease) both; }
+@keyframes fstPpIn { from { opacity: 0; transform: translateY(-4px) scale(.985); } to { opacity: 1; transform: none; } }
+.fst-pp-body { display: grid; grid-template-columns: 178px minmax(0, 1fr); gap: 12px; }
+.fst-pp-side { display: flex; flex-direction: column; gap: 2px; padding-right: 10px; border-right: 1px solid var(--line-soft); }
+.fst-pp-item { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; width: 100%; min-height: 40px; padding: 4px 28px 4px 10px; border-radius: 10px;
+  font-size: 13px; text-align: left; color: var(--ink); transition: background .15s; }
+.fst-pp-item:hover, .fst-pp-item[aria-pressed="true"] { background: var(--hover); }
+.fst-pp-item[aria-pressed="true"] { font-weight: 500; }
+.fst-pp-item > small { color: var(--ink-2); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.fst-pp-item > svg { position: absolute; right: 9px; top: 50%; translate: 0 -50%; color: var(--ink-2); }
+.fst-pp-cal { display: grid; gap: 8px; align-content: start; min-width: 0; padding: 2px 2px 0; }
+.fst-pp-custom-title { display: flex; align-items: center; justify-content: space-between; min-height: 18px; font-size: 12px; font-weight: 500; color: var(--ink-2); letter-spacing: .01em; }
+.fst-pp-custom-title > svg { flex: none; }
+.fst-pp-dates { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.fst-pp-dates label { display: grid; gap: 4px; font-size: 11.5px; color: var(--ink-2); }
+.fst-pp-date { height: 34px; width: 100%; border-radius: 11px; border: 1px solid var(--line); background: #fff; padding: 0 8px; font: inherit; font-size: 13px; color: var(--ink); box-shadow: var(--shadow-1); }
+.fst-pp-date:hover { border-color: #d9d4cc; }
+.fst-pp-month { display: flex; align-items: center; justify-content: space-between; font-size: 13px; font-weight: 500; }
+.fst-pp-nav { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 9px; color: var(--ink-2); transition: background .15s, transform .18s var(--ease); }
+.fst-pp-nav:hover:not(:disabled) { background: var(--hover); color: var(--ink); }
+.fst-pp-nav:active:not(:disabled) { transform: scale(.88); }
+.fst-pp-nav:disabled { opacity: .3; cursor: default; }
+.fst-pp-grid { display: grid; gap: 2px; }
+.fst-pp-weekdays, .fst-pp-week { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.fst-pp-weekdays span { height: 22px; display: grid; place-items: center; font-size: 11.5px; color: var(--ink-2); }
+.fst-pp-cell, .fst-pp-gap { display: block; min-width: 0; }
+.fst-pp-day { display: grid; place-items: center; width: 100%; height: 32px; border-radius: 0; font-size: 13px; font-variant-numeric: tabular-nums; color: var(--ink); transition: background .12s, color .12s; }
+.fst-pp-day:hover:not(:disabled):not(.is-edge) { background: var(--hover); border-radius: 9px; }
+.fst-pp-day.is-in { background: var(--track); }
+.fst-pp-day.is-edge { background: var(--charcoal); color: #fff; }
+.fst-pp-day.is-start { border-radius: 9px 0 0 9px; }
+.fst-pp-day.is-end { border-radius: 0 9px 9px 0; }
+.fst-pp-day.is-start.is-end { border-radius: 9px; }
+.fst-pp-day.is-today:not(.is-edge) { box-shadow: inset 0 0 0 1px var(--rail); border-radius: 9px; }
+.fst-pp-day:disabled { color: var(--faint); cursor: default; }
+.fst-pp-halves { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.fst-pp-half { display: grid; gap: 1px; justify-items: center; padding: 6px 4px; border-radius: 10px; background: var(--track); font-size: 12px; color: var(--ink); transition: background .15s, transform .18s var(--ease), opacity .15s; }
+.fst-pp-half > small { color: var(--ink-2); font-size: 11px; font-variant-numeric: tabular-nums; }
+.fst-pp-half:hover:not(:disabled) { background: var(--rail); }
+.fst-pp-half:active:not(:disabled) { transform: scale(.96); }
+.fst-pp-half:disabled { opacity: .4; cursor: default; }
+.fst-pp-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 30px; }
+.fst-pp-note { font-size: 12px; color: var(--red); }
+.fst-pp-apply { margin-left: auto; height: 30px; padding: 0 14px; border-radius: 999px; background: var(--charcoal); color: #fff; font-size: 13px; font-weight: 400; transition: transform .18s var(--ease), background .15s, opacity .15s; }
+.fst-pp-apply:hover:not(:disabled) { background: #3d3a37; }
+.fst-pp-apply:active:not(:disabled) { transform: scale(.94); }
+.fst-pp-apply:disabled { opacity: .35; cursor: default; }
+/* Écran étroit : les périodes proposées passent au-dessus du calendrier, en pastilles. */
+@media (max-width: 620px) {
+  .fst-pp-panel { width: 372px; }
+  .fst-pp-body { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .fst-pp-side { flex-direction: row; flex-wrap: wrap; gap: 6px; padding: 0 0 10px; border-right: 0; border-bottom: 1px solid var(--line-soft); }
+  .fst-pp-item { width: auto; min-height: 30px; padding: 0 12px; border-radius: 999px; background: var(--track); font-size: 12.5px; }
+  .fst-pp-item > small, .fst-pp-item > svg { display: none; }
+  .fst-pp-item[aria-pressed="true"] { background: var(--charcoal); color: #fff; }
+}
+@media (prefers-reduced-motion: reduce) { .fst-pp-panel { animation: none; } .fst-pp-btn, .fst-pp-item, .fst-pp-apply, .fst-pp-half, .fst-pp-day, .fst-pp-nav { transition: none; } }

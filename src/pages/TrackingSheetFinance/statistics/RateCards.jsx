@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { CalendarX2, ChevronRight, Undo2 } from 'lucide-react';
 import { useDrawn } from '../../../components/perfSales/motion.jsx';
 import { LEVEL, ONBOARDING_STATUS, byPerson, count, dayFR, eur, outcomeMeta, pct, plural } from './model.js';
-import { monthLabel, monthShort, rangeFor, rangeLabel } from './period.js';
+import { dayRangeLabel, monthLabel, monthShort, rangeFor, rangeLabel } from './period.js';
 import { Avatar, Card, Collapse, Fill, Num, Pill, Segmented } from './parts.jsx';
+import { PeriodPicker } from './PeriodPicker.jsx';
 import { useStatistic } from './useStatistics.js';
 
 const SPANS = [{ key: 'month', label: 'Mois' }, { key: 'quarter', label: '3 mois' }, { key: 'year', label: 'Année' }];
@@ -70,18 +71,26 @@ function useSpan(anchor, current) {
   return { span, setSpan, range: rangeFor(span, anchor, current) };
 }
 
+// Le choix de période d'une carte : les trois durées en mois et, sur la Performance Sales (`pickPeriod`), le bouton des jours. `days` : la période
+// en jours choisie au bouton, ou null (les mois) ; chaque carte garde la sienne. Choisir une durée en mois revient aux mois.
+function PeriodActions({ pickPeriod, days, setDays, span, setSpan, label }) {
+  const segmented = <Segmented small options={SPANS} value={days ? null : span} onChange={(key) => { setDays(null); setSpan(key); }} label={label} />;
+  return pickPeriod ? <div className="fst-head-actions"><PeriodPicker value={days} onChange={setDays} label={label} />{segmented}</div> : segmented;
+}
+
 // ── Rétractations ───────────────────────────────────────────────────────────────────────────────────
-export function RetractionsCard({ anchor, current, canOpen, onOpenClient }) {
+export function RetractionsCard({ anchor, current, canOpen, onOpenClient, pickPeriod = false }) {
   const { span, setSpan, range } = useSpan(anchor, current);
-  const state = useStatistic('retractions', range);
+  const [days, setDays] = useState(null);
+  const state = useStatistic('retractions', range, days);
   const data = state.data;
   const totals = data?.totals || {};
   const people = (data?.by_sales_person || []).filter((p) => p.sales > 0);
   const top = Math.max(0, ...people.map((p) => p.rate || 0));
 
   return (
-    <Card title="Taux de rétractation par sales" Icon={Undo2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${rangeLabel(range)}`}
-      actions={<Segmented small options={SPANS} value={span} onChange={setSpan} label="Période des rétractations" />}>
+    <Card title="Taux de rétractation par sales" Icon={Undo2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${days ? dayRangeLabel(days) : rangeLabel(range)}`}
+      actions={<PeriodActions pickPeriod={pickPeriod} days={days} setDays={setDays} span={span} setSpan={setSpan} label="Période des rétractations" />}>
       <div className="fst-rate-top">
         <div>
           <Num className="fst-rate-big" value={totals.rate} format={(n) => pct(n)} />
@@ -149,9 +158,10 @@ function Onboarding({ row, canOpen, onOpenClient }) {
   );
 }
 
-export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
+export function NoShowsCard({ anchor, current, canOpen, onOpenClient, pickPeriod = false }) {
   const { span, setSpan, range } = useSpan(anchor, current);
-  const state = useStatistic('onboarding-no-shows', range);
+  const [days, setDays] = useState(null);
+  const state = useStatistic('onboarding-no-shows', range, days);
   const data = state.data;
   const totals = data?.totals || {};
   const people = (data?.by_sales_person || []).filter((p) => p.clients > 0);
@@ -159,8 +169,8 @@ export function NoShowsCard({ anchor, current, canOpen, onOpenClient }) {
   const listed = (name) => byPerson(data.clients, name).filter((c) => c.status === 'no_show' || c.status === 'to_confirm');
 
   return (
-    <Card title="No show d’onboarding par sales" Icon={CalendarX2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${rangeLabel(range)}`}
-      actions={<Segmented small options={SPANS} value={span} onChange={setSpan} label="Période des no show" />}>
+    <Card title="No show d’onboarding par sales" Icon={CalendarX2} state={state} skeleton={340} hint={`Ventes signées sur la période · ${days ? dayRangeLabel(days) : rangeLabel(range)}`}
+      actions={<PeriodActions pickPeriod={pickPeriod} days={days} setDays={setDays} span={span} setSpan={setSpan} label="Période des no show" />}>
       <div className="fst-rate-top">
         <div>
           <Num className="fst-rate-big" value={totals.rate} format={(n) => pct(n)} />

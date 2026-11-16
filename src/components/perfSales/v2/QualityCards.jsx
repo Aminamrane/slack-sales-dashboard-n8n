@@ -20,8 +20,8 @@ export default function QualityCards({ period }) {
     <MotionConfig reducedMotion="user">
       <div className="fst-root fst-embed" style={{ marginTop: 20 }}>
         <Reveal className="fst-grid is-even" amount={0.05}>
-          <RetractionsCard anchor={anchor} current={current} canOpen={never} />
-          <NoShowsCard anchor={anchor} current={current} canOpen={never} />
+          <RetractionsCard anchor={anchor} current={current} canOpen={never} pickPeriod />
+          <NoShowsCard anchor={anchor} current={current} canOpen={never} pickPeriod />
         </Reveal>
       </div>
     </MotionConfig>
