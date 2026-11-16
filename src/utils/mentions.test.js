@@ -23,6 +23,13 @@ test('le filtre classe par pertinence, sans accents ni casse', () => {
   assert.deepEqual(filterPeople(people, 'zzz'), []);
 });
 
+test('le filtre ne coupe plus la liste : tout le monde est proposé, la liste défile', () => {
+  const many = Array.from({ length: 30 }, (_, i) => ({ id: 'p' + i, name: 'Personne ' + String(i).padStart(2, '0'), email: `p${i}@owner.test`, role: 'ceo' }));
+  assert.equal(filterPeople(many, '').length, 30);
+  assert.equal(filterPeople(many, 'per').length, 30);
+  assert.equal(filterPeople(many, '', 6).length, 6);
+});
+
 test('insérer une personne remplace la requête par « @Nom Complet » suivi d’un espace', () => {
   const result = insertMention('Bonjour @Li, merci', 8, 11, people[0]);
   assert.equal(result.text, 'Bonjour @Lisa Gentaire , merci');
