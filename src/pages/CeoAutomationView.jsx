@@ -22,6 +22,7 @@ import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
 import ProcessPage from "../components/automationBoard/ProcessPage";
 import DevBoard from "../components/automationBoard/DevBoard";
+import { COLUMN_HINTS, Hint } from "../components/automationBoard/Hint";
 import "../components/automationBoard/automation.css";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
@@ -294,11 +295,11 @@ export default function CeoAutomationView() {
                         <thead>
                           <tr>
                             <Th Icon={ListChecks}>Mission</Th>
-                            <Th Icon={CheckCheck}>Réalisées</Th>
-                            <Th Icon={Gauge}>Utilisation du logiciel</Th>
-                            <Th Icon={MessageCircle}>Messagerie</Th>
-                            <Th Icon={Tags}>Classement</Th>
-                            <Th Icon={Milestone}>Avancement</Th>
+                            <Th Icon={CheckCheck}><Hint text={COLUMN_HINTS.done}>Réalisées</Hint></Th>
+                            <Th Icon={Gauge}><Hint text={COLUMN_HINTS.usage}>Utilisation du logiciel</Hint></Th>
+                            <Th Icon={MessageCircle}><Hint text={COLUMN_HINTS.messaging}>Messagerie</Hint></Th>
+                            <Th Icon={Tags}><Hint text={COLUMN_HINTS.classification}>Classement</Hint></Th>
+                            <Th Icon={Milestone}><Hint text={COLUMN_HINTS.progress} align="end">Avancement</Hint></Th>
                           </tr>
                         </thead>
                         <tbody key={`${period}-${classification}-${pole}-${view}-${query}`}>
@@ -327,12 +328,12 @@ export default function CeoAutomationView() {
                                 </div>
                               </td>
                               <td>
-                                <div className="fst-num" style={{ fontWeight: 500 }}>{number(row.total)} <span className="fst-cell-muted" style={{ fontWeight: 400, fontSize: 12 }}>· {number(row.recent)} sur 90 j</span></div>
+                                <div className="fst-num" style={{ fontWeight: 500 }} title={`${number(row.total)} réalisées depuis le début, dont ${number(row.recent)} ces 90 derniers jours`}>{number(row.total)} <span className="fst-cell-muted" style={{ fontWeight: 400, fontSize: 12 }}>· {number(row.recent)} sur 90 j</span></div>
                                 <div style={{ marginTop: 6, maxWidth: 150 }}><Bar value={row.bar} color={P.faint} P={P} /></div>
                               </td>
                               <td style={{ minWidth: 190 }}><Usage usage={row.usage} P={P} /></td>
                               <td className="fst-num">
-                                {row.messaging?.total ? <>{number(row.messaging.total)} <span className="fst-cell-muted" style={{ fontSize: 12 }}>· {row.messaging.share} %</span></> : <span className="fst-cell-muted">–</span>}
+                                {row.messaging?.total ? <span title={`${number(row.messaging.total)} demandées depuis la messagerie, soit ${row.messaging.share} % de ces missions`}>{number(row.messaging.total)} <span className="fst-cell-muted" style={{ fontSize: 12 }}>· {row.messaging.share} %</span></span> : <span className="fst-cell-muted" title="Aucune demande depuis la messagerie">–</span>}
                               </td>
                               <td>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>

@@ -322,3 +322,52 @@ export function eventSentence(event) {
   const what = String(event?.what || "");
   return event?.who && /^[a-zàâéèêîôû]/.test(what) ? `${event.who} ${what}` : what || event?.who || "";
 }
+
+// ── Les deux voix d'une mission (dev 16/11/2026 : « c'est dur de savoir où en sont les devs, les derniers avis des
+// juristes ») ──────────────────────────────────────────────────────────────────────────────────────────────────────
+// Opti'Lex date ses faits de deux façons : « 2026-11-12 » + heure dans l'historique, « 12/11/2026 à 14:04 » dans les
+// lignes (attente, travail en cours). Les deux se lisent ici en une date.
+export function factDate(value, time = "") {
+  if (!value) return null;
+  const text = String(value).trim();
+  const fr = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s*à\s*(\d{1,2})[:h](\d{2}))?/);
+  const date = fr ? new Date(`${fr[3]}-${fr[2]}-${fr[1]}T${(fr[4] || "12").padStart(2, "0")}:${fr[5] || "00"}:00`)
+    : /^\d{4}-\d{2}-\d{2}$/.test(text) ? new Date(`${text}T${time || "12:00"}:00`) : new Date(text);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+
+// Il y a combien de temps, en mots : « aujourd'hui à 14 h 04 », « hier », « il y a 3 jours », « le 2 novembre ».
+export function whenLabel(date, now = Date.now()) {
+  if (!date) return "";
+  const days = Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(date).setHours(0, 0, 0, 0)) / 86400000);
+  const hour = `${String(date.getHours()).padStart(2, "0")} h ${String(date.getMinutes()).padStart(2, "0")}`;
+  if (days <= 0) return `aujourd’hui à ${hour}`;
+  if (days === 1) return `hier à ${hour}`;
+  if (days < 7) return `il y a ${days} jours`;
+  return `le ${date.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}`;
+}
+
+// La dernière parole de chaque côté. Le juriste : sa demande de modification, sa validation d'une version, ses commentaires
+// partagés depuis Opti'Lex. Les développeurs : la version livrée, le travail en cours et ses points d'avancement, les
+// points d'avancement posés depuis Owner. `null` quand un côté ne s'est pas encore exprimé.
+export function voices(row, history, entries) {
+  const lawyer = [];
+  const devs = [];
+  const aw = row?.awaiting;
+  if (aw?.who === "dev") lawyer.push({ who: aw.by, at: factDate(aw.since), what: "a demandé une modification", text: aw.text || "", tone: "change" });
+  if (aw?.who === "lawyer") devs.push({ who: aw.by, at: factDate(aw.since), what: "a livré une version à tester", text: aw.text || "", tone: "deliver" });
+  const w = row?.working;
+  if (w) devs.push({ who: w.updatedBy || w.by, at: factDate(w.updatedAt || w.since), what: w.updatedAt && w.updatedAt !== w.since ? "a fait un point d’avancement" : "travaille dessus", text: w.text || "", tone: "work" });
+  (Array.isArray(history) ? history : []).forEach((day) => (day.items || []).forEach((item) => {
+    const at = factDate(day.day, item.time);
+    if (item.filter === "comments" && item.who) lawyer.push({ who: item.who, at, what: "a écrit", text: item.text || "", tone: "comment" });
+    const step = Number.isInteger(item.step) ? item.step : null;
+    if (item.kind === "decision" && step === 3) lawyer.push({ who: item.who, at, what: "a validé la version", text: item.note || item.text || "", tone: "approve" });
+    if (item.kind === "decision" && step === 2) devs.push({ who: item.who, at, what: "a livré une version à tester", text: item.note || item.text || "", tone: "deliver" });
+  }));
+  (Array.isArray(entries) ? entries : []).forEach((entry) => {
+    if (entry.kind === "update") devs.push({ who: entry.author_name, at: factDate(entry.created_at), what: "a fait un point d’avancement", text: entry.body || "", tone: "work" });
+  });
+  const latest = (list) => list.filter((item) => item.at).sort((a, b) => b.at - a.at)[0] || null;
+  return { lawyer: latest(lawyer), devs: latest(devs) };
+}
