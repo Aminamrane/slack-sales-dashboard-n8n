@@ -100,16 +100,32 @@ export const statusCounts = (lines = []) => lines.reduce((acc, line) => {
 export const sumBy = (lines, pick) => lines.reduce((sum, line) => sum + (Number(pick(line)) || 0), 0);
 
 // ── Rendez-vous d'onboarding ────────────────────────────────────────────────────────────────────────
+// Règle du dev (13/11/2026) : un rendez-vous reporté est un report, jamais un no show ; un onboarding finalement tenu
+// n'est pas un no show. Seul le dernier rendez-vous connu peut être un no show.
 export const OUTCOME = {
   no_show: { label: 'No show', tone: 'red' },
   held: { label: 'Onboarding tenu', tone: 'green' },
-  moved_before: { label: 'Déplacé avant le jour', tone: 'grey' },
-  unknown: { label: 'Déplacé, moment inconnu', tone: 'grey' },
+  postponed: { label: 'Reporté', tone: 'grey' },
+  // Autre date connue d'avant les rappels, sans trace d'un report : montrée, jamais comptée.
+  unknown: { label: 'Autre date, sans trace', tone: 'grey' },
   upcoming: { label: 'À venir', tone: 'blue' },
   rescheduling: { label: 'À recaler', tone: 'amber' },
 };
-export const outcomeMeta = (step) => (step.outcome === 'no_show' && step.level === 'to_confirm'
-  ? { label: 'À confirmer', tone: 'amber' } : OUTCOME[step.outcome] || OUTCOME.unknown);
+// Quand le rendez-vous a été reporté. Le jour même, après sa date, alors que le rappel était parti, ou signalé par le
+// Client Success : reporté tard.
+export const REPORT_WHEN = {
+  before: 'avant le jour',
+  same_day: 'le jour même',
+  after: 'après la date',
+  reminded: 'le jour même ou après',
+  flagged: 'signalé « à recaler »',
+};
+const LATE = new Set(['same_day', 'after', 'reminded', 'flagged']);
+export const outcomeMeta = (step) => {
+  if (step.outcome === 'no_show' && step.level === 'to_confirm') return { label: 'À confirmer', tone: 'amber' };
+  if (step.outcome === 'postponed') return { label: 'Reporté', tone: LATE.has(step.when) ? 'amber' : 'grey' };
+  return OUTCOME[step.outcome] || OUTCOME.unknown;
+};
 export const LEVEL = { certain: 'Certain', probable: 'Probable', to_confirm: 'À confirmer' };
 export const ONBOARDING_STATUS = {
   no_show: { label: 'No show', tone: 'red' },
@@ -119,6 +135,56 @@ export const ONBOARDING_STATUS = {
   rescheduling: { label: 'À recaler', tone: 'amber' },
   none: { label: 'Pas de date', tone: 'ghost' },
 };
+
+// Les deux lectures de la carte d'onboarding, jamais mélangées : ce que compte chacune et sur quoi.
+export const ONBOARDING_VIEWS = {
+  no_show: { label: 'No show', rate: 'rate', numerator: 'no_show', denominator: 'due', listed: (row) => row.status === 'no_show' || row.status === 'to_confirm' },
+  reports: { label: 'Reports', rate: 'report_rate', numerator: 'reported', denominator: 'followed', listed: (row) => row.reports > 0 },
+};
+// Les sales d'une lecture : son taux dans `rate`, du plus haut au plus bas, à taux égal ceux qui ont le plus de clients.
+export function peopleOf(people = [], view) {
+  const { rate, denominator } = ONBOARDING_VIEWS[view] || ONBOARDING_VIEWS.no_show;
+  return people.filter((p) => p.clients > 0).map((p) => ({ ...p, rate: p[rate] }))
+    .sort((a, b) => (b.rate || 0) - (a.rate || 0) || (b[denominator] || 0) - (a[denominator] || 0) || String(a.name).localeCompare(String(b.name), 'fr'));
+}
+
+// ── Tentatives de contact du Client Success vers un client en no show ───────────────────────────────
+// Dev 13/11/2026 : « combien de fois le CSM a essayé de contacter le client », « qui fait le mort ».
+export function contactMeta(attempt) {
+  if (!attempt) return null;
+  if (!attempt.has_phone) return { label: 'Pas de numéro', tone: 'ghost' };
+  if (attempt.unreachable) return { label: 'Ne répond pas', tone: 'red' };
+  if (attempt.answered > 0) return { label: 'A décroché', tone: 'green' };
+  if (attempt.called_back > 0) return { label: 'A rappelé', tone: 'green' };
+  // Décroché quelques secondes seulement : ni un échange, ni un client qui ne décroche jamais.
+  if (attempt.brief > 0) return { label: 'Décroché bref', tone: 'amber' };
+  return { label: 'Jamais appelé', tone: 'amber' };
+}
+const OUTCOME_WORDS = {
+  conversation: ['décroché', 'décrochés'], brief: ['décroché bref', 'décrochés brefs'], voicemail: ['répondeur', 'répondeurs'], not_answered: ['sans réponse', 'sans réponse'],
+};
+// « 4 tentatives depuis le 10/11/2026 · 3 répondeurs · 1 sans réponse · dernière le 12/11/2026 »
+export function contactLine(attempt) {
+  if (!attempt || !attempt.has_phone) return 'Aucun numéro sur la fiche : les appels ne peuvent pas être rattachés.';
+  const since = attempt.since ? ` depuis le ${dayFR(attempt.since)}` : '';
+  if (!attempt.attempts) {
+    return `Aucun appel du Client Success${since}${attempt.before ? ` (${plural(attempt.before, 'appel')} avant)` : ''}.`;
+  }
+  const parts = [`${plural(attempt.attempts, 'tentative')}${since}`];
+  [['answered', 'conversation'], ['brief', 'brief'], ['voicemail', 'voicemail'], ['not_answered', 'not_answered']].forEach(([key, word]) => {
+    if (attempt[key]) parts.push(`${count(attempt[key])} ${OUTCOME_WORDS[word][attempt[key] > 1 ? 1 : 0]}`);
+  });
+  if (attempt.inbound) parts.push(`${plural(attempt.inbound, 'appel reçu', 'appels reçus')} du client`);
+  if (attempt.last_attempt) parts.push(`dernière le ${dayFR(attempt.last_attempt)}`);
+  return parts.join(' · ');
+}
+export const CALL_OUTCOME = { conversation: 'décroché', voicemail: 'répondeur', not_answered: 'sans réponse' };
+// « 12/11 à 17:00 » : l'heure de Paris, telle que le serveur la donne.
+export const callMoment = (iso) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)} à ${iso.slice(11, 16)}` : '–');
+export const callLength = (seconds) => (seconds ? `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}` : null);
+
+// ── Météo d'un client rétracté ──────────────────────────────────────────────────────────────────────
+export const weatherTone = (score) => (score >= 5 ? 'green' : score >= 3 ? 'amber' : 'red');
 
 // Lignes d'un sales dans une carte de taux : ses cas d'abord, puis le reste.
 export const byPerson = (rows = [], name) => rows.filter((row) => row.sales_person === name);
