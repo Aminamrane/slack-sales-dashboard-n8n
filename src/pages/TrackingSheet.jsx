@@ -78,6 +78,7 @@ import iconPrioLow from "../assets/low.svg";
 import iconCampaigns from "../assets/tar.png";
 import iconCalendrier from "../assets/calendrier.png";
 import iconSheets from "../assets/files.png";
+import iconKpis from "../assets/finance.png";
 import iconBuilding from "../assets/building.svg";
 import campaignImg1 from "../assets/audit-document.jpg";
 import campaignImg2 from "../assets/charges-fatales-2.png";
@@ -3374,6 +3375,9 @@ export default function TrackingSheet() {
                 <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3l1.9 4.9L18.8 9.8 13.9 11.7 12 16.6 10.1 11.7 5.2 9.8 10.1 7.9z"/><path d="M18.5 14.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/></svg>
               ) },
               // « KPIs & Stats » et « Mes préférences » retirés du menu (dev 11/11/2026). Les chiffres restent dans le bandeau du haut.
+              // « KPIs & Stats » revient pour les heads (dev 16/11/2026) : c'est leur tableau Perf Sales de l'équipe, retiré avec
+              // celui des sales par erreur le 12/11. Les sales gardent le bandeau du haut seul.
+              ...(['admin', 'head_of_sales', 'head_of_sales_manager'].includes(currentUser?.role) ? [{ key: 'kpis', label: 'KPIs & Stats', iconSrc: iconKpis, accent: '#6366f1' }] : []),
               // Préférences de secteur (06/10/2026) : le dev les voit et les modifie toutes, chaque sales les siennes.
               ...(currentUser?.role === 'admin' ? [{ key: 'sales_prefs', label: 'Préférences sales', accent: C.accent, iconNode: (active) => (
                 <SlidersHorizontal size={19} strokeWidth={2} color={active ? (darkMode ? '#141414' : '#ffffff') : (darkMode ? 'rgba(255,255,255,0.45)' : 'rgba(0,0,0,0.3)')} />
