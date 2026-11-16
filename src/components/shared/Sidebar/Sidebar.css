@@ -57,6 +57,9 @@
 .sb-notif-select.is-on { background: var(--sb-text); color: var(--sb-bg); }
 .sb-notif-select:disabled { color: var(--sb-muted); cursor: default; }
 .sb-notif-body p.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-line; }
+.sb-notif-item.is-open .sb-notif-top { align-items: flex-start; }
+.sb-notif-body p.is-expandable { cursor: pointer; }
+.sb-notif-item.is-open .sb-notif-top strong { white-space: normal; overflow: visible; text-overflow: clip; }
 .sb-notif-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; }
 .sb-notif-acts .sb-notif-action { margin-top: 0; }
 .sb-notif-more { padding: 2px 0; border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--sb-muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: transparent; transition: color .15s, text-decoration-color .15s; }

@@ -22,7 +22,13 @@ export function notificationTarget(notif, role) {
     if (notif.type === 'owner_rating_regression' && notif.data?.meteo_id) { params.set('focus', 'comments'); params.set('rating', String(notif.data.meteo_id)); }
     return `${boardPathFor(role)}?${params.toString()}`;
   }
-  if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
+  // Mention : chemin choisi par le serveur selon le rôle, plus le commentaire exact (la fiche défile jusqu'à lui).
+  if (notif.type === 'board_mention') {
+    const path = notif.data?.path || '/optilex-board';
+    const id = notif.data?.comment_id;
+    if (!id || /[?&]comment=/.test(path)) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}comment=${encodeURIComponent(String(id))}`;
+  }
   // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur).
   if (notif.type === 'finance_note_mention') return notif.data?.path || '/tracking-finance';
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';

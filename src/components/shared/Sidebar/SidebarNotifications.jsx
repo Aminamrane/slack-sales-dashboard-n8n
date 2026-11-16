@@ -6,10 +6,10 @@
 // masse ») : le texte se lit en entier (« Lire la suite »), la liste s'allonge (« Voir plus »), et « Sélectionner »
 // fait apparaître des cases pour marquer lu ou retirer plusieurs notifications d'un coup. Retirer ne touche que sa
 // propre liste : les autres destinataires gardent la leur.
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // eslint-disable-next-line no-unused-vars -- motion utilisé via JSX (faux positif)
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { ArrowLeft, AtSign, Bell, Check, CheckCheck, FileText, Mail, ShieldAlert, Trash2, TrendingDown, User } from "lucide-react";
+import { ArrowLeft, AtSign, Bell, Check, CheckCheck, FileText, Mail, MessageSquare, ShieldAlert, Trash2, TrendingDown, User } from "lucide-react";
 import apiClient from "../../../services/apiClient";
 import { CLIENT_NOTIFICATION_TYPES, notificationDate, notificationTarget } from "../../../utils/notificationPresentation.js";
 
@@ -25,15 +25,34 @@ const ago = (value) => {
 };
 const glyphOf = (n) => (n.type === "owner_rating_regression" ? TrendingDown : n.type === "sheet_invitation" ? Mail
   : (n.type === "board_mention" || n.type === "finance_note_mention") ? AtSign : n.type === "optilex_contract_alert" ? ShieldAlert : Bell);
-// Le bouton dit où mène la notification ; le board est celui du rôle de la personne connectée.
+// Le bouton dit où mène la notification (le board est celui du rôle de la personne connectée) : une mention mène
+// au commentaire exact, une météo à son échange (dev 16/11/2026 : « c'est le commentaire qui va intéresser »).
 const actionOf = (n) => {
   const target = notificationTarget(n, apiClient.getUser()?.role);
   if (!target) return null;
-  if (CLIENT_NOTIFICATION_TYPES.includes(n.type) || n.type === "board_mention" || n.type === "finance_note_mention") return { target, label: "Voir le client", Icon: User };
+  if (n.type === "board_mention" || n.type === "finance_note_mention") return { target, label: "Voir le commentaire", Icon: MessageSquare };
+  if (n.type === "owner_rating_regression") return { target, label: "Voir la météo", Icon: TrendingDown };
+  if (CLIENT_NOTIFICATION_TYPES.includes(n.type)) return { target, label: "Voir le client", Icon: User };
   return { target, label: "Ouvrir", Icon: FileText };
 };
-// Au-delà de deux lignes (environ), le texte est coupé : « Lire la suite » l'affiche en entier.
-const isLong = (text) => text.length > 110 || text.includes("\n");
+// Titre ou texte coupé (mesuré, pas deviné à la longueur) : « Lire la suite » affiche tout.
+function useClipped(open, deps) {
+  const titleRef = useRef(null);
+  const textRef = useRef(null);
+  const [clipped, setClipped] = useState(false);
+  useLayoutEffect(() => {
+    if (open) return undefined;
+    const t = titleRef.current; const p = textRef.current;
+    const measure = () => setClipped(!!((t && t.scrollWidth > t.clientWidth + 1) || (p && p.scrollHeight > p.clientHeight + 1)));
+    measure();
+    // Le menu s'élargit à l'ouverture du panneau : on remesure quand la largeur change.
+    if (typeof ResizeObserver === "undefined") return undefined;
+    const ro = new ResizeObserver(measure);
+    [t, p].forEach((el) => el && ro.observe(el));
+    return () => ro.disconnect();
+  }, [open, ...deps]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return { titleRef, textRef, clipped };
+}
 
 export function NotificationsRow({ collapsed, unread, open, onToggle }) {
   const label = unread ? `Notifications, ${unread} non lue${unread > 1 ? "s" : ""}` : "Notifications";
@@ -90,53 +109,10 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
       </header>
       <div className="sb-notif-list ceo-side-scroll">
         <AnimatePresence initial={false}>
-          {shown.map((n, i) => {
-            const Glyph = glyphOf(n);
-            const action = actionOf(n);
-            const message = n.message && n.message !== n.title ? n.message : "";
-            const open = !!expanded[n.id];
-            const on = picked.has(n.id);
-            return (
-              <motion.article key={n.id} layout={!reduce} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}`}
-                initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.025 } }}
-                exit={{ opacity: 0, x: -12, transition: { duration: 0.14 } }}
-                onClick={selecting ? () => toggle(n.id) : undefined}>
-                {selecting ? (
-                  <span className={`sb-notif-check${on ? " is-on" : ""}`} role="checkbox" aria-checked={on} aria-label={`Sélectionner : ${n.title || n.message}`}
-                    tabIndex={0} onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); toggle(n.id); } }}>
-                    {on && <Check size={13} strokeWidth={3} aria-hidden="true" />}
-                  </span>
-                ) : (
-                  <span className="sb-notif-ic"><Glyph size={16} strokeWidth={1.9} aria-hidden="true" /></span>
-                )}
-                <div className="sb-notif-body">
-                  <div className="sb-notif-top">
-                    <strong title={n.title || n.message}>{n.title || n.message}</strong>
-                    <time dateTime={notificationDate(n.created_at).iso} title={notificationDate(n.created_at).label}>{ago(n.created_at)}</time>
-                  </div>
-                  {message && <p className={open ? "is-open" : ""}>{message}</p>}
-                  {!selecting && (message && isLong(message) || action) && (
-                    <div className="sb-notif-acts">
-                      {action && (
-                        <button type="button" className="sb-notif-action" onClick={() => onOpen(n, action.target)}>
-                          <action.Icon size={13} aria-hidden="true" />{action.label}
-                        </button>
-                      )}
-                      {message && isLong(message) && (
-                        <button type="button" className="sb-notif-more" aria-expanded={open} onClick={() => expand(n)}>{open ? "Réduire" : "Lire la suite"}</button>
-                      )}
-                    </div>
-                  )}
-                </div>
-                {!selecting && !n.read && <button type="button" className="sb-notif-dot" onClick={() => onOpen(n, null)} aria-label="Marquer comme lue" title="Marquer comme lue" />}
-                {!selecting && (
-                  <button type="button" className="sb-notif-del" onClick={() => onDismiss([n.id])} aria-label="Retirer de ma liste" title="Retirer de ma liste">
-                    <Trash2 size={13} aria-hidden="true" />
-                  </button>
-                )}
-              </motion.article>
-            );
-          })}
+          {shown.map((n, i) => (
+            <NotificationItem key={n.id} n={n} i={i} reduce={reduce} selecting={selecting} on={picked.has(n.id)} open={!!expanded[n.id]}
+              onToggle={() => toggle(n.id)} onExpand={() => expand(n)} onOpen={onOpen} onDismiss={onDismiss} />
+          ))}
         </AnimatePresence>
         {!shown.length && !loading && (
           <div className="sb-notif-empty"><Bell size={22} aria-hidden="true" /><p>{view === "unread" ? "Tout est lu." : "Aucune notification."}</p></div>
@@ -166,5 +142,51 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
         )}
       </footer>
     </section>
+  );
+}
+
+function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpand, onOpen, onDismiss }) {
+  const Glyph = glyphOf(n);
+  const action = actionOf(n);
+  const message = n.message && n.message !== n.title ? n.message : "";
+  const { titleRef, textRef, clipped } = useClipped(open, [n.title, n.message]);
+  const canExpand = open || clipped;
+  return (
+    <motion.article layout={!reduce} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}`}
+      initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.025 } }}
+      exit={{ opacity: 0, x: -12, transition: { duration: 0.14 } }}
+      onClick={selecting ? onToggle : undefined}>
+      {selecting ? (
+        <span className={`sb-notif-check${on ? " is-on" : ""}`} role="checkbox" aria-checked={on} aria-label={`Sélectionner : ${n.title || n.message}`}
+          tabIndex={0} onKeyDown={(e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); onToggle(); } }}>
+          {on && <Check size={13} strokeWidth={3} aria-hidden="true" />}
+        </span>
+      ) : (
+        <span className="sb-notif-ic"><Glyph size={16} strokeWidth={1.9} aria-hidden="true" /></span>
+      )}
+      <div className="sb-notif-body">
+        <div className="sb-notif-top">
+          <strong ref={titleRef} title={open ? undefined : n.title || n.message} onClick={!selecting && canExpand ? onExpand : undefined}>{n.title || n.message}</strong>
+          <time dateTime={notificationDate(n.created_at).iso} title={notificationDate(n.created_at).label}>{ago(n.created_at)}</time>
+        </div>
+        {message && <p ref={textRef} className={`${open ? "is-open" : ""}${!selecting && canExpand ? " is-expandable" : ""}`} onClick={!selecting && canExpand ? onExpand : undefined}>{message}</p>}
+        {!selecting && (canExpand || action) && (
+          <div className="sb-notif-acts">
+            {action && (
+              <button type="button" className="sb-notif-action" onClick={() => onOpen(n, action.target)}>
+                <action.Icon size={13} aria-hidden="true" />{action.label}
+              </button>
+            )}
+            {canExpand && <button type="button" className="sb-notif-more" aria-expanded={open} onClick={onExpand}>{open ? "Réduire" : "Lire la suite"}</button>}
+          </div>
+        )}
+      </div>
+      {!selecting && !n.read && <button type="button" className="sb-notif-dot" onClick={() => onOpen(n, null)} aria-label="Marquer comme lue" title="Marquer comme lue" />}
+      {!selecting && (
+        <button type="button" className="sb-notif-del" onClick={() => onDismiss([n.id])} aria-label="Retirer de ma liste" title="Retirer de ma liste">
+          <Trash2 size={13} aria-hidden="true" />
+        </button>
+      )}
+    </motion.article>
   );
 }

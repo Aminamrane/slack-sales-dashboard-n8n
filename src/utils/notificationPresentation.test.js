@@ -55,3 +55,9 @@ test('chaque alerte client ouvre la fiche sur le board du rôle, la météo sur 
   assert.equal(notificationTarget({ type: 'onboarding_google_change', data: { numero_client: '5', lead_id: 3 } }, 'admin'), '/ceo/optilex-board?client=5');
   assert.equal(notificationTarget({ type: 'optilex_contract_alert', data: {} }, 'admin'), null);
 });
+
+test('une mention ouvre le commentaire exact dans la fiche (16/11/2026)', () => {
+  assert.equal(notificationTarget({ type: 'board_mention', data: { path: '/ceo/optilex-board?client=n%C2%B095&focus=comments', comment_id: 812 } }),
+    '/ceo/optilex-board?client=n%C2%B095&focus=comments&comment=812');
+  assert.equal(notificationTarget({ type: 'board_mention', data: { comment_id: 9 } }), '/optilex-board?comment=9');
+});
