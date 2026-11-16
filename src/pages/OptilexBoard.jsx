@@ -83,7 +83,7 @@ const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onbo
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir" };
 // Libellés courts des filtres posés, rappelés sous la barre (dev 28/10/2026).
 const ONBOARDING_TAGS = { venir: "À venir", done: "Réalisé", confirm: "À confirmer", todo: "À faire", noshow: "No show", recaler: "À recaler" };
-// Menu « Client Success » de « Affiner » (dev 16/11/2026, « filtrer par tout ce qu'on a dans Client Success ») : la
+// Menu « Programmes » de « Affiner » (dev 16/11/2026, « filtrer par tout ce qu'on a dans Client Success ») : la
 // lettre de mission et l'avis Trustpilot (faits ou à faire), puis les trois programmes. UNION des cases cochées.
 const CS_FILTERS = [
   { key: "lettre_ok", kind: "lettre", label: "Lettre de mission analysée", tag: "Lettre analysée", test: (r) => !!r.mission_letter_analyzed },
@@ -1350,7 +1350,7 @@ export default function OptilexBoard({ embed = false }) {
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
   // Familles regroupées en menus (demande dev 2026-09-03, barre trop chargée) :
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
-  const [programmeSel, setProgrammeSel] = useState([]);    // clés de CS_FILTERS (menu « Client Success »)
+  const [programmeSel, setProgrammeSel] = useState([]);    // clés de CS_FILTERS (menu « Programmes »)
   const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'confirm' | 'todo' | 'noshow' | 'recaler'
   // Portefeuille client (dev 13/11/2026) : CSM du board (serveur) et CSM cochés dans « Affiner » (union, « none » =
   // sans CSM). Coché, le board entier se réduit au portefeuille : onglets, compteurs et liste.
@@ -1483,7 +1483,7 @@ export default function OptilexBoard({ embed = false }) {
       if (activeCats.length === 0 && r.is_pending_contract) return false;
       if (etatsSel.length > 0 && !etatsSel.some((cat) => matchesCat(r, cat))) return false;
       if (critsSel.length > 0 && !critsSel.every((cat) => matchesCat(r, cat))) return false;
-      // Menu « Client Success » : UNION des cases cochées (CS_FILTERS).
+      // Menu « Programmes » : UNION des cases cochées (CS_FILTERS).
       if (programmeSel.length > 0 && !CS_FILTERS.some((f) => programmeSel.includes(f.key) && f.test(r))) return false;
       // Menu « Onboarding » : UNION des situations cochées, qui sont EXCLUSIVES (voir situationOf).
       if (withOnboarding && onboardingSel.length > 0) {
@@ -1782,7 +1782,7 @@ export default function OptilexBoard({ embed = false }) {
     ...meteoFilter.map((b) => ({ key: `meteo-${b}`, group: "Météo", label: b === "none" ? "Non noté" : WEATHER[b].label, clear: () => setMeteoFilter((p) => p.filter((x) => x !== b)) })),
     ...(sigRange.from || sigRange.to ? [{ key: "date", group: dateTarget === "onboarding" ? "Onboarding" : "Signature", label: sigRangeLabel(sigRange.from, sigRange.to), clear: () => setSigRange({ from: "", to: "" }) }] : []),
     ...onboardingSel.map((k) => ({ key: `onb-${k}`, group: "Onboarding", label: ONBOARDING_TAGS[k] || k, clear: () => setOnboardingSel((p) => p.filter((x) => x !== k)) })),
-    ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Client Success", label: CS_FILTERS.find((f) => f.key === k)?.tag || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
+    ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: CS_FILTERS.find((f) => f.key === k)?.tag || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
     ...csmSel.map((k) => ({ key: `csm-${k}`, group: "CSM", label: csmTagLabel(k, csmById), clear: () => setCsmSel((p) => p.filter((x) => x !== k)) })),
     ...(q ? [{ key: "q", group: "Recherche", label: `« ${q} »`, clear: () => setQ("") }] : []),
   ];
@@ -2268,11 +2268,7 @@ export default function OptilexBoard({ embed = false }) {
         .ob-frows>.ob-frow+.ob-frow{border-top:1px solid #f1eee9}
         .ob-flabel{flex:0 0 56px;font-size:10.5px;font-weight:500;letter-spacing:.09em;text-transform:uppercase;color:#a8a39b}
         .ob-fgroup{display:flex;align-items:center;flex-wrap:wrap;gap:6px}
-        @container (min-width: 1400px){
-          .ob-frows{display:flex;align-items:center;gap:24px}
-          .ob-frows>.ob-frow+.ob-frow{border-top:0;margin-left:auto}
-          .ob-frow--refine .ob-flabel{flex:none}
-        }
+        /* Météo et Affiner restent chacun sur leur ligne (dev 16/11/2026) : côte à côte, Affiner partait tout à droite. */
         .ob-n{font-size:11px;font-weight:500;color:${MUTED};font-variant-numeric:tabular-nums;transition:color .18s}
         /* États : contrôle segmenté, la pastille marine glisse d'un onglet à l'autre. */
         .ob-seg{display:inline-flex;align-items:center;flex-wrap:wrap;gap:2px;padding:3px;background:#ebe8e3;border-radius:12px}
@@ -2455,7 +2451,7 @@ export default function OptilexBoard({ embed = false }) {
             })}
           </div>
         </div>
-        {/* Météo et Affiner : une ligne chacun, côte à côte quand la barre est assez large. */}
+        {/* Météo et Affiner : une ligne chacun. */}
         <div className="ob-frows">
           <div className="ob-frow">
             {/* Météo client : puces directes (demande dev 2026-09-03), multi-sélection = union. */}
@@ -2513,7 +2509,7 @@ export default function OptilexBoard({ embed = false }) {
                 selected={onboardingSel}
                 onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
                 onClear={() => setOnboardingSel([])} />
-              <ChecklistMenu label="Client Success" title="Suivi Client Success"
+              <ChecklistMenu label="Programmes" title="Programmes clients"
                 icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
                 items={CS_FILTERS.map((f) => ({ key: f.key, label: f.label, count: portfolioRows.filter(f.test).length,
                   icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind={f.kind} size={14} /></span> }))}
