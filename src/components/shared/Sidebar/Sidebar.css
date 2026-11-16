@@ -50,6 +50,35 @@
 .sb-notif-action:active { transform: scale(.97); }
 .sb-notif-dot { position: absolute; top: 15px; right: 8px; width: 9px; height: 9px; padding: 0; border: 0; border-radius: 50%; background: #22a35a; cursor: pointer; }
 .sb-notif-dot:hover { box-shadow: 0 0 0 4px rgba(34,163,90,.15); }
+/* Gestion des notifications (dev 16/11/2026) : texte entier, « Voir plus », sélection et retrait en masse. */
+.sb-notif-head { grid-template-columns: auto 1fr auto; }
+.sb-notif-select { padding: 4px 10px; border: 0; border-radius: 8px; background: transparent; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--sb-secondary); cursor: pointer; }
+.sb-notif-select:hover:not(:disabled) { background: var(--sb-hover); color: var(--sb-text); }
+.sb-notif-select.is-on { background: var(--sb-text); color: var(--sb-bg); }
+.sb-notif-select:disabled { color: var(--sb-muted); cursor: default; }
+.sb-notif-body p.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; white-space: pre-line; }
+.sb-notif-acts { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin-top: 8px; }
+.sb-notif-acts .sb-notif-action { margin-top: 0; }
+.sb-notif-more { padding: 2px 0; border: 0; background: transparent; font: inherit; font-size: 12px; font-weight: 500; color: var(--sb-muted); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; text-decoration-color: transparent; transition: color .15s, text-decoration-color .15s; }
+.sb-notif-more:hover { color: var(--sb-text); text-decoration-color: currentColor; }
+.sb-notif-del { position: absolute; top: 34px; right: 4px; display: grid; place-items: center; width: 22px; height: 22px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sb-muted); cursor: pointer; opacity: 0; transition: opacity .15s, background .15s, color .15s; }
+.sb-notif-item:hover .sb-notif-del, .sb-notif-del:focus-visible { opacity: 1; }
+.sb-notif-del:hover { background: var(--sb-red-bg); color: var(--sb-red); }
+.sb-notif-panel.is-selecting .sb-notif-item { cursor: pointer; border-radius: 10px; }
+.sb-notif-panel.is-selecting .sb-notif-item:hover { background: var(--sb-hover); }
+.sb-notif-item.is-picked { background: var(--sb-subtle); }
+.sb-notif-check { display: grid; place-items: center; flex-shrink: 0; width: 18px; height: 18px; margin: 7px; border: 1.5px solid #cfcac2; border-radius: 5px; background: var(--sb-bg); color: #fff; transition: background .15s, border-color .15s; }
+.sb-notif-check.is-on { background: var(--sb-text); border-color: var(--sb-text); color: var(--sb-bg); }
+.sb-notif-check:focus-visible { outline: 2px solid var(--sb-accent); outline-offset: 2px; }
+.sb-notif-load { display: block; width: 100%; margin: 8px 0 4px; padding: 8px; border: 1px dashed var(--sb-border); border-radius: 10px; background: transparent; font: inherit; font-size: 12.5px; font-weight: 500; color: var(--sb-secondary); cursor: pointer; }
+.sb-notif-load:hover:not(:disabled) { background: var(--sb-hover); color: var(--sb-text); }
+.sb-notif-bulk { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.sb-notif-foot .sb-notif-all { padding-left: 2px; }
+.sb-notif-all .sb-notif-check { margin: 0; }
+.sb-notif-bulk-acts { display: inline-flex; gap: 2px; }
+.sb-notif-foot .sb-notif-remove:not(:disabled) { color: var(--sb-red); }
+.sb-notif-foot .sb-notif-remove.is-confirm { background: var(--sb-red); color: #fff; }
+.sb-notif-foot .sb-notif-remove.is-confirm:hover { background: var(--sb-red); filter: brightness(.95); }
 .sb-notif-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 12px; color: var(--sb-muted); font-size: 13px; }
 .sb-notif-empty p { margin: 0; }
 .sb-notif-foot { flex-shrink: 0; padding: 8px 12px; border-top: 1px solid var(--sb-border); }

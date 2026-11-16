@@ -5,8 +5,23 @@ export function notificationDate(value) {
   if (!Number.isFinite(date.getTime())) return { iso: undefined, label: 'Date non renseignée' };
   return { iso: date.toISOString(), label: new Intl.DateTimeFormat('fr-FR', { timeZone:'Europe/Paris', day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' }).format(date) };
 }
-export function notificationTarget(notif) {
-  if (notif.type === 'owner_rating_regression') return '/ceo/optilex-board' + (notif.data?.numero_client ? `?client=${encodeURIComponent(notif.data.numero_client)}` : '');
+// Board du client selon le rôle (dev 16/11/2026) : le cabinet et la facturation n'ont que /optilex-board ; la
+// direction et le Client Success, /ceo/optilex-board. Sans rôle connu, le board de la direction (comme avant).
+const CABINET_BOARD_ROLES = ['optilex', 'finance_team'];
+export function boardPathFor(role) {
+  return CABINET_BOARD_ROLES.includes(role) ? '/optilex-board' : '/ceo/optilex-board';
+}
+// Alertes qui portent un client du board (numero_client) : le lien ouvre sa fiche.
+export const CLIENT_NOTIFICATION_TYPES = ['owner_rating_regression', 'optilex_contract_alert', 'optilex_client_sans_guid', 'onboarding_google_change'];
+export function notificationTarget(notif, role) {
+  if (CLIENT_NOTIFICATION_TYPES.includes(notif.type)) {
+    const numero = notif.data?.numero_client;
+    if (!numero) return notif.type === 'owner_rating_regression' ? boardPathFor(role) : null;
+    const params = new URLSearchParams({ client: String(numero) });
+    // Météo : la fiche s'ouvre sur l'échange de cette météo (onglet Échanges, défilé jusqu'à elle).
+    if (notif.type === 'owner_rating_regression' && notif.data?.meteo_id) { params.set('focus', 'comments'); params.set('rating', String(notif.data.meteo_id)); }
+    return `${boardPathFor(role)}?${params.toString()}`;
+  }
   if (notif.type === 'board_mention') return notif.data?.path || '/optilex-board';   // chemin choisi par le serveur selon le rôle
   // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur).
   if (notif.type === 'finance_note_mention') return notif.data?.path || '/tracking-finance';

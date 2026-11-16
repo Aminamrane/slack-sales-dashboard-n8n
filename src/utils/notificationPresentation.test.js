@@ -45,3 +45,13 @@ test('les alertes au setter derrière un RDV ouvrent sa sheet setter (15/10/2026
     assert.equal(notificationTarget({ type, data: { lead_id: 7 } }), '/tracking-setter');
   }
 });
+
+test('chaque alerte client ouvre la fiche sur le board du rôle, la météo sur son échange (16/11/2026)', () => {
+  const rating = { type: 'owner_rating_regression', data: { numero_client: 'n°409', meteo_id: 77 } };
+  assert.equal(notificationTarget(rating, 'ceo'), '/ceo/optilex-board?client=n%C2%B0409&focus=comments&rating=77');
+  assert.equal(notificationTarget(rating, 'optilex'), '/optilex-board?client=n%C2%B0409&focus=comments&rating=77');
+  assert.equal(notificationTarget({ type: 'optilex_contract_alert', data: { numero_client: '930' } }, 'customer_success_manager'), '/ceo/optilex-board?client=930');
+  assert.equal(notificationTarget({ type: 'optilex_client_sans_guid', data: { numero_client: '12' } }, 'finance_team'), '/optilex-board?client=12');
+  assert.equal(notificationTarget({ type: 'onboarding_google_change', data: { numero_client: '5', lead_id: 3 } }, 'admin'), '/ceo/optilex-board?client=5');
+  assert.equal(notificationTarget({ type: 'optilex_contract_alert', data: {} }, 'admin'), null);
+});
