@@ -83,7 +83,17 @@ const NON_ETAT_SORTED_TABS = ["Tous", "Renouvellement client", "Inactifs", "Onbo
 const TAB_LABEL = { "Attente Opti'Lex": "En attente Opti'Lex", "Onboarding à venir": "Onboarding Owner à venir" };
 // Libellés courts des filtres posés, rappelés sous la barre (dev 28/10/2026).
 const ONBOARDING_TAGS = { venir: "À venir", done: "Réalisé", confirm: "À confirmer", todo: "À faire", noshow: "No show", recaler: "À recaler" };
-const PROGRAMME_TAGS = { ambassadeur: "Ambassadeur", parrainage: "Parrainage", temoignage: "Témoignage" };
+// Menu « Client Success » de « Affiner » (dev 16/11/2026, « filtrer par tout ce qu'on a dans Client Success ») : la
+// lettre de mission et l'avis Trustpilot (faits ou à faire), puis les trois programmes. UNION des cases cochées.
+const CS_FILTERS = [
+  { key: "lettre_ok", kind: "lettre", label: "Lettre de mission analysée", tag: "Lettre analysée", test: (r) => !!r.mission_letter_analyzed },
+  { key: "lettre_todo", kind: "lettre", label: "Lettre de mission à analyser", tag: "Lettre à analyser", test: (r) => !!r.numero_client && !r.mission_letter_analyzed },
+  { key: "trustpilot_ok", kind: "trustpilot", label: "Avis Trustpilot laissé", tag: "Avis Trustpilot", test: (r) => !!r.trustpilot_review },
+  { key: "trustpilot_todo", kind: "trustpilot", label: "Pas encore d'avis Trustpilot", tag: "Sans avis Trustpilot", test: (r) => !!r.numero_client && !r.trustpilot_review },
+  { key: "temoignage", kind: "temoignage", label: "Témoignage", tag: "Témoignage", test: (r) => !!r.temoignage_eligible },
+  { key: "parrainage", kind: "parrainage", label: "Programme de parrainage", tag: "Parrainage", test: (r) => !!r.parrainage_eligible },
+  { key: "ambassadeur", kind: "ambassadeur", label: "Programme ambassadeur", tag: "Ambassadeur", test: (r) => !!r.ambassador_eligible },
+];
 // Pictogrammes des programmes (dev 29/10/2026) : l'ambassadeur parle (porte-voix), le parrainage se serre la main,
 // le témoignage est une bulle avec son étoile. Deux tons, teinte de la palette du dev quand le programme est coché.
 const PROGRAM_ICONS = {
@@ -1340,7 +1350,7 @@ export default function OptilexBoard({ embed = false }) {
   const [meteoFilter, setMeteoFilter] = useState([]);      // bandes météo cochées (rouge/orange/vert)
   // Familles regroupées en menus (demande dev 2026-09-03, barre trop chargée) :
   // multi-sélection = UNION au sein du menu, la famille reste en ET avec le reste.
-  const [programmeSel, setProgrammeSel] = useState([]);    // 'ambassadeur' | 'parrainage'
+  const [programmeSel, setProgrammeSel] = useState([]);    // clés de CS_FILTERS (menu « Client Success »)
   const [onboardingSel, setOnboardingSel] = useState([]);  // 'venir' | 'done' | 'confirm' | 'todo' | 'noshow' | 'recaler'
   // Portefeuille client (dev 13/11/2026) : CSM du board (serveur) et CSM cochés dans « Affiner » (union, « none » =
   // sans CSM). Coché, le board entier se réduit au portefeuille : onglets, compteurs et liste.
@@ -1473,13 +1483,8 @@ export default function OptilexBoard({ embed = false }) {
       if (activeCats.length === 0 && r.is_pending_contract) return false;
       if (etatsSel.length > 0 && !etatsSel.some((cat) => matchesCat(r, cat))) return false;
       if (critsSel.length > 0 && !critsSel.every((cat) => matchesCat(r, cat))) return false;
-      // Menu « Programmes » : UNION des programmes cochés (ambassadeur / parrainage / témoignage).
-      if (programmeSel.length > 0) {
-        const inProgramme = (programmeSel.includes("ambassadeur") && r.ambassador_eligible)
-          || (programmeSel.includes("parrainage") && r.parrainage_eligible)
-          || (programmeSel.includes("temoignage") && r.temoignage_eligible);
-        if (!inProgramme) return false;
-      }
+      // Menu « Client Success » : UNION des cases cochées (CS_FILTERS).
+      if (programmeSel.length > 0 && !CS_FILTERS.some((f) => programmeSel.includes(f.key) && f.test(r))) return false;
       // Menu « Onboarding » : UNION des situations cochées, qui sont EXCLUSIVES (voir situationOf).
       if (withOnboarding && onboardingSel.length > 0) {
         const situation = situationOf(r);
@@ -1777,7 +1782,7 @@ export default function OptilexBoard({ embed = false }) {
     ...meteoFilter.map((b) => ({ key: `meteo-${b}`, group: "Météo", label: b === "none" ? "Non noté" : WEATHER[b].label, clear: () => setMeteoFilter((p) => p.filter((x) => x !== b)) })),
     ...(sigRange.from || sigRange.to ? [{ key: "date", group: dateTarget === "onboarding" ? "Onboarding" : "Signature", label: sigRangeLabel(sigRange.from, sigRange.to), clear: () => setSigRange({ from: "", to: "" }) }] : []),
     ...onboardingSel.map((k) => ({ key: `onb-${k}`, group: "Onboarding", label: ONBOARDING_TAGS[k] || k, clear: () => setOnboardingSel((p) => p.filter((x) => x !== k)) })),
-    ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: PROGRAMME_TAGS[k] || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
+    ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Client Success", label: CS_FILTERS.find((f) => f.key === k)?.tag || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
     ...csmSel.map((k) => ({ key: `csm-${k}`, group: "CSM", label: csmTagLabel(k, csmById), clear: () => setCsmSel((p) => p.filter((x) => x !== k)) })),
     ...(q ? [{ key: "q", group: "Recherche", label: `« ${q} »`, clear: () => setQ("") }] : []),
   ];
@@ -2508,16 +2513,10 @@ export default function OptilexBoard({ embed = false }) {
                 selected={onboardingSel}
                 onToggle={(k) => setOnboardingSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
                 onClear={() => setOnboardingSel([])} />
-              <ChecklistMenu label="Programmes" title="Programmes clients"
+              <ChecklistMenu label="Client Success" title="Suivi Client Success"
                 icon={(c) => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="6" /><path d="M15.477 12.89 17 22l-5-3-5 3 1.523-9.11" /></svg>}
-                items={[
-                  { key: "ambassadeur", label: "Programme ambassadeur", count: portfolioRows.filter((r) => r.ambassador_eligible).length,
-                    icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="ambassadeur" size={14} /></span> },
-                  { key: "parrainage", label: "Programme de parrainage", count: portfolioRows.filter((r) => r.parrainage_eligible).length,
-                    icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="parrainage" size={14} /></span> },
-                  { key: "temoignage", label: "Témoignage", count: portfolioRows.filter((r) => r.temoignage_eligible).length,
-                    icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind="temoignage" size={14} /></span> },
-                ]}
+                items={CS_FILTERS.map((f) => ({ key: f.key, label: f.label, count: portfolioRows.filter(f.test).length,
+                  icon: <span style={{ display: "inline-flex", color: MUTED }}><ProgramIcon kind={f.kind} size={14} /></span> }))}
                 selected={programmeSel}
                 onToggle={(k) => setProgrammeSel((p) => (p.includes(k) ? p.filter((x) => x !== k) : [...p, k]))}
                 onClear={() => setProgrammeSel([])} />
