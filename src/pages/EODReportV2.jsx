@@ -504,22 +504,7 @@ export default function EODReportV2() {
         setLocalTerminatedIds(new Set());
       }
 
-      // Fire-and-forget to OpenClaw (AI analysis for EOD Dashboard)
-      const openclawUrl = import.meta.env.VITE_OPENCLAW_WEBHOOK_URL;
-      if (openclawUrl) {
-        const user = apiClient.getUser();
-        const totalHours = tasks.reduce((sum, t) => sum + (t.subtasks || []).reduce((s, st) => s + (st.hours_spent || 0), 0), 0);
-        fetch(openclawUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-API-Key': import.meta.env.VITE_OPENCLAW_API_KEY || '' },
-          body: JSON.stringify({
-            event: 'eod_submitted',
-            timestamp: new Date().toISOString(),
-            user: { id: user?.id, name: user?.name || user?.first_name || '', email: user?.email, role: user?.role, department: user?.department || user?.role },
-            eod: { report_date: reportDate, pool_key: null, tasks: payload.tasks, question_answers: questionAnswers, total_hours: totalHours },
-          }),
-        }).catch(err => console.warn('[OpenClaw] Send failed (non-blocking):', err));
-      }
+      // L'analyse IA du tableau de bord EOD est déclenchée par l'API après l'enregistrement.
 
       setSubmitted(true);
       setStep(5);
