@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classificationOf, countLabel, filterHistory, fold, periodLabel, sizeLabel, stepOf, visibleRows } from './automationBoard.js';
+import { ballOf, classificationOf, countLabel, filterHistory, fold, newsFeed, periodLabel, pipeline, sinceLabel, sizeLabel, stepOf, visibleRows } from './automationBoard.js';
 
 const ROWS = [
   { id: 1, name: 'Process REM', parentId: null, classification: 'pending_validation', pole: { group: 'both' }, toConfirm: false },
@@ -266,4 +266,28 @@ test("la fiche d'une mission propose « On y travaille », puis le point d'avanc
   // Pendant que le juriste teste, il n'y a rien à commencer.
   const tested = turnOf({ step: 2, awaiting: { who: "lawyer" }, working: null }, steps);
   assert.ok(!tested.actions.some((gesture) => gesture.action === "start"));
+});
+
+// ── Le suivi en un coup d'œil (16/11/2026) ──
+test("la balle : chez Owner quand on y travaille ou qu'une modification est demandée, chez Opti'Lex quand une version attend", () => {
+  const now = Date.parse("2026-11-16T12:00:00Z");
+  const rows = [
+    { id: 1, name: "A", step: 2, awaiting: { who: "lawyer", by: "Dev", since: "2026-11-10", text: "À tester" } },
+    { id: 2, name: "B", step: 2, awaiting: { who: "dev", by: "Juriste", since: "2026-11-15", text: "Le montant est faux" } },
+    { id: 3, name: "C", step: 1, working: { by: "Dev", since: "2026-11-14", updatedAt: "2026-11-16", text: "Presque fini" } },
+    { id: 4, name: "D", step: 2, awaiting: { who: "dev", by: "Juriste", since: "2026-11-12", text: "Reprendre" }, working: { by: "Dev", since: "2026-11-13" } },
+    { id: 5, name: "E", step: 0 },
+  ];
+  const ball = ballOf(rows, now);
+  assert.deepEqual(ball.owner.map((c) => [c.id, c.state]), [[4, "fixing"], [3, "working"], [2, "asked"]]);
+  assert.deepEqual(ball.optilex.map((c) => [c.id, c.days]), [[1, 6]]);
+  assert.equal(ball.owner[0].text, "Reprendre");   // la demande du juriste reste lisible tant que le dev n'a rien écrit
+  const feed = newsFeed(rows, 10, now);
+  assert.equal(feed[0].kind, "progress");
+  assert.deepEqual(feed.map((n) => n.kind).slice(1, 3), ["change", "start"]);
+  assert.equal(sinceLabel("2026-11-15", now), "depuis hier");
+  const pipe = pipeline(rows, [{ value: 0, label: "x" }, { value: 1 }, { value: 2 }, { value: 3 }, { value: 4 }]);
+  assert.deepEqual(pipe.map((s) => s.count), [1, 1, 3, 0, 0]);
+  assert.equal(pipe[2].side, "optilex");
+  assert.deepEqual(visibleRows(rows, { step: 2 }).map((l) => l.row.id), [1, 2, 4]);
 });

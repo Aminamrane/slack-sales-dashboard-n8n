@@ -19,11 +19,13 @@ export function fold(text) {
 // Lignes à afficher : un process et ses missions restent ensemble. Un process qui correspond montre toutes ses
 // missions ; une mission qui correspond garde son process au-dessus d'elle, pour qu'on sache d'où elle vient.
 // `awaiting` : ne garder que les lignes où quelqu'un est attendu, "lawyer" (version à tester) ou "dev" (modification demandée).
-export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, awaiting = "", closed = new Set() } = {}) {
+// `step` : ne garder que les lignes à cette étape du parcours (clic sur « Le parcours », 16/11/2026).
+export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, awaiting = "", step = null, closed = new Set() } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const needle = fold(query);
-  const filtering = Boolean(needle || classification || pole || toConfirm || awaiting);
+  const filtering = Boolean(needle || classification || pole || toConfirm || awaiting || step != null);
   const match = (row) => (!needle || fold(row.name).includes(needle))
+    && (step == null || (Number(row.step) || 0) === step)
     && (!classification || row.classification === classification)
     && (!pole || row.pole?.group === pole)
     && (!toConfirm || row.toConfirm === true)
@@ -321,4 +323,83 @@ export function errorText(error, fallback) {
 export function eventSentence(event) {
   const what = String(event?.what || "");
   return event?.who && /^[a-zàâéèêîôû]/.test(what) ? `${event.who} ${what}` : what || event?.who || "";
+}
+
+// ── Le suivi en un coup d'œil (dev 16/11/2026 : « le suivi est pas facile, c'est dur de savoir où en sont les devs, les
+// derniers avis des juristes… », « quelque chose de motion design et de simple ») ─────────────────────────────────────
+// Tout se lit dans la liste du board (aucune requête de plus) : qui attend (`awaiting`), qui travaille (`working`), ce que
+// la direction du cabinet a validé (`validated`). La balle est chez Owner (développeurs) quand une modification est demandée
+// ou qu'ils travaillent ; chez Opti'Lex (juristes) quand une version attend leur test.
+const DAY = 86400000;
+function stamp(value) {
+  if (!value) return null;
+  const text = String(value);
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T12:00:00` : text);
+  return Number.isFinite(date.getTime()) ? date : null;
+}
+export function waitedDays(value, now = Date.now()) {
+  const date = stamp(value);
+  return date ? Math.max(0, Math.floor((now - date.getTime()) / DAY)) : null;
+}
+export function sinceLabel(value, now = Date.now()) {
+  const days = waitedDays(value, now);
+  if (days == null) return "";
+  if (days === 0) return "aujourd’hui";
+  if (days === 1) return "depuis hier";
+  return `depuis ${days} jours`;
+}
+export function agoLabel(value, now = Date.now()) {
+  const days = waitedDays(value, now);
+  if (days == null) return "";
+  if (days === 0) return "aujourd’hui";
+  if (days === 1) return "hier";
+  return `il y a ${days} jours`;
+}
+
+// Les deux couloirs. Une mission n'est que dans un couloir : un travail en cours la met chez Owner.
+export function ballOf(rows, now = Date.now()) {
+  const list = Array.isArray(rows) ? rows : [];
+  const card = (row, side, state, label, fact) => ({ id: row.id, name: row.name, pole: row.pole?.label || "", side, state, label,
+    by: fact?.by || "", since: fact?.since || null, days: waitedDays(fact?.since, now), text: fact?.text || "", step: Number(row.step) || 0 });
+  const owner = [];
+  const optilex = [];
+  list.forEach((row) => {
+    if (row.working) owner.push(card(row, "owner", row.awaiting?.who === "dev" ? "fixing" : "working",
+      row.awaiting?.who === "dev" ? "Correction en cours" : "En cours", { ...row.working, text: row.working.text || (row.awaiting?.who === "dev" ? row.awaiting.text : "") }));
+    else if (row.awaiting?.who === "dev") owner.push(card(row, "owner", "asked", "Modification demandée", row.awaiting));
+    else if (row.awaiting?.who === "lawyer") optilex.push(card(row, "optilex", "test", "À tester", row.awaiting));
+  });
+  // Ce qui attend depuis le plus longtemps d'abord : c'est ce qu'il faut débloquer.
+  const order = (a, b) => (b.days ?? -1) - (a.days ?? -1);
+  return { owner: owner.sort(order), optilex: optilex.sort(order) };
+}
+
+// Le parcours : combien de missions à chaque étape, et qui a la main à cette étape.
+export function pipeline(rows, steps) {
+  const list = Array.isArray(rows) ? rows : [];
+  const total = list.length || 1;
+  return (Array.isArray(steps) ? steps : []).map((step) => {
+    const count = list.filter((row) => (Number(row.step) || 0) === step.value).length;
+    return { ...step, count, share: Math.round((count / total) * 100), side: step.value === 2 ? "optilex" : step.value >= 3 ? "done" : "owner" };
+  });
+}
+
+// Les dernières nouvelles : livraisons, avis des juristes, points des développeurs, validations du cabinet, les plus
+// récentes d'abord. Une ligne peut en donner plusieurs (un travail en cours et une modification demandée, par exemple).
+export function newsFeed(rows, limit = 8, now = Date.now()) {
+  const list = Array.isArray(rows) ? rows : [];
+  const news = [];
+  const push = (row, kind, side, who, verb, at, text = "") => { if (stamp(at)) news.push({ key: `${row.id}:${kind}`, id: row.id, name: row.name, kind, side, who, verb, at, ago: agoLabel(at, now), text }); };
+  list.forEach((row) => {
+    const a = row.awaiting;
+    if (a?.who === "lawyer") push(row, "deliver", "owner", a.by, "a livré une version à tester", a.since, a.text);
+    if (a?.who === "dev") push(row, "change", "optilex", a.by, "a demandé une modification", a.since, a.text);
+    const w = row.working;
+    if (w) {
+      push(row, "start", "owner", w.by, "travaille dessus", w.since, w.updatedAt && w.updatedAt !== w.since ? "" : w.text);
+      if (w.updatedAt && w.updatedAt !== w.since) push(row, "progress", "owner", w.by, "a fait un point d’avancement", w.updatedAt, w.text);
+    }
+    if (row.validated) push(row, "validated", "optilex", row.validated.by, "a validé le process", row.validated.at);
+  });
+  return news.sort((x, y) => stamp(y.at) - stamp(x.at)).slice(0, limit);
 }

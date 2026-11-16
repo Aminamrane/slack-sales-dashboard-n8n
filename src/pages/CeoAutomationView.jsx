@@ -22,6 +22,7 @@ import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
 import ProcessPage from "../components/automationBoard/ProcessPage";
 import DevBoard from "../components/automationBoard/DevBoard";
+import Overview from "../components/automationBoard/Overview";
 import "../components/automationBoard/automation.css";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
@@ -110,6 +111,9 @@ export default function CeoAutomationView() {
   // Vue de la liste : tout, le suivi des développeurs (en cours, en attente du juriste, modification demandée), les classements à
   // confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
   const [view, setView] = useState("");
+  // Étape choisie dans « Le parcours » (16/11/2026) : la liste ne garde que les missions à cette étape.
+  const [step, setStep] = useState(null);
+  const listRef = useRef(null);
   const [closed, setClosed] = useState(() => new Set());
   const seq = useRef(0);
 
@@ -138,10 +142,10 @@ export default function CeoAutomationView() {
 
   const P = useMemo(() => palette(C, darkMode), [C, darkMode]);
   const lines = useMemo(
-    () => visibleRows(data?.rows, { query, classification, pole, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
-    [data, query, classification, pole, view, closed],
+    () => visibleRows(data?.rows, { query, classification, pole, step, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
+    [data, query, classification, pole, step, view, closed],
   );
-  const filtering = Boolean(query.trim() || classification || pole || view);
+  const filtering = Boolean(query.trim() || classification || pole || view || step != null);
   const openId = Number(params.get("process")) || null;
   const openProcess = useCallback((id) => {
     setParams((current) => {
@@ -157,7 +161,11 @@ export default function CeoAutomationView() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); };
+  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); setStep(null); };
+  // Depuis le suivi en tête : une vue ou une étape choisie amène à la liste, qui défile jusqu'à elle.
+  const showList = () => requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+  const pickView = (next) => { setView(next); setStep(null); showList(); };
+  const pickStep = (next) => { setStep(next); if (next != null) { setView(""); showList(); } };
   // Un geste du suivi fait depuis la liste (on y travaille, point d'avancement, version livrée…) : Opti'Lex l'inscrit, la liste se relit.
   const act = useCallback(async (id, action, note) => {
     await apiClient.post(`${API}/${id}/action`, { action, note });
@@ -182,6 +190,7 @@ export default function CeoAutomationView() {
   const chips = [
     classification && { key: "classification", label: data?.classifications?.find((item) => item.value === classification)?.shortLabel || classification, clear: () => setClassification("") },
     pole && { key: "pole", label: data?.poleGroups?.[pole] || pole, clear: () => setPole("") },
+    step != null && { key: "step", label: `Étape ${step} · ${data?.steps?.find((item) => item.value === step)?.label || ""}`, clear: () => setStep(null) },
   ].filter(Boolean);
 
   return (
@@ -242,6 +251,7 @@ export default function CeoAutomationView() {
 
             {data && (
               <>
+                <Overview rows={data.rows} steps={data.steps} step={step} onStep={pickStep} onOpen={openProcess} onView={pickView} />
                 <Stats>
                   <Stat label="Part automatisée" text={`${data.totals.automatedShare} %`} Icon={Gauge} tone="green"
                     note="des missions classées passent par un process automatisé" />
@@ -256,6 +266,7 @@ export default function CeoAutomationView() {
                 </Stats>
 
                 <Reveal>
+                  <div ref={listRef} style={{ scrollMarginTop: 16 }} />
                   <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}
                     hint="Un clic sur une ligne ouvre le suivi de la mission : cahier des charges, avancement, échanges.">
                     <div className="fst-tools">
@@ -301,7 +312,7 @@ export default function CeoAutomationView() {
                             <Th Icon={Milestone}>Avancement</Th>
                           </tr>
                         </thead>
-                        <tbody key={`${period}-${classification}-${pole}-${view}-${query}`}>
+                        <tbody key={`${period}-${classification}-${pole}-${view}-${step}-${query}`}>
                           {lines.map(({ row, depth, children, open, dimmed }, index) => (
                             <tr key={row.id} data-open="true" tabIndex={0} aria-label={`Ouvrir le suivi de ${row.name}`} style={{ "--i": index, opacity: dimmed ? 0.6 : 1 }}
                               onClick={() => openProcess(row.id)}
