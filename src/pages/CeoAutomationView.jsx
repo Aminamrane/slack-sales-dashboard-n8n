@@ -16,13 +16,13 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import { PERIODS, countLabel, visibleRows } from "../utils/automationBoard";
 import { AnimatePresence, motion as Motion } from "framer-motion";
-import { CheckCheck, ChevronRight, CircleCheck, CircleDashed, CircleDot, Gauge, Hourglass, ListChecks, MessageCircle, Milestone, Search, Tags, X } from "lucide-react";
+import { BookOpen, CheckCheck, ChevronRight, CircleCheck, CircleDashed, CircleDot, Gauge, Hourglass, ListChecks, MessageCircle, Milestone, Search, Tags, X } from "lucide-react";
 import { Card, Empty, OpenCue, Page, Reveal, Segmented, Stat, Stats, TableBox, Tag, Th } from "./TrackingSheetFinance/components/PageKit.jsx";
 import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
 import ProcessPage from "../components/automationBoard/ProcessPage";
 import DevBoard from "../components/automationBoard/DevBoard";
-import Overview from "../components/automationBoard/Overview";
+import Guide, { COLUMN_HINTS, Hint, useGuide } from "../components/automationBoard/Guide";
 import "../components/automationBoard/automation.css";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
@@ -111,10 +111,9 @@ export default function CeoAutomationView() {
   // Vue de la liste : tout, le suivi des développeurs (en cours, en attente du juriste, modification demandée), les classements à
   // confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
   const [view, setView] = useState("");
-  // Étape choisie dans « Le parcours » (16/11/2026) : la liste ne garde que les missions à cette étape.
-  const [step, setStep] = useState(null);
-  const listRef = useRef(null);
   const [closed, setClosed] = useState(() => new Set());
+  // « Comment lire la page » (16/11/2026) : ouvert d'office à la première visite, puis à la demande.
+  const [guideOpen, setGuideOpen] = useGuide();
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -142,10 +141,10 @@ export default function CeoAutomationView() {
 
   const P = useMemo(() => palette(C, darkMode), [C, darkMode]);
   const lines = useMemo(
-    () => visibleRows(data?.rows, { query, classification, pole, step, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
-    [data, query, classification, pole, step, view, closed],
+    () => visibleRows(data?.rows, { query, classification, pole, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
+    [data, query, classification, pole, view, closed],
   );
-  const filtering = Boolean(query.trim() || classification || pole || view || step != null);
+  const filtering = Boolean(query.trim() || classification || pole || view);
   const openId = Number(params.get("process")) || null;
   const openProcess = useCallback((id) => {
     setParams((current) => {
@@ -161,11 +160,7 @@ export default function CeoAutomationView() {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); setStep(null); };
-  // Depuis le suivi en tête : une vue ou une étape choisie amène à la liste, qui défile jusqu'à elle.
-  const showList = () => requestAnimationFrame(() => listRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
-  const pickView = (next) => { setView(next); setStep(null); showList(); };
-  const pickStep = (next) => { setStep(next); if (next != null) { setView(""); showList(); } };
+  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); };
   // Un geste du suivi fait depuis la liste (on y travaille, point d'avancement, version livrée…) : Opti'Lex l'inscrit, la liste se relit.
   const act = useCallback(async (id, action, note) => {
     await apiClient.post(`${API}/${id}/action`, { action, note });
@@ -190,7 +185,6 @@ export default function CeoAutomationView() {
   const chips = [
     classification && { key: "classification", label: data?.classifications?.find((item) => item.value === classification)?.shortLabel || classification, clear: () => setClassification("") },
     pole && { key: "pole", label: data?.poleGroups?.[pole] || pole, clear: () => setPole("") },
-    step != null && { key: "step", label: `Étape ${step} · ${data?.steps?.find((item) => item.value === step)?.label || ""}`, clear: () => setStep(null) },
   ].filter(Boolean);
 
   return (
@@ -237,8 +231,10 @@ export default function CeoAutomationView() {
           <ProcessPage key={openId} id={openId} period={period} frame={data} onClose={closeProcess} onOpen={openProcess} onChanged={load} P={P} />
         ) : (
           <Page title="Automatisation des missions"
-            sub="Où en est chaque mission d’Opti’Lex : ce que le logiciel fait déjà, ce qui attend une validation, ce qui reste à automatiser."
+            sub={<>Où en est chaque mission d’Opti’Lex : ce que le logiciel fait déjà, ce qui attend une validation, ce qui reste à automatiser.<br />
+              <button type="button" className="ab-guide-link" aria-expanded={guideOpen} onClick={() => setGuideOpen((v) => !v)}><BookOpen size={13} />Comment lire la page</button></>}
             actions={<Segmented options={periods} value={period ?? 0} onChange={(key) => setPeriod(key || null)} label="Période de l'utilisation du logiciel" />}>
+            <Guide open={guideOpen} onClose={() => setGuideOpen(false)} steps={data?.steps} classifications={data?.classifications} />
             {((error && data) || (data?.stale && !error)) && (
               <div className="fst-error" role="status">
                 Opti&apos;Lex ne répond pas pour l&apos;instant : les chiffres affichés sont {error ? `ceux de ${data.at}` : `les derniers reçus (${data.at})`}.
@@ -251,7 +247,6 @@ export default function CeoAutomationView() {
 
             {data && (
               <>
-                <Overview rows={data.rows} steps={data.steps} step={step} onStep={pickStep} onOpen={openProcess} onView={pickView} />
                 <Stats>
                   <Stat label="Part automatisée" text={`${data.totals.automatedShare} %`} Icon={Gauge} tone="green"
                     note="des missions classées passent par un process automatisé" />
@@ -266,7 +261,6 @@ export default function CeoAutomationView() {
                 </Stats>
 
                 <Reveal>
-                  <div ref={listRef} style={{ scrollMarginTop: 16 }} />
                   <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}
                     hint="Un clic sur une ligne ouvre le suivi de la mission : cahier des charges, avancement, échanges.">
                     <div className="fst-tools">
@@ -305,14 +299,14 @@ export default function CeoAutomationView() {
                         <thead>
                           <tr>
                             <Th Icon={ListChecks}>Mission</Th>
-                            <Th Icon={CheckCheck}>Réalisées</Th>
-                            <Th Icon={Gauge}>Utilisation du logiciel</Th>
-                            <Th Icon={MessageCircle}>Messagerie</Th>
-                            <Th Icon={Tags}>Classement</Th>
-                            <Th Icon={Milestone}>Avancement</Th>
+                            <Th Icon={CheckCheck}><Hint text={COLUMN_HINTS.done}>Réalisées</Hint></Th>
+                            <Th Icon={Gauge}><Hint text={COLUMN_HINTS.usage}>Utilisation du logiciel</Hint></Th>
+                            <Th Icon={MessageCircle}><Hint text={COLUMN_HINTS.messaging}>Messagerie</Hint></Th>
+                            <Th Icon={Tags}><Hint text={COLUMN_HINTS.classification}>Classement</Hint></Th>
+                            <Th Icon={Milestone}><Hint text={COLUMN_HINTS.progress} align="end">Avancement</Hint></Th>
                           </tr>
                         </thead>
-                        <tbody key={`${period}-${classification}-${pole}-${view}-${step}-${query}`}>
+                        <tbody key={`${period}-${classification}-${pole}-${view}-${query}`}>
                           {lines.map(({ row, depth, children, open, dimmed }, index) => (
                             <tr key={row.id} data-open="true" tabIndex={0} aria-label={`Ouvrir le suivi de ${row.name}`} style={{ "--i": index, opacity: dimmed ? 0.6 : 1 }}
                               onClick={() => openProcess(row.id)}
@@ -338,12 +332,12 @@ export default function CeoAutomationView() {
                                 </div>
                               </td>
                               <td>
-                                <div className="fst-num" style={{ fontWeight: 500 }}>{number(row.total)} <span className="fst-cell-muted" style={{ fontWeight: 400, fontSize: 12 }}>· {number(row.recent)} sur 90 j</span></div>
+                                <div className="fst-num" style={{ fontWeight: 500 }} title={`${number(row.total)} réalisées depuis le début, dont ${number(row.recent)} ces 90 derniers jours`}>{number(row.total)} <span className="fst-cell-muted" style={{ fontWeight: 400, fontSize: 12 }}>· {number(row.recent)} sur 90 j</span></div>
                                 <div style={{ marginTop: 6, maxWidth: 150 }}><Bar value={row.bar} color={P.faint} P={P} /></div>
                               </td>
                               <td style={{ minWidth: 190 }}><Usage usage={row.usage} P={P} /></td>
                               <td className="fst-num">
-                                {row.messaging?.total ? <>{number(row.messaging.total)} <span className="fst-cell-muted" style={{ fontSize: 12 }}>· {row.messaging.share} %</span></> : <span className="fst-cell-muted">–</span>}
+                                {row.messaging?.total ? <span title={`${number(row.messaging.total)} demandées depuis la messagerie, soit ${row.messaging.share} % de ces missions`}>{number(row.messaging.total)} <span className="fst-cell-muted" style={{ fontSize: 12 }}>· {row.messaging.share} %</span></span> : <span className="fst-cell-muted" title="Aucune demande depuis la messagerie">–</span>}
                               </td>
                               <td>
                                 <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
