@@ -2193,6 +2193,8 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xr:hover .ob-xr-tools .br-add,.ob-xr-tools .br-add[aria-expanded="true"]{opacity:1}
         @media (hover:none){.ob-xr-tools .br-add{opacity:1}}
         .ob-xr.is-fresh{animation:obFresh 1.8s cubic-bezier(.22,1,.36,1)}
+        .ob-xc.is-target,.ob-xr.is-target{scroll-margin:24px;animation:obTarget 2.8s cubic-bezier(.22,1,.36,1) .5s both}
+        @keyframes obTarget{0%,40%{background:#fbf1c2;border-color:#e9d98a;box-shadow:0 0 0 4px rgba(233,217,138,.35)}100%{box-shadow:0 0 0 0 rgba(233,217,138,0)}}
         @keyframes obFresh{0%{opacity:0;transform:translateY(-6px);background:#fbf1c2}18%{opacity:1;transform:none;background:#fbf1c2}100%{background:#faf9f7}}
         /* Réponse sous le message : une ligne de saisie avec son avatar et l'envoi en avion. */
         .ob-xi{overflow:hidden}
@@ -5202,7 +5204,7 @@ function CommentItem({ c, replies, t, openSignal }) {
   const author = authorOf(c);
   const key = `comment:${c.id}`;
   return (
-    <motion.article id={`msg-${c.id}`} layout="position" className="ob-xc" initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
+    <motion.article id={`msg-${c.id}`} layout="position" className={`ob-xc${String(t.focusId) === String(c.id) ? " is-target" : ""}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1], layout: { type: "spring", stiffness: 380, damping: 36 } }}>
       <MsgHead author={author} time={msgTime(c.created_at)} extra={c.updated_at ? " · modifié" : ""}
         menu={t.canEdit(c) && t.editingId !== c.id && <ItemMenu label="Actions du message" items={editItems(c, t)} />} />
@@ -5226,7 +5228,7 @@ function CommentItem({ c, replies, t, openSignal }) {
 function ThreadReply({ c, t }) {
   const author = authorOf(c);
   return (
-    <div className={`ob-xr${c.fresh ? " is-fresh" : ""}`}>
+    <div id={`msg-${c.id}`} className={`ob-xr${c.fresh ? " is-fresh" : ""}${String(t.focusId) === String(c.id) ? " is-target" : ""}`}>
       {/* Réagir à une réponse : le bouton vit dans l'en-tête (au survol) ; les pastilles n'apparaissent que s'il y en a. */}
       <MsgHead author={author} size={22} small time={msgTime(c.created_at)}
         menu={<span className="ob-xr-tools"><EmojiPalette onPick={(e) => t.react("comment", c.id, e)} />{t.canEdit(c) && t.editingId !== c.id && <ItemMenu label="Actions de la réponse" items={editItems(c, t)} />}</span>} />
@@ -5351,6 +5353,9 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   const [searchParams] = useSearchParams();
   const focusComments = searchParams.get("focus") === "comments";
   const focusRating = searchParams.get("rating");
+  // Commentaire exact d'une mention (dev 16/11/2026, « il faut que ça m'amène au commentaire exact ») : défilé jusqu'à
+  // lui, fil de réponses ouvert s'il y est, et mis en évidence un instant.
+  const focusComment = searchParams.get("comment");
   const rootRef = useRef(null);
   useEffect(() => {
     let alive = true;
@@ -5362,9 +5367,12 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   useEffect(() => {
     if (!focusComments || loading) return undefined;
     setLimit(Infinity);
-    const timer = setTimeout(() => (focusRating && document.getElementById(`weather-${focusRating}`) || rootRef.current)?.scrollIntoView({ behavior: "smooth", block: "start" }), 250);
+    const target = () => (focusComment && document.getElementById(`msg-${focusComment}`))
+      || (focusRating && document.getElementById(`weather-${focusRating}`)) || rootRef.current;
+    // Un peu plus tard pour un commentaire : le fil de réponses qui le contient s'ouvre d'abord (0,3 s).
+    const timer = setTimeout(() => target()?.scrollIntoView({ behavior: "smooth", block: focusComment ? "center" : "start" }), focusComment ? 520 : 250);
     return () => clearTimeout(timer);
-  }, [focusComments, focusRating, loading, ratings]);
+  }, [focusComments, focusRating, focusComment, loading, ratings, comments]);
   useEffect(() => {
     if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(""), 8000);
@@ -5497,9 +5505,10 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
     const timer = setTimeout(() => document.getElementById(k === "rating" ? `weather-${id}` : `msg-${id}`)?.scrollIntoView({ behavior: "smooth", block: "nearest" }), 480);
     return () => clearTimeout(timer);
   }, [bump]);
-  const openSignalOf = (e) => (bump.key === `${e.kind}:${e.id}` ? bump.n : 0) || (e.kind === "rating" && String(focusRating) === String(e.id) ? 1 : 0);
+  const openSignalOf = (e) => (bump.key === `${e.kind}:${e.id}` ? bump.n : 0) || (e.kind === "rating" && String(focusRating) === String(e.id) ? 1 : 0)
+    || (focusComment && repliesOf(e.kind, e.id).some((r) => String(r.id) === String(focusComment)) ? 1 : 0);
   const t = {
-    readOnly, canEdit: (c) => !readOnly && canEdit(c), people, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
+    readOnly, focusId: focusComment, canEdit: (c) => !readOnly && canEdit(c), people, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
     myName, replying, sendReply, startReply: (key) => { if (!readOnly) setReplying((k) => (k === key ? null : key)); }, cancelReply: () => setReplying(null),
     reactionsOf: (kind, id) => reactions[`${kind}:${id}`] || [],
     startEdit: (c) => { setEditingId(c.id); setEditDraft(c.body); setConfirmDeleteId(null); },
