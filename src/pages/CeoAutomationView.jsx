@@ -16,13 +16,13 @@ import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import { PERIODS, countLabel, visibleRows } from "../utils/automationBoard";
 import { AnimatePresence, motion as Motion } from "framer-motion";
-import { BookOpen, CheckCheck, ChevronRight, CircleCheck, CircleDashed, CircleDot, Gauge, Hourglass, ListChecks, MessageCircle, Milestone, Search, Tags, X } from "lucide-react";
+import { CheckCheck, ChevronRight, CircleCheck, CircleDashed, CircleDot, Gauge, Hourglass, ListChecks, MessageCircle, Milestone, Search, Tags, X } from "lucide-react";
 import { Card, Empty, OpenCue, Page, Reveal, Segmented, Stat, Stats, TableBox, Tag, Th } from "./TrackingSheetFinance/components/PageKit.jsx";
 import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
 import ProcessPage from "../components/automationBoard/ProcessPage";
 import DevBoard from "../components/automationBoard/DevBoard";
-import Guide, { COLUMN_HINTS, Hint, useGuide } from "../components/automationBoard/Guide";
+import { COLUMN_HINTS, Hint } from "../components/automationBoard/Hint";
 import "../components/automationBoard/automation.css";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
@@ -112,8 +112,6 @@ export default function CeoAutomationView() {
   // confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
   const [view, setView] = useState("");
   const [closed, setClosed] = useState(() => new Set());
-  // « Comment lire la page » (16/11/2026) : ouvert d'office à la première visite, puis à la demande.
-  const [guideOpen, setGuideOpen] = useGuide();
   const seq = useRef(0);
 
   const load = useCallback(async () => {
@@ -231,10 +229,8 @@ export default function CeoAutomationView() {
           <ProcessPage key={openId} id={openId} period={period} frame={data} onClose={closeProcess} onOpen={openProcess} onChanged={load} P={P} />
         ) : (
           <Page title="Automatisation des missions"
-            sub={<>Où en est chaque mission d’Opti’Lex : ce que le logiciel fait déjà, ce qui attend une validation, ce qui reste à automatiser.<br />
-              <button type="button" className="ab-guide-link" aria-expanded={guideOpen} onClick={() => setGuideOpen((v) => !v)}><BookOpen size={13} />Comment lire la page</button></>}
+            sub="Où en est chaque mission d’Opti’Lex : ce que le logiciel fait déjà, ce qui attend une validation, ce qui reste à automatiser."
             actions={<Segmented options={periods} value={period ?? 0} onChange={(key) => setPeriod(key || null)} label="Période de l'utilisation du logiciel" />}>
-            <Guide open={guideOpen} onClose={() => setGuideOpen(false)} steps={data?.steps} classifications={data?.classifications} />
             {((error && data) || (data?.stale && !error)) && (
               <div className="fst-error" role="status">
                 Opti&apos;Lex ne répond pas pour l&apos;instant : les chiffres affichés sont {error ? `ceux de ${data.at}` : `les derniers reçus (${data.at})`}.

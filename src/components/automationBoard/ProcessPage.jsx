@@ -14,15 +14,16 @@
 // formulaire replié à confirmer. Un commentaire part au cabinet par défaut : c'est un échange avec lui.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../../services/apiClient";
-import { countLabel, dayLabel, errorText, journey, missionComments, periodHint, periodLabel, sizeLabel, turnOf } from "../../utils/automationBoard";
-import { ArrowLeft, BarChart3, Check, CloudUpload, Code2, FileText, FlaskConical, Gauge, Layers, ListTree, Lock, MessageCircle, Milestone, Route, Send, Tags, Users, Wrench } from "lucide-react";
+import { countLabel, dayLabel, errorText, journey, missionComments, periodHint, sizeLabel, turnOf, voices } from "../../utils/automationBoard";
+import { ArrowLeft, BarChart3, Check, CloudUpload, Code2, FileText, FlaskConical, Layers, ListTree, Lock, MessageCircle, Route, Send, Tags, Users, Wrench } from "lucide-react";
 import { Card, Empty, Page, Reveal, Tag } from "../../pages/TrackingSheetFinance/components/PageKit.jsx";
 import "../../pages/TrackingSheetFinance/components/ExchangeThread.css";
-import { ExternalIcon, Face, StepTrack, Usage } from "./parts";
+import { ExternalIcon, Face, Usage } from "./parts";
 import { Composer, Feedback, Files } from "./Followup.jsx";
 import Journey from "./Journey.jsx";
+import { Hero, Voices } from "./MissionHero.jsx";
 import { FILE_ACCEPT, followupApi, partnerFile, pickFiles } from "./followupApi.js";
-import { TONE_OF, number } from "./theme";
+import { TONE_OF } from "./theme";
 
 const API = "/api/v1/optilex/automation-board";
 const NO_FOLLOW = { available: false, entries: [], reactions: {} };
@@ -84,6 +85,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   // Le parcours (jalons, et sous chacun ce qui s'est passé) et les commentaires de la mission se lisent à part.
   const milestones = useMemo(() => (data?.row ? journey(data.row, steps, data.history, follow.entries) : []), [data, steps, follow]);
   const comments = useMemo(() => missionComments(data?.history, follow.entries), [data, follow]);
+  const said = useMemo(() => voices(data?.row, data?.history, follow.entries), [data, follow]);
   const owned = follow.available;
   const shared = !owned || audience === "shared";
   const locked = Boolean(row?.validated);
@@ -186,67 +188,68 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
 
       {row && (
         <>
+          {/* En-tête (16/11/2026) : l'étape en grand, la frise qui se clique, les chiffres clés. */}
+          <Hero row={row} steps={steps} stepNow={stepNow} last={last} since={since}
+            tags={(
+              <>
+                {turn.working && <Tag tone="blue">En cours chez les développeurs</Tag>}
+                {/* « Chez les développeurs » ne dit rien de plus quand ils y travaillent déjà. */}
+                {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : !(turn.working && turn.who === "build") && <Tag tone={turn.tone}>{turn.tag}</Tag>}
+              </>
+            )}
+            onPick={locked ? undefined : setPicked} picked={picked}
+            pickBar={picked != null && (
+              <div className="ab-pick-save" role="group" aria-label="Changer l’étape">
+                <span>Passer la mission à « {steps.find((item) => item.value === picked)?.label} » ? Le classement suivra tout seul.</span>
+                <button type="button" className="fst-btn" disabled={Boolean(acting.busy)} onClick={() => setPicked(null)}>Annuler</button>
+                <button type="button" className="ab-btn-main" disabled={Boolean(acting.busy)} onClick={savePicked}><Check size={15} />{acting.busy === "pick" ? "Enregistrement…" : "Enregistrer l’étape"}</button>
+              </div>
+            )}
+            footnote={locked ? <p className="ab-note">Validé par la direction du cabinet ({row.validated.by}) : l’étape et le classement ne changent plus. La direction peut lever la validation dans Opti’Lex.</p>
+              : row.step === last && !row.awaiting ? <p className="ab-note">Il reste la validation, qui se fait dans Opti’Lex par la direction du cabinet.</p> : null} />
+
+          {/* Les deux voix de la mission : où en sont les développeurs, et le dernier avis du juriste. */}
+          <Voices voices={said} turn={turn} />
+
+          {/* La suite : à qui de jouer, et son geste en un clic. */}
           <Reveal>
-            <Card title="Où en est la mission" Icon={Milestone}>
-              <div className="ab-state">
-                <div style={{ minWidth: 0 }}>
-                  <div className="ab-state-name">{stepNow?.label || "Étape inconnue"}</div>
-                  <div className="ab-state-since">{[`Étape ${row.step} sur ${last}`, since].filter(Boolean).join(" · ")}</div>
+            <div className="ab-next">
+                {/* À qui de jouer, et son geste : un clic enregistre, le mot écrit part avec. */}
+              <div className={`ab-turn is-${turn.who}`}>
+                <div className="ab-turn-head">
+                  <span className="ab-turn-ico" aria-hidden="true">{React.createElement(TURN_ICON[turn.who], { size: 16, strokeWidth: 1.9 })}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="ab-turn-title">{turn.title}</div>
+                    <div className="ab-turn-hint">{turn.hint}</div>
+                  </div>
                 </div>
-                <div className="ab-state-act">
-                  {turn.working && <Tag tone="blue">En cours chez les développeurs</Tag>}
-                  {/* « Chez les développeurs » ne dit rien de plus quand ils y travaillent déjà. */}
-                  {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : !(turn.working && turn.who === "build") && <Tag tone={turn.tone}>{turn.tag}</Tag>}
-                </div>
-                {/* La frise se clique : choisir une étape fait apparaître son enregistrement, juste dessous. */}
-                <StepTrack value={row.step} steps={steps} P={P} onPick={locked ? undefined : setPicked} picked={picked} />
-                {picked != null && (
-                  <div className="ab-pick-save" role="group" aria-label="Changer l’étape">
-                    <span>Passer la mission à « {steps.find((item) => item.value === picked)?.label} » ? Le classement suivra tout seul.</span>
-                    <button type="button" className="fst-btn" disabled={Boolean(acting.busy)} onClick={() => setPicked(null)}>Annuler</button>
-                    <button type="button" className="ab-btn-main" disabled={Boolean(acting.busy)} onClick={savePicked}><Check size={15} />{acting.busy === "pick" ? "Enregistrement…" : "Enregistrer l’étape"}</button>
+                {turn.quote && <blockquote className="ab-turn-quote">{turn.quote}</blockquote>}
+                {turn.working && (
+                  <div className="ab-turn-working">
+                    <strong>Les développeurs y travaillent</strong> depuis le {String(turn.working.since).slice(0, 10)}, par {turn.working.by}
+                    {turn.working.updatedAt !== turn.working.since && <> · dernier point le {String(turn.working.updatedAt).slice(0, 10)}, par {turn.working.updatedBy}</>}.
                   </div>
                 )}
-
-                {/* À qui de jouer, et son geste : un clic enregistre, le mot écrit part avec. */}
-                <div className={`ab-turn is-${turn.who}`}>
-                  <div className="ab-turn-head">
-                    <span className="ab-turn-ico" aria-hidden="true">{React.createElement(TURN_ICON[turn.who], { size: 16, strokeWidth: 1.9 })}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="ab-turn-title">{turn.title}</div>
-                      <div className="ab-turn-hint">{turn.hint}</div>
-                    </div>
-                  </div>
-                  {turn.quote && <blockquote className="ab-turn-quote">{turn.quote}</blockquote>}
-                  {turn.working && (
-                    <div className="ab-turn-working">
-                      <strong>Les développeurs y travaillent</strong> depuis le {String(turn.working.since).slice(0, 10)}, par {turn.working.by}
-                      {turn.working.updatedAt !== turn.working.since && <> · dernier point le {String(turn.working.updatedAt).slice(0, 10)}, par {turn.working.updatedBy}</>}.
-                    </div>
+                {turn.working?.text && <blockquote className="ab-turn-quote">{turn.working.text}</blockquote>}
+                <textarea className="ab-turn-note" rows={2} value={note} maxLength={NOTE_MAX} placeholder={turn.placeholder} aria-label="Un mot qui s’inscrit au parcours"
+                  onChange={(e) => { setNote(e.target.value); if (acting.error) setActing({ busy: "", error: "" }); }} />
+                <div className="ab-turn-btns">
+                  {turn.actions.map((gesture) => (
+                    <button key={gesture.key} type="button" className={gesture.primary ? "ab-btn-main" : "fst-btn"} disabled={Boolean(acting.busy)} onClick={() => act(gesture)}>
+                      {gesture.primary && (gesture.action === "approve" ? <Check size={15} /> : <Send size={15} />)}
+                      {acting.busy === gesture.key ? "Enregistrement…" : gesture.label}
+                    </button>
+                  ))}
+                  {acting.error && <span className="ab-turn-error" role="alert">{acting.error}</span>}
+                  {!acting.error && saved && saved !== "rank" && (
+                    <span className="ab-state-saved" role="status">
+                      {{ deliver: "Version livrée : le juriste est attendu.", approve: "Version validée.", request_change: "Modification demandée : les développeurs sont attendus.",
+                        step: "Étape enregistrée ; le classement a suivi.", confirm: "Classement confirmé." }[saved]} Inscrit au parcours, dans Opti’Lex.
+                    </span>
                   )}
-                  {turn.working?.text && <blockquote className="ab-turn-quote">{turn.working.text}</blockquote>}
-                  <textarea className="ab-turn-note" rows={2} value={note} maxLength={NOTE_MAX} placeholder={turn.placeholder} aria-label="Un mot qui s’inscrit au parcours"
-                    onChange={(e) => { setNote(e.target.value); if (acting.error) setActing({ busy: "", error: "" }); }} />
-                  <div className="ab-turn-btns">
-                    {turn.actions.map((gesture) => (
-                      <button key={gesture.key} type="button" className={gesture.primary ? "ab-btn-main" : "fst-btn"} disabled={Boolean(acting.busy)} onClick={() => act(gesture)}>
-                        {gesture.primary && (gesture.action === "approve" ? <Check size={15} /> : <Send size={15} />)}
-                        {acting.busy === gesture.key ? "Enregistrement…" : gesture.label}
-                      </button>
-                    ))}
-                    {acting.error && <span className="ab-turn-error" role="alert">{acting.error}</span>}
-                    {!acting.error && saved && saved !== "rank" && (
-                      <span className="ab-state-saved" role="status">
-                        {{ deliver: "Version livrée : le juriste est attendu.", approve: "Version validée.", request_change: "Modification demandée : les développeurs sont attendus.",
-                          step: "Étape enregistrée ; le classement a suivi.", confirm: "Classement confirmé." }[saved]} Inscrit au parcours, dans Opti’Lex.
-                      </span>
-                    )}
-                  </div>
                 </div>
-                {locked && <p className="ab-note" style={{ gridColumn: "1 / -1", marginTop: 0 }}>Validé par la direction du cabinet ({row.validated.by}) : l’étape et le classement ne changent plus. La direction peut lever la validation dans Opti’Lex.</p>}
-                {!locked && row.step === last && !row.awaiting && <p className="ab-note" style={{ gridColumn: "1 / -1", marginTop: 0 }}>Il reste la validation, qui se fait dans Opti’Lex par la direction du cabinet.</p>}
               </div>
-            </Card>
+            </div>
           </Reveal>
 
           <Reveal className="fst-grid">
@@ -358,25 +361,6 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
                 )}
               </Card>
 
-              <Card title="Utilisation du logiciel" Icon={Gauge} hint={`${periodLabel(data.period)}.`}>
-                <Usage usage={row.usage} P={P} large />
-                <p className="fst-card-hint" style={{ marginTop: 10 }}>
-                  {row.usage ? row.usage.detail : `Aucun module du logiciel ne couvre cette mission : rien à mesurer sur les ${periodHint(data.period)}.`}
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginTop: 18, paddingTop: 18, borderTop: "1px solid var(--line-soft)" }}>
-                  <div>
-                    <div className="fst-cell-muted" style={{ fontSize: 12.5 }}>Missions réalisées</div>
-                    <div className="fst-num" style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.03em", marginTop: 4 }}>{number(row.total)}</div>
-                    <div className="fst-cell-muted" style={{ fontSize: 12 }}>dont {number(row.recent)} sur 90 jours</div>
-                  </div>
-                  <div>
-                    <div className="fst-cell-muted" style={{ fontSize: 12.5 }}>Messagerie client</div>
-                    <div className="fst-num" style={{ fontSize: 28, fontWeight: 500, letterSpacing: "-0.03em", marginTop: 4 }}>{number(row.messaging?.total)}</div>
-                    <div className="fst-cell-muted" style={{ fontSize: 12 }}>{row.messaging?.total ? `${row.messaging.share} % des demandes` : "aucune demande"}</div>
-                  </div>
-                </div>
-              </Card>
-
               {data.family?.length > 0 && (
                 <Card title="Missions du process" Icon={ListTree} hint="Un clic ouvre le suivi de la mission.">
                   {data.family.map((item) => (
@@ -389,7 +373,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
               )}
 
               {data.months?.length > 0 && data.monthsMax > 0 && (
-                <Card title="Mois par mois" Icon={BarChart3} hint="En clair les missions réalisées, en sombre celles passées par le logiciel.">
+                <Card title="Utilisation mois par mois" Icon={BarChart3} hint={`En clair les missions réalisées, en sombre celles passées par le logiciel. ${row.usage ? row.usage.detail : `Aucun module du logiciel ne couvre cette mission : rien à mesurer sur les ${periodHint(data.period)}.`}`}>
                   <div style={{ display: "grid", gridTemplateColumns: `repeat(${data.months.length}, 1fr)`, gap: 5, alignItems: "end", height: 96 }}>
                     {data.months.map((month) => (
                       <div key={month.label} title={`${month.label} : ${countLabel(month.missions, "mission", "missions")}, dont ${month.used} par le logiciel`}

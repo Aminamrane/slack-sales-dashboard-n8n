@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classificationOf, countLabel, filterHistory, fold, periodLabel, sizeLabel, stepOf, visibleRows } from './automationBoard.js';
+import { classificationOf, countLabel, factDate, filterHistory, fold, periodLabel, sizeLabel, stepOf, visibleRows, voices, whenLabel } from './automationBoard.js';
 
 const ROWS = [
   { id: 1, name: 'Process REM', parentId: null, classification: 'pending_validation', pole: { group: 'both' }, toConfirm: false },
@@ -266,4 +266,17 @@ test("la fiche d'une mission propose « On y travaille », puis le point d'avanc
   // Pendant que le juriste teste, il n'y a rien à commencer.
   const tested = turnOf({ step: 2, awaiting: { who: "lawyer" }, working: null }, steps);
   assert.ok(!tested.actions.some((gesture) => gesture.action === "start"));
+});
+
+test("les deux voix d'une mission : la dernière parole du juriste et celle des développeurs (16/11/2026)", () => {
+  const row = { step: 2, awaiting: { who: "dev", by: "Juriste", since: "14/11/2026 à 10:12", text: "Les primes manquent" }, working: null };
+  const history = [{ day: "2026-11-12", items: [{ kind: "decision", step: 2, who: "Dev", time: "14:04", note: "V1 livrée" }, { filter: "comments", who: "Juriste", time: "09:00", text: "Vu" }] }];
+  const entries = [{ kind: "update", author_name: "Dev 2", created_at: "2026-11-13T17:20:00+01:00", body: "Reprise des primes" }];
+  const v = voices(row, history, entries);
+  assert.equal(v.lawyer.what, "a demandé une modification");
+  assert.equal(v.lawyer.text, "Les primes manquent");
+  assert.equal(v.devs.who, "Dev 2");
+  assert.equal(voices({}, [], []).lawyer, null);
+  assert.equal(factDate("12/11/2026 à 14:04").getHours(), 14);
+  assert.equal(whenLabel(new Date("2026-11-14T10:12:00"), new Date("2026-11-16T09:00:00").getTime()), "il y a 2 jours");
 });
