@@ -30,6 +30,15 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
   const open = options.length > 0;
   const queryText = query ? query.query : null;
   useEffect(() => { setActive(0); }, [queryText]);
+  // La liste défile : la personne choisie aux flèches reste toujours visible dans la fenêtre.
+  const listRef = useRef(null);
+  useEffect(() => {
+    const list = listRef.current, row = list && list.children[active];
+    if (!row) return;
+    // Défilement de la liste seule (jamais de la page) : la ligne choisie est ramenée dans la fenêtre.
+    if (row.offsetTop < list.scrollTop) list.scrollTop = row.offsetTop;
+    else if (row.offsetTop + row.offsetHeight > list.scrollTop + list.clientHeight) list.scrollTop = row.offsetTop + row.offsetHeight - list.clientHeight;
+  }, [active, open]);
 
   const syncCaret = (event) => setCaret(event.target.selectionStart ?? String(event.target.value || '').length);
   const pick = (person) => {
@@ -61,14 +70,15 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
         onKeyDown={handleKeyDown} onKeyUp={syncCaret} onClick={syncCaret} onSelect={syncCaret} {...rest} />
       {open && (
         <div role="listbox" aria-label="Mentionner une personne"
-          style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 30, marginTop: 4, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)', overflow: 'hidden' }}>
-          <div style={{ padding: '6px 12px', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 6 }}>
+          style={{ position: 'absolute', left: 0, right: 0, top: '100%', zIndex: 30, marginTop: 4, background: '#fff', border: `1px solid ${BORDER}`, borderRadius: 14, boxShadow: '0 14px 34px rgba(28,27,25,.10), 0 2px 6px rgba(28,27,25,.04)', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '6px 12px', fontSize: 11, color: MUTED, borderBottom: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             <span style={{ width: 6, height: 6, borderRadius: 3, background: GREEN, display: 'inline-block' }} />
             Mentionner : la personne sera prévenue par e-mail et dans le CRM
           </div>
+          <div ref={listRef} style={{ maxHeight: 248, overflowY: 'auto', overscrollBehavior: 'contain', scrollbarWidth: 'thin', scrollbarColor: `${BORDER} transparent` }}>
           {options.map((person, index) => (
             <button type="button" key={person.id} role="option" aria-selected={index === active}
-              onMouseDown={(event) => { event.preventDefault(); pick(person); }} onMouseEnter={() => setActive(index)}
+              onMouseDown={(event) => { event.preventDefault(); pick(person); }} onMouseMove={() => active !== index && setActive(index)}
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 12px', border: 'none', background: index === active ? SOFT : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
               <Initials name={person.name} src={person.avatar_url} />
               <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
@@ -77,6 +87,7 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
               </span>
             </button>
           ))}
+          </div>
         </div>
       )}
     </div>

@@ -13,7 +13,7 @@ export function mentionQuery(text, caret) {
   return { start: at, query };
 }
 
-export function filterPeople(people, query, limit = 6) {
+export function filterPeople(people, query, limit = Infinity) {
   const q = fold(query).trim();
   const scored = (people || []).map(p => {
     const name = fold(p.name), email = fold(p.email);
