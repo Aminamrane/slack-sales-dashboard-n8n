@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowUpToLine, Check, Copy, Plus, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { canPromote, choicesOf, countOf, panelOf, rowsOf } from './contactKinds.js';
+import { formatPhoneDisplay } from '../../utils/phoneDisplay.js';
+import { load, useContacts } from './leadContactsStore.js';
 
 // Autres téléphones et e-mails d'un lead (dev 11 et 12/11/2026), rangés sous les champs « Téléphone » et « Email » de
 // la fiche. Au repos, RIEN ne s'affiche de plus que le champ : un petit « +2 » (ou un « + » s'il n'y en a pas) à côté
@@ -9,47 +10,20 @@ import { canPromote, choicesOf, countOf, panelOf, rowsOf } from './contactKinds.
 // Règle : le contact PRIORITAIRE est le téléphone / l'e-mail du lead lui-même, celui des relances, des SMS et de
 // l'envoi du contrat. « Rendre prioritaire » échange un autre contact avec celui du lead.
 // Si le serveur ne connaît pas encore la route, rien ne s'affiche et la fiche reste comme avant.
-// Numéro WhatsApp (dev 17/11/2026) : pour la facturation (relances de paiement, campagnes). Il se range sous le
-// téléphone, avec son badge, et n'est jamais prioritaire (contactKinds.js).
 const FIELD = { phone: 'phone', email: 'email' };
 const KINDS = {
-  phone: { noun: 'numéro', choice: 'Téléphone', other: (n) => `${n} autre${n > 1 ? 's' : ''} numéro${n > 1 ? 's' : ''}`, placeholder: '06 12 34 56 78', type: 'tel', add: 'Ajouter un numéro' },
-  whatsapp: { noun: 'numéro WhatsApp', choice: 'WhatsApp', placeholder: '06 12 34 56 78', type: 'tel', add: 'Ajouter un numéro WhatsApp' },
-  email: { noun: 'e-mail', choice: 'E-mail', other: (n) => `${n} autre${n > 1 ? 's' : ''} e-mail${n > 1 ? 's' : ''}`, placeholder: 'prenom.nom@societe.fr', type: 'email', add: 'Ajouter un e-mail' },
+  phone: { noun: 'numéro', other: (n) => `${n} autre${n > 1 ? 's' : ''} numéro${n > 1 ? 's' : ''}`, placeholder: '06 12 34 56 78', type: 'tel', add: 'Ajouter un numéro' },
+  email: { noun: 'e-mail', other: (n) => `${n} autre${n > 1 ? 's' : ''} e-mail${n > 1 ? 's' : ''}`, placeholder: 'prenom.nom@societe.fr', type: 'email', add: 'Ajouter un e-mail' },
 };
-const WHATSAPP = { light: ['#e3f6ea', '#0f7a3d', '#c4ead2'], dark: ['rgba(37,211,102,.14)', '#5ad08a', 'rgba(37,211,102,.28)'] };
 const urlOf = (leadId) => `/api/v1/tracking/leads/${leadId}/contacts`;
 
-// Un petit magasin par lead : le compteur du champ et la liste dépliée lisent les mêmes données, chargées une seule
-// fois par ouverture de fiche. `open` : le type de contact déplié ('phone', 'email' ou rien).
-const stores = new Map();
-function storeOf(leadId) {
-  let store = stores.get(leadId);
-  if (!store) { store = { snapshot: { data: null, open: null }, listeners: new Set(), loadedAt: 0 }; stores.set(leadId, store); }
-  return store;
-}
-function emit(store, patch) { store.snapshot = { ...store.snapshot, ...patch }; store.listeners.forEach((listener) => listener()); }
-async function load(leadId) {
-  const store = storeOf(leadId);
-  store.loadedAt = Date.now();
-  try { emit(store, { data: await apiClient.get(urlOf(leadId)) }); } catch { emit(store, { data: null }); }
-}
-function useContacts(leadId) {
-  const store = storeOf(leadId);
-  const snapshot = useSyncExternalStore((listener) => { store.listeners.add(listener); return () => store.listeners.delete(listener); }, () => store.snapshot);
-  useEffect(() => { if (Date.now() - store.loadedAt > 5000) load(leadId); }, [leadId, store]);
-  return [snapshot, (patch) => emit(store, patch)];
-}
+const countOf = (data, kind) => (data?.contacts || []).filter((contact) => contact.kind === kind).length;
 
 const tagStyle = (darkMode, strong) => {
   const [bg, ink, edge] = strong
     ? (darkMode ? ['rgba(240,163,92,.14)', '#f0a35c', 'rgba(240,163,92,.25)'] : ['#fde9da', '#c2500e', '#f8d4ba'])
     : (darkMode ? ['rgba(255,255,255,.06)', '#c9c9c9', '#3a3a3a'] : ['#f1eee9', '#4a4540', '#e3ded6']);
   return { padding: '0 6px', borderRadius: 6, border: `1px solid ${edge}`, background: bg, color: ink, fontSize: 9.5, fontWeight: 500, letterSpacing: 0, textTransform: 'none', whiteSpace: 'nowrap', flexShrink: 0 };
-};
-const whatsappTagStyle = (darkMode) => {
-  const [bg, ink, edge] = WHATSAPP[darkMode ? 'dark' : 'light'];
-  return { ...tagStyle(darkMode, false), background: bg, color: ink, border: `1px solid ${edge}` };
 };
 
 // « Prioritaire », à côté du libellé du champ : seulement quand la liste est dépliée, pour dire lequel sert aux relances.
@@ -94,31 +68,23 @@ export function ContactsToggle({ leadId, kind, C, darkMode, readOnly = false }) 
 export default function LeadContactRows({ leadId, kind, mainValue, onPromote, C, darkMode, readOnly = false }) {
   const [{ data, open }, set] = useContacts(leadId);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ kind, value: '', category: '' });
+  const [form, setForm] = useState({ value: '', category: '' });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const shown = open === kind;
-  const all = data?.categories;
-  const categories = all?.[kind];
-  const rows = rowsOf(data, kind);
+  const categories = data?.categories?.[kind];
+  const rows = (data?.contacts || []).filter((contact) => contact.kind === kind);
   const empty = rows.length === 0;
   // Sans autre contact, déplier revient à vouloir en ajouter un : la saisie est là tout de suite.
   useEffect(() => {
     if (!shown) { setAdding(false); setConfirm(null); setError(''); return; }
-    if (categories) setForm({ kind, value: '', category: Object.keys(categories)[0] });
+    if (categories) setForm({ value: '', category: Object.keys(categories)[0] });
     if (empty) setAdding(true);
-  }, [shown, categories, empty, kind]);
+  }, [shown, categories, empty]);
 
   if (!categories || !shown) return null;
-  const choices = choicesOf(all);
-  const formCategories = all?.[form.kind] || categories;
-  const formKind = KINDS[form.kind] || KINDS[kind];
-  // Changer de type garde le numéro saisi : un téléphone tapé peut devenir le WhatsApp sans le retaper.
-  const pick = (next) => setForm({ ...form, kind: next, category: Object.keys(all?.[next] || {})[0] || '' });
-  // Raccourci : le WhatsApp est souvent le téléphone du lead.
-  const sameAsPhone = form.kind === 'whatsapp' && kind === 'phone' && (mainValue || '').trim();
   const base = urlOf(leadId);
 
   const run = async (action) => {
@@ -131,11 +97,7 @@ export default function LeadContactRows({ leadId, kind, mainValue, onPromote, C,
   const submit = async (event) => {
     event.preventDefault();
     if (!form.value.trim()) return;
-    if (await run(() => apiClient.post(base, { kind: form.kind, category: form.category, value: form.value }))) {
-      setAdding(false); setForm({ ...form, value: '' });
-      // Un e-mail ajouté depuis le téléphone (ou l'inverse) se range sous son champ : on montre ce champ.
-      if (panelOf(form.kind) !== kind) set({ open: panelOf(form.kind) });
-    }
+    if (await run(() => apiClient.post(base, { kind, category: form.category, value: form.value }))) { setAdding(false); setForm({ ...form, value: '' }); }
   };
   // Rendre prioritaire : le lead prend ce contact, l'ancien prioritaire prend sa place ici, en « Secondaire ».
   const promote = (contact) => run(async () => {
@@ -157,15 +119,13 @@ export default function LeadContactRows({ leadId, kind, mainValue, onPromote, C,
         <div key={contact.id}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span title={contact.value} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: kind === 'phone' ? C.text : C.secondary,
-              fontFamily: kind === 'phone' ? "'SF Mono', 'Fira Code', monospace" : 'inherit', fontWeight: kind === 'phone' ? 500 : 400 }}>{contact.value}</span>
-            {contact.kind === 'whatsapp'
-              ? <span title="Numéro WhatsApp, pour la facturation" style={whatsappTagStyle(darkMode)}>WhatsApp</span>
-              : <span style={tagStyle(darkMode, contact.category === 'a_contacter' || contact.category === 'personne_a_contacter')}>{contact.label}</span>}
+              fontFamily: kind === 'phone' ? "'SF Mono', 'Fira Code', monospace" : 'inherit', fontWeight: kind === 'phone' ? 500 : 400 }}>{kind === 'phone' ? formatPhoneDisplay(contact.value) : contact.value}</span>
+            <span style={tagStyle(darkMode, contact.category === 'a_contacter' || contact.category === 'personne_a_contacter')}>{contact.label}</span>
             <span style={{ flex: 1 }} />
             {copied === contact.id
               ? <Check size={13} color="#0b7a4b" style={{ flexShrink: 0 }} />
               : <span role="button" title="Copier" style={action} {...hover} onClick={() => copy(contact)}><Copy size={13} color={C.muted} /></span>}
-            {!readOnly && canPromote(contact) && <span role="button" title="Rendre prioritaire : utilisé pour les relances et le contrat" style={action} {...hover} onClick={() => setConfirm(confirm === contact.id ? null : contact.id)}><ArrowUpToLine size={13} color={C.muted} /></span>}
+            {!readOnly && <span role="button" title="Rendre prioritaire : utilisé pour les relances et le contrat" style={action} {...hover} onClick={() => setConfirm(confirm === contact.id ? null : contact.id)}><ArrowUpToLine size={13} color={C.muted} /></span>}
             {!readOnly && <span role="button" title="Retirer" style={action} {...hover} onClick={() => run(() => apiClient.delete(`${base}/${contact.id}`))}><X size={13} color={C.muted} /></span>}
           </div>
           {confirm === contact.id && (
@@ -183,40 +143,14 @@ export default function LeadContactRows({ leadId, kind, mainValue, onPromote, C,
         </button>
       )}
       {!readOnly && adding && (
-        <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {/* Type du contact : Téléphone, WhatsApp ou E-mail (ceux que le serveur connaît). */}
-          {choices.length > 1 && (
-            <div role="radiogroup" aria-label="Type de contact" style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 2, padding: 2, borderRadius: 9, background: darkMode ? '#222' : '#ece8e2' }}>
-              {choices.map((choice) => {
-                const on = form.kind === choice;
-                return (
-                  <button key={choice} type="button" role="radio" aria-checked={on} onClick={() => pick(choice)}
-                    style={{ padding: '3px 9px', borderRadius: 7, border: 'none', fontSize: 11, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', transition: 'background 0.15s, color 0.15s',
-                      background: on ? (darkMode ? '#3a3a3a' : '#ffffff') : 'transparent', color: on ? C.text : C.muted, boxShadow: on && !darkMode ? '0 1px 2px rgba(43,41,39,.12)' : 'none' }}>
-                    {KINDS[choice].choice}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          <div style={{ display: 'grid', gridTemplateColumns: Object.keys(formCategories).length > 1 ? 'minmax(0, 1fr) auto auto' : 'minmax(0, 1fr) auto', gap: 6, alignItems: 'center' }}>
-            <input autoFocus type={formKind.type} value={form.value} placeholder={formKind.placeholder} aria-label={formKind.add}
-              onChange={(e) => setForm({ ...form, value: e.target.value })} onKeyDown={(e) => { if (e.key === 'Escape') { if (empty) set({ open: null }); else setAdding(false); } }} style={field} />
-            {/* Un numéro WhatsApp n'a qu'une catégorie : pas de liste à ouvrir. */}
-            {Object.keys(formCategories).length > 1 && (
-              <select value={form.category} aria-label="Catégorie" onChange={(e) => setForm({ ...form, category: e.target.value })} style={{ ...field, cursor: 'pointer', maxWidth: 124 }}>
-                {Object.entries(formCategories).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
-              </select>
-            )}
-            <button type="submit" disabled={busy || !form.value.trim()} aria-label="Ajouter" title="Ajouter" style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, borderRadius: 9, border: 'none',
-              background: darkMode ? '#ededed' : '#2b2927', color: darkMode ? '#141414' : '#ffffff', cursor: 'pointer', opacity: busy || !form.value.trim() ? 0.4 : 1, transition: 'opacity 0.2s' }}><Check size={14} /></button>
-          </div>
-          {sameAsPhone && form.value.trim() !== sameAsPhone && (
-            <button type="button" onClick={() => setForm({ ...form, value: sameAsPhone })}
-              style={{ alignSelf: 'flex-start', padding: 0, border: 'none', background: 'transparent', color: C.muted, fontSize: 11.5, fontWeight: 500, fontFamily: 'inherit', cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 2 }}>
-              Même numéro que le téléphone
-            </button>
-          )}
+        <form onSubmit={submit} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto auto', gap: 6, alignItems: 'center' }}>
+          <input autoFocus type={KINDS[kind].type} value={form.value} placeholder={KINDS[kind].placeholder} aria-label={KINDS[kind].add}
+            onChange={(e) => setForm({ ...form, value: e.target.value })} onKeyDown={(e) => { if (e.key === 'Escape') { if (empty) set({ open: null }); else setAdding(false); } }} style={field} />
+          <select value={form.category} aria-label="Catégorie" onChange={(e) => setForm({ ...form, category: e.target.value })} style={{ ...field, cursor: 'pointer', maxWidth: 124 }}>
+            {Object.entries(categories).map(([key, text]) => <option key={key} value={key}>{text}</option>)}
+          </select>
+          <button type="submit" disabled={busy || !form.value.trim()} aria-label="Ajouter" title="Ajouter" style={{ display: 'grid', placeItems: 'center', width: 28, height: 28, borderRadius: 9, border: 'none',
+            background: darkMode ? '#ededed' : '#2b2927', color: darkMode ? '#141414' : '#ffffff', cursor: 'pointer', opacity: busy || !form.value.trim() ? 0.4 : 1, transition: 'opacity 0.2s' }}><Check size={14} /></button>
         </form>
       )}
       {error && <p role="alert" style={{ margin: 0, fontSize: 11.5, color: darkMode ? '#f87171' : '#c5221f' }}>{error}</p>}
