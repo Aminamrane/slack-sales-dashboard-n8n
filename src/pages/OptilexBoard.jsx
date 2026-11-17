@@ -5,7 +5,7 @@ import { EmojiPalette, Reactions, toggledReactions } from '../components/BoardRe
 import { RECEIVABLES_ROLES, ReceivablesValue } from '../components/BoardReceivables.jsx';
 import { Panel, Stat, Tag } from '../components/DashParts.jsx';
 import { AirportKPI } from '../components/AirportCounter.jsx';
-import { ContactMore, RankTag, useContactEntries } from '../components/BoardContactLine.jsx';
+import { ContactMore, RankTag, useContactEntries, WhatsAppTag } from '../components/BoardContactLine.jsx';
 import { Barcode, OnboardedPass, OnboardedSeal } from '../components/OnboardingPass.jsx';
 import WeatherCaseComposer, { WeatherQualification, WeatherScaleGuide } from '../components/WeatherCaseComposer';
 import { WEATHER, weatherPresentation, weatherFilter, weatherRatingLabel } from '../utils/weatherCase';
@@ -3427,6 +3427,8 @@ const PROP_ICONS = {
   siren: <path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18" />,
   tranche: <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></>,
   email: <><circle cx="12" cy="12" r="3.8" /><path d="M15.8 12v1.4a2.6 2.6 0 0 0 5.2 0V12a9 9 0 1 0-3.6 7.2" /></>,
+  // Bulle et combiné : le numéro WhatsApp (dev 17/11/2026).
+  whatsapp: <><path d="M3.5 20.5 5 16.3a8.5 8.5 0 1 1 3 2.9Z" /><path d="M9.3 8.7c.3-.5.7-.5 1-.2l.8.9c.2.3.2.6 0 .9l-.4.5a4.6 4.6 0 0 0 2.5 2.5l.5-.4c.3-.2.6-.2.9 0l.9.8c.3.3.3.7-.2 1a3 3 0 0 1-2.7.2 6.5 6.5 0 0 1-3.5-3.5 3 3 0 0 1 .2-2.7Z" /></>,
   phone: <path d="M8.3 3.6 6.1 3a2 2 0 0 0-2.2 1A12 12 0 0 0 20 20.1a2 2 0 0 0 1-2.2l-.6-2.2a1.5 1.5 0 0 0-1.6-1.1l-2.5.3a1.5 1.5 0 0 0-1.1.8l-.6 1.2a10 10 0 0 1-5.5-5.5l1.2-.6a1.5 1.5 0 0 0 .8-1.1l.3-2.5a1.5 1.5 0 0 0-1.1-1.6Z" />,
   contrat: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M8.5 16.5c.9-1.2 1.6-1.2 2.2 0s1.4 1.2 2.3 0" /></>,
   programmes: <><circle cx="12" cy="8" r="6" /><path d="M15.48 12.89 17 22l-5-3-5 3 1.52-9.11" /></>,
@@ -3611,6 +3613,7 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
   const mainEmail = ov(row, "email_ovr", "email");
   const [emails, localEmail] = useContactEntries("email", num, mainEmail, row.shared_contacts?.emails);
   const [phones, localPhone] = useContactEntries("phone", num, ov(row, "phone_ovr", "contact_phone"), row.shared_contacts?.phones);
+  const [whatsapps, localWhatsapp] = useContactEntries("whatsapp", num, null, row.shared_contacts?.whatsapp);
   const mainEmailEntry = emails.find((e) => e.value.toLowerCase() === String(mainEmail || "").trim().toLowerCase()) || emails[0];
   const [draft, setDraft] = useState({});
   const startEdit = () => {
@@ -3720,6 +3723,13 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
                 <span className="ob-pv-line ob-contact"><span className="ob-pv-none">—</span>
                   {num && contactEditable && <ContactMore kind="phone" numero={num} entries={phones} editable onChanged={onContactsChanged} onLocal={localPhone} />}</span>
               )}
+            </PropRow>
+            {/* Numéro WhatsApp (dev 17/11/2026) : pour la facturation, ajouté par le sales, un CSM ou la Finance. Jamais
+                le téléphone du client ni le principal : il n'a pas de rang, son badge. */}
+            <PropRow icon="whatsapp" label="WhatsApp" copy={whatsapps[0]?.value || ""} copyLabel="le numéro WhatsApp">
+              <span className="ob-pv-line ob-contact">
+                {whatsapps.length ? <><span className="ob-pv-text">{whatsapps[0].value}</span><WhatsAppTag /></> : <span className="ob-pv-none">—</span>}
+                {num && (whatsapps.length > 0 || contactEditable) && <ContactMore kind="whatsapp" numero={num} entries={whatsapps} editable={contactEditable} onChanged={onContactsChanged} onLocal={localWhatsapp} />}</span>
             </PropRow>
           </div>
           {/* Contrats : l'état et ses dates ; les dossiers et leurs PDF vivent dans l'onglet Intégration (dev 29/10/2026). */}

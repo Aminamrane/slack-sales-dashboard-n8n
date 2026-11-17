@@ -12,14 +12,20 @@
 // Le téléphone « hérité » : tant qu'aucun téléphone n'est en base, on montre
 // celui que la fiche affichait déjà (jointure contrats → leads, volatile) avec
 // un bouton pour l'enregistrer proprement. On n'invente rien, on récupère.
+//
+// Numéros WhatsApp (dev 17/11/2026) : leur propre groupe, pour les futures
+// relances de paiement et campagnes. Copiables comme les autres, avec un lien
+// qui ouvre la conversation (wa.me). Jamais principaux : ce ne sont pas des
+// téléphones, ni pour les SMS ni pour le board.
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
   Mail, Phone, Home, Building2, Users, Calculator, Receipt, Tag,
-  Plus, Star, Trash2, Check, X as XIcon, ChevronDown, Copy,
+  Plus, Star, Trash2, Check, X as XIcon, ChevronDown, Copy, MessageCircle, ExternalLink,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
+import { whatsappUrl } from '../../utils/whatsapp.js';
 import { CONTACT_LABEL_OPTIONS } from './constants.js';
 // Valeur de contact copiable en un clic, avec son icône VISIBLE.
 //
@@ -93,15 +99,20 @@ const LABEL_ICONS = {
 const LABEL_TEXT = Object.fromEntries(CONTACT_LABEL_OPTIONS.map((o) => [o.value, o.label]));
 
 const KIND_META = {
-  email: { Icon: Mail,  title: 'Emails',     placeholder: 'adresse@exemple.fr' },
-  phone: { Icon: Phone, title: 'Téléphones', placeholder: '+33 6 12 34 56 78' },
+  email:    { Icon: Mail,          title: 'Emails',           placeholder: 'adresse@exemple.fr', add: 'un email' },
+  phone:    { Icon: Phone,         title: 'Téléphones',       placeholder: '+33 6 12 34 56 78',  add: 'un téléphone' },
+  whatsapp: { Icon: MessageCircle, title: 'Numéros WhatsApp', placeholder: '+33 6 12 34 56 78',  add: 'un numéro WhatsApp' },
 };
+const WHATSAPP_GREEN = '#0f7a3d';
+// Seuls l'email et le téléphone ont un contact principal.
+const hasPrimary = (kind) => kind !== 'whatsapp';
 
 export default function ContactList({
   clientId,
-  kind,                 // 'email' | 'phone'
+  kind,                 // 'email' | 'phone' | 'whatsapp'
   contacts,             // profile.contacts (tous kinds — on filtre ici)
   inheritedValue,       // valeur héritée (volatile) affichée si rien en base
+  phoneFallback,        // WhatsApp : téléphone de la fiche, proposé si aucun téléphone n'est en base
   canEdit,
   onChanged,            // () → refetch du profile côté parent
   onShowToast,
@@ -150,6 +161,12 @@ export default function ContactList({
   // un email en base et « Aucun » à l'écran — dont les derniers signés, alors
   // qu'aucun contrat ne part sans email (constat dev 2026-08-28).
   const showInherited = list.length === 0 && !!inheritedValue;
+  // Raccourci à l'ajout d'un WhatsApp : le téléphone principal du client (sinon le premier, sinon celui de la fiche),
+  // tant qu'il n'est pas déjà son numéro WhatsApp.
+  const phones = (contacts || []).filter((c) => c.kind === 'phone');
+  const digits = (v) => String(v || '').replace(/\D/g, '');
+  const phone = kind === 'whatsapp' ? ((phones.find((c) => c.is_primary) || phones[0])?.value || phoneFallback || '') : '';
+  const phoneHint = phone && !list.some((c) => digits(c.value) === digits(phone)) ? phone : '';
 
   return (
     <div style={{ padding: '6px 0', borderBottom: `1px solid ${N.borderSft}` }}>
@@ -163,7 +180,7 @@ export default function ContactList({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            title={`Ajouter un ${kind === 'email' ? 'email' : 'téléphone'}`}
+            title={`Ajouter ${meta.add}`}
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               border: 'none', background: 'transparent', cursor: 'pointer',
@@ -187,7 +204,7 @@ export default function ContactList({
             canEdit={canEdit}
             busy={busy}
             onRetype={(label) => retype(c.id, label)}
-            onMakePrimary={() => makePrimary(c.id)}
+            onMakePrimary={hasPrimary(kind) ? () => makePrimary(c.id) : null}
             onArchive={() => archive(c.id)}
             onCopied={onCopied}
           />
@@ -235,6 +252,7 @@ export default function ContactList({
             placeholder={meta.placeholder}
             busy={busy}
             firstOfKind={list.length === 0}
+            sameAs={phoneHint}
             onCancel={() => setAdding(false)}
             onSubmit={async (value, label, isPrimary) => {
               await addContact(value, label, isPrimary);
@@ -297,8 +315,11 @@ function ContactRow({ contact, canEdit, busy, onRetype, onMakePrimary, onArchive
           entière est donc la cible. */}
       <CopyableValue value={contact.value} onCopied={onCopied} />
 
+      {/* Numéro WhatsApp : badge et lien qui ouvre la conversation (wa.me, chiffres internationaux). */}
+      {contact.kind === 'whatsapp' && <WhatsAppLink value={contact.value} />}
+
       {/* Étoile = contact principal */}
-      {contact.is_primary ? (
+      {!onMakePrimary ? null : contact.is_primary ? (
         <Star size={12} style={{ color: '#d9910d', fill: '#d9910d', flexShrink: 0 }} title="Contact principal" />
       ) : canEdit ? (
         <button
@@ -335,6 +356,30 @@ function ContactRow({ contact, canEdit, busy, onRetype, onMakePrimary, onArchive
         </button>
       )}
     </div>
+  );
+}
+
+// ── Lien WhatsApp ───────────────────────────────────────────────────────────
+// Rien si le numéro ne se lit pas en international : mieux vaut pas de lien
+// qu'une conversation ouverte avec un inconnu.
+function WhatsAppLink({ value }) {
+  const href = whatsappUrl(value);
+  if (!href) return null;
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      title="Ouvrir la conversation WhatsApp"
+      onClick={(e) => e.stopPropagation()}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 3, flexShrink: 0,
+        padding: '1px 6px', borderRadius: 4, background: '#e3f6ea',
+        color: WHATSAPP_GREEN, fontSize: 11, fontWeight: 500, textDecoration: 'none',
+      }}
+    >
+      WhatsApp <ExternalLink size={10} strokeWidth={2} />
+    </a>
   );
 }
 
@@ -381,11 +426,11 @@ function TypePicker({ current, onPick, onClose }) {
 }
 
 // ── Formulaire d'ajout inline ───────────────────────────────────────────────
-function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
+function AddForm({ kind, placeholder, busy, firstOfKind, sameAs, onCancel, onSubmit }) {
   const [value, setValue] = useState('');
   // Le premier contact d'un kind devient principal d'office : il n'y a pas de
-  // choix à faire quand il n'y a qu'un candidat.
-  const [isPrimary, setIsPrimary] = useState(firstOfKind);
+  // choix à faire quand il n'y a qu'un candidat. Un numéro WhatsApp, jamais.
+  const [isPrimary, setIsPrimary] = useState(firstOfKind && hasPrimary(kind));
   const [label, setLabel] = useState(null);
   const canSubmit = value.trim().length > 3 && !busy;
 
@@ -436,18 +481,20 @@ function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
         })}
       </div>
 
-      <label style={{
-        display: 'inline-flex', alignItems: 'center', gap: 4,
-        fontSize: 11.5, color: N.textMuted, cursor: 'pointer', userSelect: 'none',
-      }}>
-        <input
-          type="checkbox"
-          checked={isPrimary}
-          onChange={(e) => setIsPrimary(e.target.checked)}
-          style={{ accentColor: '#55514b' }}
-        />
-        Principal
-      </label>
+      {hasPrimary(kind) && (
+        <label style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          fontSize: 11.5, color: N.textMuted, cursor: 'pointer', userSelect: 'none',
+        }}>
+          <input
+            type="checkbox"
+            checked={isPrimary}
+            onChange={(e) => setIsPrimary(e.target.checked)}
+            style={{ accentColor: '#55514b' }}
+          />
+          Principal
+        </label>
+      )}
 
       <button
         type="button"
@@ -473,6 +520,21 @@ function AddForm({ kind, placeholder, busy, firstOfKind, onCancel, onSubmit }) {
       >
         <XIcon size={13} />
       </button>
+
+      {/* Le WhatsApp est souvent le téléphone du client : un clic le reprend. */}
+      {sameAs && value.trim() !== sameAs && (
+        <button
+          type="button"
+          onClick={() => setValue(sameAs)}
+          style={{
+            flexBasis: '100%', textAlign: 'left', border: 'none', background: 'transparent',
+            padding: 0, cursor: 'pointer', color: N.textMuted, fontSize: 11.5,
+            fontFamily: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2,
+          }}
+        >
+          Même numéro que le téléphone ({sameAs})
+        </button>
+      )}
     </div>
   );
 }
