@@ -66,9 +66,9 @@ export function sectorBreakdown(lives, limit = 12) {
   const total = lives.filter((life) => life.open).length;
   const row = (group, label) => ({ key: group.key, label, open: group.open, resiliated: group.resiliated, clients: group.days.length,
     share: total ? group.open / total : null, averageDays: average(group.days) });
-  // Le libellé d'un secteur : son écriture la plus fréquente.
+  // Le libellé d'un secteur : son écriture la plus fréquente ; à égalité, celle qui commence par une majuscule.
   const named = [...groups.values()].filter((group) => group.key !== '')
-    .map((group) => row(group, [...group.labels].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'fr'))[0][0]))
+    .map((group) => row(group, [...group.labels].sort((a, b) => b[1] - a[1] || Number(/^\p{Lu}/u.test(b[0])) - Number(/^\p{Lu}/u.test(a[0])) || a[0].localeCompare(b[0], 'fr'))[0][0]))
     .sort((a, b) => b.open - a.open || b.clients - a.clients || a.label.localeCompare(b.label, 'fr'));
   const merge = (list, key, label) => (list.length ? [row({ key, open: list.reduce((n, g) => n + g.open, 0), resiliated: list.reduce((n, g) => n + g.resiliated, 0),
     days: list.flatMap((g) => Array(g.clients).fill(g.averageDays)) }, label)] : []);
@@ -81,18 +81,30 @@ export function sectorBreakdown(lives, limit = 12) {
   };
 }
 
+// La clé d'un secteur : son nom sans accent ni casse (« Micro-crèche » et « micro creche » sont la même niche).
+export const sectorKey = (text) => fold(text);
+
 // Tout ce que la page montre, à la date `asOf` (AAAA-MM-JJ) : `null` tant que le board n'est pas chargé.
-export function financialAnalysis(boardRows, asOf) {
+// `sector` (clé d'un secteur, `sectorKey`) restreint la durée de vie, les résiliations et la rétention à cette niche ;
+// la liste des niches, elle, se lit toujours sur tout le parc.
+export function financialAnalysis(boardRows, asOf, sector = null) {
   if (!Array.isArray(boardRows)) return null;
   const established = boardRows.filter((row) => !row.is_pending_contract);
-  const retention = computeRetention(established, asOf, asOf.slice(0, 7));
-  const { lives } = clientLifetimes(established, asOf);
+  const breakdown = sectorBreakdown(clientLifetimes(established, asOf).lives);
+  const scoped = sector == null ? established : established.filter((row) => fold(row.secteur_activite) === sector);
+  const retention = computeRetention(scoped, asOf, asOf.slice(0, 7));
+  const { lives } = clientLifetimes(scoped, asOf);
   return {
     asOf,
+    sector,
     ...retention,
     inCourse: retention.resiliationGlobal.base,
+    signed: lives.length,
+    gone: lives.filter((life) => !life.open).length,
+    // Les rétractés n'entrent dans aucun calcul : ils n'ont jamais vraiment commencé.
+    retracted: scoped.filter((row) => displayEtat(row) === 'Rétractation').length,
     survival: survival(lives, asOf),
     afterFirstYear: afterFirstYear(lives),
-    ...sectorBreakdown(lives),
+    ...breakdown,
   };
 }

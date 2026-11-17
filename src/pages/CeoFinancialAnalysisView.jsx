@@ -1,7 +1,11 @@
 // src/pages/CeoFinancialAnalysisView.jsx
 //
 // « Analyse financière » dans le dashboard (section Finance), même gabarit que les autres pages du dashboard
-// (menu de gauche filtré par rôle), au style Owner, bâtie avec le kit de la page Finance.
+// (menu de gauche filtré par rôle), au style Owner.
+// Mise en page du 17/11/2026, d'après la référence donnée par le dev (« Customer Journeys » : grands panneaux arrondis
+// posés l'un dans l'autre, un parcours en colonnes reliées par des traits, pastilles rondes, une tuile noire, des
+// anneaux), avec nos couleurs. La page raconte le parcours d'un client dans le temps : la signature, la première
+// année, l'après. Une niche se choisit en haut du panneau (ou dans le tableau) et restreint tous les chiffres.
 // Demande du 26/10/2026 (pour le fonds) : la durée de vie moyenne d'un client, qui avance chaque jour sauf pour ceux
 // qui sont partis, le taux de résiliation du mois et depuis le début, et de quoi le parc est fait (les niches).
 // Tout se lit sur le board Owner/Opti'Lex, avec les mêmes définitions que le dashboard : les chiffres concordent.
@@ -17,9 +21,10 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import { Building2, Calculator, CalendarClock, Hourglass, Layers, PiggyBank, Shapes, TrendingDown, Users } from "lucide-react";
-import { Card, Empty, Page, Reveal, Stat, Stats, TableBox, Th } from "./TrackingSheetFinance/components/PageKit.jsx";
-import { Fill } from "./TrackingSheetFinance/statistics/parts.jsx";
+import { AnimatePresence, motion as Motion } from "framer-motion";
+import { CalendarClock, Hourglass, Info, LayoutGrid, PenLine, Timer, Undo2, X } from "lucide-react";
+import { Empty, Page, Reveal } from "./TrackingSheetFinance/components/PageKit.jsx";
+import { Collapse, Fill, Num, ProgressRing } from "./TrackingSheetFinance/statistics/parts.jsx";
 import { financialAnalysis, lifetimeLabel } from "../utils/financialAnalysis.js";
 // Le kit de la page Finance ne porte pas le mode sombre : cette feuille le lui donne sous `.ab-root`.
 import "../components/automationBoard/automation.css";
@@ -29,10 +34,65 @@ const ALLOWED_ROLES = new Set(["admin", "ceo"]);
 const TAB_ID = "financial_analysis";
 const number = (value) => (value == null ? "–" : Number(value).toLocaleString("fr-FR"));
 const percent = (rate) => (rate == null ? "–" : `${(rate * 100).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} %`);
-const euros = (value) => (value == null ? "–" : `${Math.round(value).toLocaleString("fr-FR")} €`);
+// Un montant en court, pour une tuile : 2 847 300 € se lit « 2,8 M€ ».
+const compactEuros = (value) => (value == null ? "–" : value >= 1e6 ? `${(value / 1e6).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} M€`
+  : value >= 1e4 ? `${Math.round(value / 1e3).toLocaleString("fr-FR")} k€` : `${Math.round(value).toLocaleString("fr-FR")} €`);
 const frenchDate = (iso) => (iso ? new Date(`${iso}T12:00:00`).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" }) : "");
 const todayInParis = () => new Date().toLocaleDateString("sv-SE", { timeZone: "Europe/Paris" });
 const plural = (count, one, many) => `${number(count)} ${count > 1 ? many : one}`;
+const stepLabel = (months) => (months >= 12 && months % 12 === 0 ? `${months / 12} an${months > 12 ? "s" : ""}` : `${months} mois`);
+const EASE = [0.22, 1, 0.36, 1];
+// Le parcours : des lignes de hauteur fixe, pour que les traits tombent juste d'une colonne à l'autre.
+const ROW = 72;
+const PAD = 12;
+const GAP = 64;
+const rowY = (index) => PAD + index * ROW + ROW / 2;
+
+// Bouton rond, comme sur la référence : une pastille blanche à trait fin.
+function Round({ title, onClick, pressed, children }) {
+  return <button type="button" className="fa-round" title={title} aria-label={title} aria-pressed={pressed} onClick={onClick}>{children}</button>;
+}
+
+// Les deux lettres d'une niche, dans son rond.
+const monogram = (label) => {
+  const words = String(label || "?").replace(/[^\p{L}\s-]/gu, "").split(/[\s-]+/).filter(Boolean);
+  return (words.length > 1 ? words[0][0] + words[1][0] : (words[0] || "?").slice(0, 2)).toUpperCase();
+};
+
+// Une ligne d'une carte du parcours : un rond (picto ou anneau), deux lignes de texte, le chiffre à droite.
+function Step({ lead, title, sub, value, tone, hint }) {
+  return (
+    <div className="fa-row" data-tone={tone} title={hint}>
+      <span className="fa-row-lead">{lead}</span>
+      <span className="fa-row-text"><b>{title}</b><small>{sub}</small></span>
+      <span className="fa-row-value fst-num">{value}</span>
+    </div>
+  );
+}
+
+// Les traits entre deux colonnes du parcours : une courbe par lien, un point à chaque bout. Un lien sans arrivée
+// (`to` absent) s'arrête en chemin, en pointillé : ceux-là ne continuent pas.
+function Links({ links, rows }) {
+  const height = PAD * 2 + rows * ROW;
+  return (
+    <svg className="fa-links" width={GAP} height={height} viewBox={`0 0 ${GAP} ${height}`} aria-hidden="true">
+      {links.map(({ from, to }, index) => {
+        const y1 = rowY(from);
+        const dead = to == null;
+        const y2 = dead ? y1 : rowY(to);
+        const path = dead ? `M0 ${y1} H${GAP * 0.5}` : `M0 ${y1} C${GAP * 0.5} ${y1} ${GAP * 0.5} ${y2} ${GAP} ${y2}`;
+        return (
+          <g key={`${from}-${to}`} className={dead ? "is-dead" : undefined}>
+            <Motion.path d={path} fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }}
+              transition={{ duration: 0.9, ease: EASE, delay: 0.25 + index * 0.08 }} />
+            <circle cx={3} cy={y1} r={3} />
+            <circle cx={dead ? GAP * 0.5 : GAP - 3} cy={y2} r={3} />
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 // Routes propres aux onglets de la barre ; les autres passent par navigateBackToDashboard.
 const TAB_ROUTES = {
@@ -124,7 +184,10 @@ export default function CeoFinancialAnalysisView() {
     return () => clearInterval(timer);
   }, [authChecked, load]);
   const asOf = todayInParis();
-  const stats = useMemo(() => financialAnalysis(rows, asOf), [rows, asOf]);
+  // La niche choisie (clé du secteur) : tous les chiffres s'y restreignent ; `null` : tout le parc.
+  const [sector, setSector] = useState(null);
+  const [rules, setRules] = useState(false);
+  const stats = useMemo(() => financialAnalysis(rows, asOf, sector), [rows, asOf, sector]);
 
   if (!authChecked) {
     return (
@@ -145,6 +208,11 @@ export default function CeoFinancialAnalysisView() {
   const previous = stats?.resiliationPreviousMonth;
   const global = stats?.resiliationGlobal;
   const year = stats?.afterFirstYear;
+  // Le parcours en deux temps : jusqu'à un an, puis après.
+  const firstYear = (stats?.survival || []).filter((step) => step.months <= 12);
+  const later = (stats?.survival || []).filter((step) => step.months > 12);
+  const scope = sector == null ? null : stats?.sectors.find((item) => item.key === sector);
+  const scopeName = sector == null ? "Tout le parc" : scope?.label || "Niche";
 
   return (
     <div
@@ -194,86 +262,165 @@ export default function CeoFinancialAnalysisView() {
 
           {stats && (
             <>
-              <Stats>
-                <Stat label="Durée de vie moyenne" text={lifetimeLabel(life.averageDays)} Icon={Hourglass}
-                  title="De la signature à la date d’effet de la sortie ; pour un client encore là, jusqu’à aujourd’hui. Elle gagne un jour chaque jour."
-                  note={`médiane ${lifetimeLabel(life.medianDays)} · ${plural(life.measured, "client mesuré", "clients mesurés")}`} />
-                <Stat label="Résiliation du mois" text={percent(month.rate)} Icon={TrendingDown} tone={month.count ? "amber" : undefined}
-                  title="Résiliations datées dans le mois, rapportées aux clients en cours la veille du 1er."
-                  note={`${plural(month.count, "résiliation", "résiliations")} pour ${number(month.base)} clients · ${percent(previous.rate)} le mois dernier`} />
-                <Stat label="Résiliation depuis le début" text={percent(global.rate)} Icon={Layers}
-                  title="Toutes les résiliations depuis le début, rapportées aux clients en cours aujourd’hui (définition de la Finance)."
-                  note={`${plural(global.count, "résiliation", "résiliations")} pour ${number(global.base)} clients en cours`} />
-                <Stat label="Sociétés accompagnées" text={number(product?.companies)} Icon={Building2}
-                  note={product?.companies_as_of ? `au ${frenchDate(product.companies_as_of)}` : "chiffre du portail indisponible"} />
-                <Stat label="Économies réalisées" text={euros(product?.savings)} Icon={PiggyBank} tone="green"
-                  title="Les gains réalisés par les clients, cumulés, tels que le portail les arrête chaque nuit."
-                  note={product?.savings_as_of ? `arrêté au ${frenchDate(product.savings_as_of)}` : "chiffre du portail indisponible"} />
-              </Stats>
-
-              <Reveal className="fst-grid">
-                <Card title="Rétention dans le temps" Icon={Users}
-                  hint="Parmi les clients signés depuis au moins ce délai, la part encore là à son terme.">
-                  {stats.survival.length === 0 ? <Empty>Pas encore assez d’ancienneté pour le dire.</Empty> : (
-                    <div className="fa-steps">
-                      {stats.survival.map((step) => (
-                        <div key={step.months} className="fa-step" title={`${number(step.kept)} encore là sur ${number(step.eligible)} clients signés depuis au moins ${step.months} mois`}>
-                          <span className="fa-step-label">{step.months >= 12 && step.months % 12 === 0 ? `${step.months / 12} an${step.months > 12 ? "s" : ""}` : `${step.months} mois`}</span>
-                          <Fill value={step.rate} />
-                          <span className="fa-step-rate fst-num">{percent(step.rate)}</span>
-                          <span className="fa-step-base fst-num">{number(step.kept)} sur {number(step.eligible)}</span>
-                        </div>
-                      ))}
+              {/* Le parcours d'un client : un grand panneau, les niches en haut, quatre colonnes reliées par des traits. */}
+              <Reveal>
+                <section className="fa-panel fa-journey" aria-label="Le parcours d’un client">
+                  <div className="fa-niches" role="group" aria-label="Choisir une niche">
+                    <button type="button" className="fa-niche" aria-pressed={sector == null} title="Tout le parc" onClick={() => setSector(null)}>
+                      <span className="fa-niche-face"><LayoutGrid size={16} strokeWidth={1.8} /></span>
+                      <span className="fa-niche-count fst-num">{number(stats.sectors.reduce((sum, item) => sum + item.open, 0))}</span>
+                    </button>
+                    {stats.sectors.filter((item) => item.key !== "others").slice(0, 8).map((item) => (
+                      <button key={item.key || "none"} type="button" className="fa-niche" aria-pressed={sector === item.key}
+                        title={`${item.label} : ${plural(item.open, "client en cours", "clients en cours")}`} onClick={() => setSector(sector === item.key ? null : item.key)}>
+                        <span className="fa-niche-face">{item.key === "" ? "?" : monogram(item.label)}</span>
+                        <span className="fa-niche-count fst-num">{number(item.open)}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <header className="fa-panel-head">
+                    <div>
+                      <h3 className="fa-panel-title">Le parcours d’un client</h3>
+                      <AnimatePresence mode="wait" initial={false}>
+                        <Motion.p key={scopeName} className="fa-panel-sub" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2 }}>
+                          {scopeName}
+                        </Motion.p>
+                      </AnimatePresence>
                     </div>
-                  )}
-                  {year.passed > 0 && (
-                    <p className="fa-note">
-                      <strong>Après la première année</strong> : {plural(year.passed, "client l’a passée", "clients l’ont passée")}, dont {number(year.stillHere)} encore là.
-                      Ils sont restés en moyenne <strong>{lifetimeLabel(year.extraDays)} de plus</strong>
-                      {year.gone > 0 && <> ; ceux qui sont partis ensuite l’ont fait {lifetimeLabel(year.goneExtraDays)} après leur premier anniversaire</>}.
-                    </p>
-                  )}
-                </Card>
+                    <div className="fa-panel-tools">
+                      {sector != null && <Round title="Revenir à tout le parc" onClick={() => setSector(null)}><X size={16} strokeWidth={1.8} /></Round>}
+                      <Round title="La règle de calcul" pressed={rules} onClick={() => setRules((value) => !value)}><Info size={16} strokeWidth={1.8} /></Round>
+                    </div>
+                  </header>
 
-                <Card title="La règle de calcul" Icon={Calculator} hint="La même partout : ici, sur le dashboard et dans la feuille de la Finance.">
-                  <dl className="fa-rules">
-                    <div><dt>Durée de vie</dt><dd>De la signature Owner à la date d’effet de la sortie. Un client encore là compte jusqu’à aujourd’hui : chaque jour qui passe l’allonge.</dd></div>
-                    <div><dt>Résiliation du mois</dt><dd>Résiliations datées dans le mois ÷ clients en cours la veille du 1er.</dd></div>
-                    <div><dt>Depuis le début</dt><dd>Toutes les résiliations ÷ clients en cours aujourd’hui.</dd></div>
-                    <div><dt>Client en cours</dt><dd>Signé et pas encore sorti : pauses et départs annoncés compris.</dd></div>
-                    <div><dt>Hors calcul</dt><dd>Les rétractés, qui n’ont jamais vraiment commencé{life.unmeasured + life.incoherent > 0 ? ` ; ${plural(life.unmeasured + life.incoherent, "client sans date exploitable", "clients sans date exploitable")}` : ""}{global.undated > 0 ? ` ; ${plural(global.undated, "résiliation sans date", "résiliations sans date")}` : ""}.</dd></div>
-                  </dl>
-                </Card>
+                  <div className="fa-flow" key={sector ?? "all"}>
+                    <div className="fa-col">
+                      <div className="fa-card">
+                        <Step lead={<PenLine size={16} strokeWidth={1.8} />} title="Clients signés" sub="depuis le début" value={<Num value={stats.signed} />}
+                          hint="Les clients dont la durée de vie est mesurée : signés, avec une date de signature exploitable." />
+                        <Step tone="out" lead={<Undo2 size={16} strokeWidth={1.8} />} title="Rétractés" sub="hors calcul" value={<Num value={stats.retracted} />}
+                          hint="Les rétractés n’entrent dans aucun calcul." />
+                      </div>
+                      <p className="fa-caption">Signature</p>
+                    </div>
+                    <Links rows={Math.max(2, firstYear.length)} links={[...firstYear.map((_, index) => ({ from: 0, to: index })), { from: 1 }]} />
+                    <div className="fa-col">
+                      <div className="fa-card">
+                        {firstYear.length === 0 && <Step lead={<Timer size={16} strokeWidth={1.8} />} title="Trop tôt pour le dire" sub="aucun client assez ancien" value="–" />}
+                        {firstYear.map((step) => (
+                          <Step key={step.months} lead={<ProgressRing value={step.rate} size={38} stroke={4} label={`${percent(step.rate)} encore là à ${stepLabel(step.months)}`} />}
+                            title={`À ${stepLabel(step.months)}`} sub={`${number(step.kept)} sur ${number(step.eligible)}`} value={percent(step.rate)}
+                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme.`} />
+                        ))}
+                      </div>
+                      <p className="fa-caption">Première année</p>
+                    </div>
+                    <Links rows={Math.max(firstYear.length, later.length + 1)} links={firstYear.length ? [...later.map((_, index) => ({ from: firstYear.length - 1, to: index })), { from: firstYear.length - 1, to: later.length }] : []} />
+                    <div className="fa-col">
+                      <div className="fa-card">
+                        {later.map((step) => (
+                          <Step key={step.months} lead={<ProgressRing value={step.rate} size={38} stroke={4} label={`${percent(step.rate)} encore là à ${stepLabel(step.months)}`} />}
+                            title={`À ${stepLabel(step.months)}`} sub={`${number(step.kept)} sur ${number(step.eligible)}`} value={percent(step.rate)}
+                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme.`} />
+                        ))}
+                        <Step tone="strong" lead={<Hourglass size={16} strokeWidth={1.8} />} title="Au-delà d’un an" sub={year.passed ? `en moyenne · ${number(year.passed)} clients` : "aucun client n’a un an"}
+                          value={year.passed ? `+ ${lifetimeLabel(year.extraDays)}` : "–"}
+                          hint="Ceux qui ont passé leur première année : le temps qu’ils sont restés en plus, en moyenne. Il avance chaque jour pour ceux qui sont encore là." />
+                      </div>
+                      <p className="fa-caption">Après un an</p>
+                    </div>
+                    <div className="fa-col fa-col--tiles">
+                      <div className="fa-tiles">
+                        <div className="fa-tile is-main" title="De la signature à la date d’effet de la sortie ; pour un client encore là, jusqu’à aujourd’hui.">
+                          <span>Durée de vie moyenne</span><b>{lifetimeLabel(life.averageDays)}</b><small>gagne un jour chaque jour</small>
+                        </div>
+                        <div className="fa-tile"><span>Médiane</span><b>{lifetimeLabel(life.medianDays)}</b><small>la moitié reste plus</small></div>
+                        <div className="fa-tile"><span>Clients en cours</span><b className="fst-num"><Num value={stats.inCourse} /></b><small>signés, pas sortis</small></div>
+                        <div className="fa-tile"><span>Partis</span><b className="fst-num"><Num value={stats.gone} /></b><small>dont {plural(global.count, "résiliation", "résiliations")}</small></div>
+                        {sector == null ? (
+                          <>
+                            <div className="fa-tile"><span>Sociétés</span><b className="fst-num">{number(product?.companies)}</b><small>{product?.companies_as_of ? "accompagnées" : "portail indisponible"}</small></div>
+                            <div className="fa-tile" title="Les gains réalisés par les clients, cumulés, tels que le portail les arrête chaque nuit."><span>Économies</span><b className="fst-num">{compactEuros(product?.savings)}</b><small>{product?.savings_as_of ? "réalisées par les clients" : "portail indisponible"}</small></div>
+                          </>
+                        ) : (
+                          <>
+                            <div className="fa-tile"><span>Part du parc</span><b className="fst-num">{percent(scope?.share)}</b><small>des clients en cours</small></div>
+                            <div className="fa-tile"><span>Résiliés</span><b className="fst-num">{percent(global.rate)}</b><small>depuis le début</small></div>
+                          </>
+                        )}
+                      </div>
+                      <p className="fa-caption">En chiffres</p>
+                    </div>
+                  </div>
+
+                  <Collapse open={rules}>
+                    <dl className="fa-rules">
+                      <div><dt>Durée de vie</dt><dd>De la signature Owner à la date d’effet de la sortie. Un client encore là compte jusqu’à aujourd’hui : chaque jour qui passe l’allonge.</dd></div>
+                      <div><dt>Encore là à N mois</dt><dd>Parmi les clients signés depuis au moins N mois, la part qui était encore cliente à ce terme.</dd></div>
+                      <div><dt>Résiliation du mois</dt><dd>Résiliations datées dans le mois ÷ clients en cours la veille du 1er.</dd></div>
+                      <div><dt>Depuis le début</dt><dd>Toutes les résiliations ÷ clients en cours aujourd’hui (définition de la feuille de la Finance).</dd></div>
+                      <div><dt>Hors calcul</dt><dd>Les rétractés{life.unmeasured + life.incoherent > 0 ? ` ; ${plural(life.unmeasured + life.incoherent, "client sans date exploitable", "clients sans date exploitable")}` : ""}{global.undated > 0 ? ` ; ${plural(global.undated, "résiliation sans date", "résiliations sans date")}` : ""}.</dd></div>
+                    </dl>
+                  </Collapse>
+                </section>
               </Reveal>
 
-              <Reveal>
-                <Card title="Les niches" Icon={Shapes}
-                  hint={`Les clients par secteur d’activité, tel qu’il est noté sur leur fiche. ${plural(stats.named, "secteur", "secteurs")}${stats.unknown ? ` ; ${plural(stats.unknown, "client sans secteur", "clients sans secteur")}` : ""}.`}>
-                  {stats.sectors.length === 0 ? <Empty>Aucun client mesuré.</Empty> : (
-                    <TableBox minWidth={720}>
-                      <thead>
-                        <tr>
-                          <Th Icon={Shapes}>Secteur</Th>
-                          <Th Icon={Users} num>Clients en cours</Th>
-                          <Th Icon={Layers}>Part du parc</Th>
-                          <Th Icon={TrendingDown} num>Résiliés</Th>
-                          <Th Icon={Hourglass} num>Durée de vie moyenne</Th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {stats.sectors.map((sector, index) => (
-                          <tr key={sector.key || "none"} style={{ "--i": index }} data-muted={sector.key === "" || sector.key === "others" ? "true" : undefined}>
-                            <td><span className="fa-sector">{sector.label}</span></td>
-                            <td className="fst-num fa-right">{number(sector.open)}</td>
-                            <td><div className="fa-share"><Fill value={sector.share} /><span className="fst-num">{percent(sector.share)}</span></div></td>
-                            <td className="fst-num fa-right">{sector.resiliated ? number(sector.resiliated) : <span className="fst-cell-muted">–</span>}</td>
-                            <td className="fst-num fa-right">{lifetimeLabel(sector.averageDays)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </TableBox>
-                  )}
-                </Card>
+              <Reveal className="fa-bottom">
+                {/* Les niches : le tableau complet ; un clic sur une ligne restreint la page à cette niche. */}
+                <section className="fa-panel" aria-label="Les niches">
+                  <header className="fa-panel-head">
+                    <div>
+                      <h3 className="fa-panel-title">Les niches</h3>
+                      <p className="fa-panel-sub">{plural(stats.named, "secteur", "secteurs")}{stats.unknown ? ` · ${plural(stats.unknown, "client sans secteur", "clients sans secteur")}` : ""}</p>
+                    </div>
+                  </header>
+                  <div className="fa-table" role="table" aria-label="Clients par secteur">
+                    <div className="fa-tr fa-th" role="row">
+                      <span role="columnheader">Secteur</span><span role="columnheader">En cours</span><span role="columnheader">Part du parc</span>
+                      <span role="columnheader">Résiliés</span><span role="columnheader">Durée de vie</span>
+                    </div>
+                    {stats.sectors.map((item, index) => {
+                      const pickable = item.key !== "others";
+                      const Row = pickable ? "button" : "div";
+                      return (
+                        <Row key={item.key || "none"} role="row" className="fa-tr" style={{ "--i": index }} aria-pressed={pickable ? sector === item.key : undefined}
+                          {...(pickable ? { type: "button", onClick: () => setSector(sector === item.key ? null : item.key), title: "Restreindre la page à cette niche" } : {})}>
+                          <span role="cell" className="fa-sector"><i>{item.key === "" ? "?" : item.key === "others" ? "…" : monogram(item.label)}</i>{item.label}</span>
+                          <span role="cell" className="fst-num">{number(item.open)}</span>
+                          <span role="cell" className="fa-share"><Fill value={item.share} /><em className="fst-num">{percent(item.share)}</em></span>
+                          <span role="cell" className="fst-num">{item.resiliated ? <mark>{number(item.resiliated)}</mark> : "–"}</span>
+                          <span role="cell" className="fst-num">{lifetimeLabel(item.averageDays)}</span>
+                        </Row>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* Les résiliations : deux anneaux, le mois et depuis le début, le nombre dans sa pastille. */}
+                <section className="fa-panel" aria-label="Les résiliations">
+                  <header className="fa-panel-head">
+                    <div>
+                      <h3 className="fa-panel-title">Les résiliations</h3>
+                      <p className="fa-panel-sub">{scopeName}</p>
+                    </div>
+                  </header>
+                  <div className="fa-rings">
+                    <div className="fa-ring" data-tone="out" title="Résiliations datées dans le mois, rapportées aux clients en cours la veille du 1er.">
+                      <span className="fa-bubble fst-num">{number(month.count)}</span>
+                      <ProgressRing value={month.rate} size={168} stroke={16} color="var(--red)" label={`Résiliation du mois : ${percent(month.rate)}`}>
+                        <b className="fst-num">{percent(month.rate)}</b><small>ce mois</small>
+                      </ProgressRing>
+                      <p>{plural(month.count, "résiliation", "résiliations")} pour {number(month.base)} clients<br />{percent(previous.rate)} le mois dernier</p>
+                    </div>
+                    <div className="fa-ring" title="Toutes les résiliations depuis le début, rapportées aux clients en cours aujourd’hui.">
+                      <span className="fa-bubble fst-num">{number(global.count)}</span>
+                      <ProgressRing value={global.rate} size={168} stroke={16} label={`Résiliation depuis le début : ${percent(global.rate)}`}>
+                        <b className="fst-num">{percent(global.rate)}</b><small>depuis le début</small>
+                      </ProgressRing>
+                      <p>{plural(global.count, "résiliation", "résiliations")}<br />pour {number(global.base)} clients en cours</p>
+                    </div>
+                  </div>
+                </section>
               </Reveal>
             </>
           )}

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { afterFirstYear, financialAnalysis, lifetimeLabel, sectorBreakdown, survival } from './financialAnalysis.js';
+import { afterFirstYear, financialAnalysis, lifetimeLabel, sectorBreakdown, sectorKey, survival } from './financialAnalysis.js';
 
 const row = (more) => ({ is_pending_contract: false, etat_affiche: 'Signé', etat_date: null, owner_signed_at: null, secteur_activite: '', ...more });
 const ASOF = '2026-11-17';
@@ -59,4 +59,20 @@ test('financialAnalysis : mêmes chiffres que le dashboard, plus la rétention e
   assert.deepEqual([out.resiliationGlobal.count, out.resiliationGlobal.base], [1, 2]);
   assert.deepEqual(out.sectors.map((s) => [s.label, s.open, s.resiliated]), [['BTP', 1, 1], ['Secteur non renseigné', 1, 0]]);
   assert.equal(out.afterFirstYear.passed, 1);
+  assert.deepEqual([out.signed, out.gone, out.retracted], [3, 1, 1]);
+});
+
+test('financialAnalysis : une niche restreint les chiffres, la liste des niches reste celle du parc', () => {
+  const rows = [
+    row({ owner_signed_at: '2025-01-10', secteur_activite: 'BTP' }),
+    row({ owner_signed_at: '2025-03-01', etat_affiche: 'Résiliation', etat_date: '2025-09-17', secteur_activite: 'btp' }),
+    row({ owner_signed_at: '2026-01-05', secteur_activite: 'Micro-crèche' }),
+    row({ owner_signed_at: '2026-02-05' }),
+  ];
+  const btp = financialAnalysis(rows, ASOF, sectorKey('BTP'));
+  assert.deepEqual([btp.signed, btp.inCourse, btp.gone, btp.resiliationGlobal.count], [2, 1, 1, 1]);
+  assert.deepEqual(btp.sectors.map((s) => s.label), ['BTP', 'Micro-crèche', 'Secteur non renseigné']);
+  // Sans secteur renseigné : la clé vide.
+  assert.equal(financialAnalysis(rows, ASOF, '').signed, 1);
+  assert.equal(financialAnalysis(rows, ASOF).signed, 4);
 });
