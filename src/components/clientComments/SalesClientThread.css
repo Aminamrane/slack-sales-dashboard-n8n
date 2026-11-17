@@ -1,7 +1,7 @@
 /* SalesClientThread.css : commentaires facturation au bas de la fiche d'un lead signé (dev 17/11/2026). Les cartes, la
    saisie et les réponses sont celles du fil de la fiche Finance (ExchangeThread.css, préfixe fx-) ; ici le titre de
    section, au micro-libellé des sections de la fiche (Documents, Post-signature), et le mode sombre de la sheet. */
-.sct { margin:18px 0 6px; padding-top:14px; border-top:1px solid #ece9e4; color:#1c1b19; scroll-margin-top:16px; animation:sct-appear .32s cubic-bezier(.2,.75,.3,1) both; }
+.sct { margin:14px 0 4px; padding-top:12px; border-top:1px solid #ece9e4; color:#1c1b19; scroll-margin-top:16px; animation:sct-appear .32s cubic-bezier(.2,.75,.3,1) both; }
 .sct-head { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .sct-title { display:inline-flex; align-items:center; gap:6px; font-size:10px; font-weight:500; letter-spacing:.09em; text-transform:uppercase; color:#a8a39b; }
 .sct-title b { padding:0 6px; border-radius:7px; background:#f7f5f2; color:#8b867e; font-weight:500; letter-spacing:0; font-variant-numeric:tabular-nums; }
@@ -9,18 +9,27 @@
 .sct-empty { margin:4px 2px 8px; font-size:12.5px; line-height:1.55; color:#8b867e; }
 .sct-error { margin:4px 2px 8px; font-size:12px; color:#c5221f; }
 .sct-error button { padding:0; border:0; background:none; color:inherit; font:inherit; font-weight:500; text-decoration:underline; cursor:pointer; }
-.sct-fx { font-size:13px; }
-.sct-fx .fx-ta { min-height:56px; padding:12px 14px 6px; font-size:13px; }
-.sct-fx .fx-card { padding:12px 14px 10px; border-radius:16px; }
-.sct-fx .fx-in { padding-left:0; margin-top:4px; }
-.sct-fx .fx-list { gap:8px; }
-.sct-fx .fx-count-bar { margin-top:16px; }
-.sct-fx .fx-sub { margin-top:10px; padding-top:10px; border-top:1px solid #f1eee9; border-radius:0; }
-.sct-fx .fx-sub-in { padding-left:30px; }
-.sct-fx .fx-foot { margin-top:8px; }
-.sct-foot-space { flex:1; }
-.sct-role { flex-shrink:0; padding:1px 6px; border:1px solid #e3ded6; border-radius:6px; background:#f1eee9; color:#4a4540; font-size:10.5px; font-weight:500; }
-.sct-fx .fx-card.is-target, .sct-fx .fx-sub.is-target { scroll-margin:24px; }
+/* Échanges brefs (dev 17/11/2026) : des lignes serrées dans un encadré clair, comme les autres numéros de la fiche, pas
+   des cartes de messagerie. Le sales répond sous un message ; il n'ouvre pas de fil. */
+.sct-billing { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:11px; color:#8b867e; }
+.sct-fx { font-size:12.5px; margin-top:8px; }
+.sct-list { display:flex; flex-direction:column; gap:6px; }
+.sct-card { padding:9px 10px; border-radius:12px; background:#f7f5f2; scroll-margin:24px; }
+.sct-row-head { gap:6px; }
+.sct-row-head .fx-author.is-small { font-size:12px; }
+.sct-time { margin-left:auto; font-size:10.5px; }
+.sct-in { margin-top:4px; padding-left:28px; }
+.sct-text { font-size:12.5px; line-height:1.5; }
+.sct-sub { margin-top:8px; padding-top:8px; border-top:1px solid #ece8e2; scroll-margin:24px; }
+.sct-sub-in { padding-left:24px; margin-top:2px; }
+.sct-answer { display:inline-flex; align-items:center; gap:4px; margin-top:6px; padding:0; border:0; background:none; color:#8b867e; font:inherit; font-size:11.5px; font-weight:500; cursor:pointer; }
+.sct-answer:hover { color:#1c1b19; }
+.sct-attach { display:grid; place-items:center; flex-shrink:0; width:26px; height:26px; padding:0; border:0; border-radius:8px; background:transparent; color:#8b867e; cursor:pointer; }
+.sct-attach:hover { background:rgba(0,0,0,.04); color:#1c1b19; }
+.sct-more { margin-top:6px; padding:0; border:0; background:none; color:#8b867e; font:inherit; font-size:11.5px; font-weight:500; cursor:pointer; }
+.sct-more:hover { color:#1c1b19; }
+.sct-card.is-target, .sct-sub.is-target { box-shadow:0 0 0 2px #c9e0fa; }
+.sct-role { flex-shrink:0; padding:0 5px; border:1px solid #e3ded6; border-radius:6px; background:#fff; color:#4a4540; font-size:10px; font-weight:500; }
 
 /* Fenêtre du fil, ouverte par un lien direct quand le lead n'est pas dans la sheet. */
 .sct-veil { position:fixed; inset:0; z-index:12000; display:grid; place-items:center; padding:24px; background:rgba(28,27,25,.22); animation:sct-fade .2s ease both; }
@@ -34,12 +43,14 @@
 .sct.is-dark { border-top-color:#2e2e2e; color:#f2f2f2; }
 .sct.is-dark .sct-title b { background:#262626; color:#a3a3a3; }
 .sct.is-dark .fx { --fx-ink:#f2f2f2; --fx-muted:#a3a3a3; --fx-faint:#7d7d7d; --fx-line:#2e2e2e; --fx-hair:#262626; --fx-soft:#262626; --fx-track:#2e2e2e; }
-.sct.is-dark .fx-composer, .sct.is-dark .fx-card, .sct.is-dark .fx-reply-box, .sct.is-dark .fx-more { background:#181818; }
+.sct.is-dark .fx-reply-box { background:#141414; }
 .sct.is-dark .fx-text { color:#e6e6e6; }
 .sct.is-dark .fx-send, .sct.is-dark .fx-reply-send { background:#f2f2f2; color:#141414; }
 .sct.is-dark .fx-send:disabled { background:#2e2e2e; color:#7d7d7d; }
-.sct.is-dark .sct-fx .fx-sub { border-top-color:#262626; }
+.sct.is-dark .sct-card { background:#181818; }
+.sct.is-dark .sct-sub { border-top-color:#262626; }
 .sct.is-dark .sct-role { border-color:#3a3a3a; background:#262626; color:#c9c9c9; }
+.sct.is-dark .sct-answer:hover, .sct.is-dark .sct-more:hover, .sct.is-dark .sct-attach:hover { color:#f2f2f2; }
 .sct-veil.is-dark .sct-sheet { background:#141414; }
 
 @keyframes sct-appear { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
