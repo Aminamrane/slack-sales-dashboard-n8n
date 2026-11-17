@@ -54,6 +54,29 @@ function useClipped(open, deps) {
   return { titleRef, textRef, clipped };
 }
 
+// « Lire la suite » / « Réduire » (dev 17/11/2026, « des lettres qui grossissent ») : la carte change de hauteur pour de
+// vrai, en glissant de l'ancienne à la nouvelle, au lieu d'être étirée. Le texte garde sa taille et les cartes
+// du dessous suivent d'elles-mêmes. Un second clic pendant le mouvement repart de la hauteur du moment.
+function useHeightGlide(open, reduce, onExpand) {
+  const cardRef = useRef(null);
+  const fromRef = useRef(null);
+  const expand = () => { fromRef.current = cardRef.current?.getBoundingClientRect().height ?? null; onExpand(); };
+  useLayoutEffect(() => {
+    const el = cardRef.current; const from = fromRef.current;
+    fromRef.current = null;
+    if (!el || from == null || reduce || typeof el.animate !== "function") return undefined;
+    const to = el.getBoundingClientRect().height;
+    if (Math.abs(to - from) < 1) return undefined;
+    el.style.overflow = "hidden";
+    const anim = el.animate([{ boxSizing: "border-box", height: `${from}px` }, { boxSizing: "border-box", height: `${to}px` }],
+      { duration: 240, easing: "cubic-bezier(0.2, 0.7, 0.2, 1)" });
+    const done = () => { el.style.overflow = ""; };
+    anim.onfinish = done; anim.oncancel = done;
+    return () => anim.cancel();
+  }, [open]);   // eslint-disable-line react-hooks/exhaustive-deps
+  return { cardRef, expand };
+}
+
 export function NotificationsRow({ collapsed, unread, open, onToggle }) {
   const label = unread ? `Notifications, ${unread} non lue${unread > 1 ? "s" : ""}` : "Notifications";
   return (
@@ -151,10 +174,11 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
   const message = n.message && n.message !== n.title ? n.message : "";
   const { titleRef, textRef, clipped } = useClipped(open, [n.title, n.message]);
   const canExpand = open || clipped;
+  const { cardRef, expand } = useHeightGlide(open, reduce, onExpand);
   return (
-    <motion.article layout={!reduce} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}`}
+    <motion.article ref={cardRef} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}`}
       initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.025 } }}
-      exit={{ opacity: 0, x: -12, transition: { duration: 0.14 } }}
+      exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0, borderBottomWidth: 0, overflow: "hidden", transition: { duration: 0.18, ease: [0.2, 0.7, 0.2, 1] } }}
       onClick={selecting ? onToggle : undefined}>
       {selecting ? (
         <span className={`sb-notif-check${on ? " is-on" : ""}`} role="checkbox" aria-checked={on} aria-label={`Sélectionner : ${n.title || n.message}`}
@@ -166,10 +190,10 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
       )}
       <div className="sb-notif-body">
         <div className="sb-notif-top">
-          <strong ref={titleRef} title={open ? undefined : n.title || n.message} onClick={!selecting && canExpand ? onExpand : undefined}>{n.title || n.message}</strong>
+          <strong ref={titleRef} title={open ? undefined : n.title || n.message} onClick={!selecting && canExpand ? expand : undefined}>{n.title || n.message}</strong>
           <time dateTime={notificationDate(n.created_at).iso} title={notificationDate(n.created_at).label}>{ago(n.created_at)}</time>
         </div>
-        {message && <p ref={textRef} className={`${open ? "is-open" : ""}${!selecting && canExpand ? " is-expandable" : ""}`} onClick={!selecting && canExpand ? onExpand : undefined}>{message}</p>}
+        {message && <p ref={textRef} className={`${open ? "is-open" : ""}${!selecting && canExpand ? " is-expandable" : ""}`} onClick={!selecting && canExpand ? expand : undefined}>{message}</p>}
         {!selecting && (canExpand || action) && (
           <div className="sb-notif-acts">
             {action && (
@@ -177,7 +201,7 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
                 <action.Icon size={13} aria-hidden="true" />{action.label}
               </button>
             )}
-            {canExpand && <button type="button" className="sb-notif-more" aria-expanded={open} onClick={onExpand}>{open ? "Réduire" : "Lire la suite"}</button>}
+            {canExpand && <button type="button" className="sb-notif-more" aria-expanded={open} onClick={expand}>{open ? "Réduire" : "Lire la suite"}</button>}
           </div>
         )}
       </div>
