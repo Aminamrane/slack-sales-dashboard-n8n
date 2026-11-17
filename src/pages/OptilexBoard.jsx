@@ -1,5 +1,7 @@
 import { confirmBoardFinanceExit } from '../components/BoardFinanceExitDialog.jsx';
 import { requiresExitDecision } from '../utils/boardFinanceExit.js';
+import { confirmBoardResiliation } from '../components/BoardResiliationDialog.jsx';
+import { CONSERVATION_ISSUES, CONSERVATION_ROLES, historyItems, matchesMeteo, noShowLine, RESILIATION, REPECHE_FILTER, repecheLine, slotLabel } from '../utils/boardRepeche.js';
 import { BoardCalls, BoardDocuments, ComposerFiles, ContractFolders, ContractThumb, MESSAGE_FILE_ACCEPT, MESSAGE_FILE_MAX, MessageFiles, uploadMessageFile, useClientFiles } from '../components/BoardClientFiles.jsx';
 import { EmojiPalette, Reactions, toggledReactions } from '../components/BoardReactions.jsx';
 import { RECEIVABLES_ROLES, ReceivablesValue } from '../components/BoardReceivables.jsx';
@@ -844,7 +846,8 @@ function MeteoBadge({ score, context, showLabel = true, inline = false }) {
 // de la police par défaut du navigateur (titre à empattements).
 const METEO_DIALOG_FONT = "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif";
 // `readOnly` (rôles en lecture seule) : badge affiché comme valeur ; le bouton « Ajouter une météo » désactivé.
-function MeteoPicker({ score, context, onSave, disabled, triggerLabel, inline = false, readOnly = false }) {
+// `repeche` (dev 17/11/2026) : client repêché, rappelé en haut de la fenêtre (`repeche` de GET /optilex/board).
+function MeteoPicker({ score, context, onSave, disabled, triggerLabel, inline = false, readOnly = false, repeche = null }) {
   const [open,setOpen]=useState(false);
   const [from,setFrom]=useState({x:0,y:0});
   const reduce=useReducedMotion();
@@ -867,6 +870,7 @@ function MeteoPicker({ score, context, onSave, disabled, triggerLabel, inline = 
       <motion.div ref={dialog} role="dialog" aria-modal="true" aria-label="Mettre à jour la météo client" className="ob-meteo-dialog"
         initial={enter} animate={{opacity:1,x:0,y:0,scale:1,transition:reduce?{duration:0.15}:{type:'spring',stiffness:420,damping:34,mass:0.9,opacity:{duration:0.16}}}} exit={leave}
         style={{width:'min(580px,100%)',maxHeight:'90vh',overflowY:'auto',background:'white',borderRadius: 22,padding:'26px 26px 22px',boxShadow:'0 24px 70px rgba(28,27,25,.14), 0 2px 6px rgba(43,41,39,.042)',fontFamily:METEO_DIALOG_FONT}}>
+        {repeche && <div className="ob-repeche" role="note"><span className="ob-repeche-ic"><LifebuoyIcon size={22}/></span>{repecheLine(repeche)}</div>}
         <WeatherCaseComposer onSave={async payload=>{const ok=await onSave(payload);if(ok!==false)close();return ok;}} onCancel={close}/>
       </motion.div>
     </motion.div>}</AnimatePresence>,document.body)}
@@ -1299,7 +1303,7 @@ const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal,
         ) : <span title="Secteur non renseigné">—</span>}
       </td>
       <td style={{ ...td, whiteSpace: "normal" }}>
-        <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client} readOnly={readOnly}
+        <MeteoPicker score={r.meteo_score} context={r.meteo_context} disabled={!r.numero_client} readOnly={readOnly} repeche={r.repeche}
           onSave={payload => recordMeteo(r.numero_client, payload)} />
       </td>
       {/* État daté (Résiliation, Pause…) posé depuis la table -> on ouvre la fiche
@@ -1552,7 +1556,7 @@ export default function OptilexBoard({ embed = false }) {
     const c = { venir: 0, done: 0, confirm: 0, todo: 0, noshow: 0, recaler: 0, total: 0 };
     for (const r of portfolioRows) {
       if (!viewFilter.passes(r, false)) continue;
-      if (meteoFilter.length > 0 && !meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context))) continue;
+      if (!matchesMeteo(r, meteoFilter)) continue;
       const situation = viewFilter.situationOf(r);
       if (!situation) continue;
       c[situation] += 1;
@@ -1571,8 +1575,11 @@ export default function OptilexBoard({ embed = false }) {
   // Compteurs par bande météo (rouge 1-2 / orange 3 / vert 4-5 / "none" = non noté), calculés
   // sur la base pré-météo -> le nombre affiché sur chaque chip ne bouge pas quand on coche.
   const meteoCounts = useMemo(() => {
-    const c = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, none: 0 };
-    for (const r of preMeteoRows) c[weatherFilter(r.meteo_score, r.meteo_context)]++;
+    const c = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0, none: 0, [REPECHE_FILTER]: 0 };
+    for (const r of preMeteoRows) {
+      c[weatherFilter(r.meteo_score, r.meteo_context)]++;
+      if (r.repeche) c[REPECHE_FILTER]++;   // clients repêchés (dev 17/11/2026), comptés à part des bandes
+    }
     return c;
   }, [preMeteoRows]);
 
@@ -1580,7 +1587,7 @@ export default function OptilexBoard({ embed = false }) {
   const filtered = useMemo(() => {
     const base = meteoFilter.length === 0
       ? preMeteoRows
-      : preMeteoRows.filter((r) => meteoFilter.includes(weatherFilter(r.meteo_score, r.meteo_context)));
+      : preMeteoRows.filter((r) => matchesMeteo(r, meteoFilter));
     // 1) Tri MANUEL par en-tête de colonne (clic) : prioritaire sur tout.
     if (sortCol && SORT_ACCESSORS[sortCol]) {
       return [...base].sort(byDateSort(SORT_ACCESSORS[sortCol], sortDir));
@@ -1675,7 +1682,12 @@ export default function OptilexBoard({ embed = false }) {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
     }
-    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null } = payload;
+    // Passage « En cours de résiliation » (dev 17/11/2026) : le mail de résiliation du client d'abord, obligatoire.
+    if (payload.etat === RESILIATION && !payload.attachment_ids) {
+      payload = await confirmBoardResiliation(numero, payload);
+      if (!payload) return { cancelled: true };
+    }
+    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null, attachment_ids = [] } = payload;
     if (!numero) return;
     if (isFinanceTeam() && !FINANCE_TEAM_ETATS.includes(etat)) return; // finance_team : seulement les 2 "en cours"
     mutSeq.current += 1;
@@ -1689,7 +1701,7 @@ export default function OptilexBoard({ embed = false }) {
       return { ...r, etat_manuel: etat, etat_date, pause_end_date: pe, pause_relance_date: pr };
     }));
     try {
-      const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision });
+      const saved = await apiClient.post("/api/v1/optilex/etat-change", { numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision, attachment_ids });
       if (isLatest()) {
         // Un rechargement parti avant cette réponse peut porter l'ancien état : on l'écarte.
         mutSeq.current += 1;
@@ -1886,7 +1898,7 @@ export default function OptilexBoard({ embed = false }) {
       const alert = ALERT_FILTERS.find((a) => a.cat === c && a.cat !== "Pause");
       return { key: `etat-${c}`, group: alert ? "Alerte" : "État", label: alert ? alert.label : c, clear: () => toggleCat(c) };
     }),
-    ...meteoFilter.map((b) => ({ key: `meteo-${b}`, group: "Météo", label: b === "none" ? "Non noté" : WEATHER[b].label, clear: () => setMeteoFilter((p) => p.filter((x) => x !== b)) })),
+    ...meteoFilter.map((b) => ({ key: `meteo-${b}`, group: "Météo", label: b === REPECHE_FILTER ? "Repêchés" : b === "none" ? "Non noté" : WEATHER[b].label, clear: () => setMeteoFilter((p) => p.filter((x) => x !== b)) })),
     ...(sigRange.from || sigRange.to ? [{ key: "date", group: dateTarget === "onboarding" ? "Onboarding" : "Signature", label: sigRangeLabel(sigRange.from, sigRange.to), clear: () => setSigRange({ from: "", to: "" }) }] : []),
     ...onboardingSel.map((k) => ({ key: `onb-${k}`, group: "Onboarding", label: ONBOARDING_TAGS[k] || k, clear: () => setOnboardingSel((p) => p.filter((x) => x !== k)) })),
     ...programmeSel.map((k) => ({ key: `prog-${k}`, group: "Programme", label: CS_FILTERS.find((f) => f.key === k)?.tag || k, clear: () => setProgrammeSel((p) => p.filter((x) => x !== k)) })),
@@ -2417,6 +2429,14 @@ export default function OptilexBoard({ embed = false }) {
         .ob-chip:not(.is-on):hover{background:#f7f5f2;border-color:#e3ded6}
         .ob-chip-ic{display:inline-flex;transition:transform .32s cubic-bezier(.34,1.56,.64,1)}
         .ob-chip:hover .ob-chip-ic{transform:translateY(-1px) scale(1.14)}
+        /* Clients repêchés (dev 17/11/2026) : l'encart de la fenêtre météo, la bouée qui arrive puis tangue au survol. */
+        .ob-repeche{display:flex;align-items:center;gap:10px;margin:0 0 18px;padding:10px 14px;border:1px solid #c3ebd3;border-radius:12px;background:#e2f6ea;color:#0b7a4b;font-size:13px;font-weight:500;line-height:1.4}
+        .ob-repeche-ic{display:inline-flex;color:${TEXT};animation:obBuoyIn .7s cubic-bezier(.34,1.56,.64,1) both}
+        @keyframes obBuoyIn{from{opacity:0;transform:translateY(5px) rotate(-30deg)}to{opacity:1;transform:none}}
+        @keyframes obBuoySway{0%,100%{transform:none}30%{transform:rotate(-14deg)}65%{transform:rotate(9deg)}}
+        .ob-buoy-ring{transform-box:fill-box;transform-origin:center}
+        .ob-chip:hover .ob-buoy-ring,.ob-repeche:hover .ob-buoy-ring{animation:obBuoySway .8s cubic-bezier(.34,1.3,.64,1)}
+        @media (prefers-reduced-motion:reduce){.ob-repeche-ic,.ob-chip:hover .ob-buoy-ring,.ob-repeche:hover .ob-buoy-ring{animation:none}}
         /* Menus : rectangle arrondi, la flèche pivote à l'ouverture. */
         .ob-trigger{display:inline-flex;align-items:center;gap:7px;padding:6px 12px;border-radius:10px;border:1px solid ${BORDER};background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer;white-space:nowrap;transition:background .16s,border-color .16s,color .16s}
         .ob-trigger:not(.is-on):not(:disabled):hover{background:#f7f5f2;border-color:#e3ded6}
@@ -2591,6 +2611,21 @@ export default function OptilexBoard({ embed = false }) {
                   </motion.button>
                 );
               })}
+              {/* Clients repêchés (dev 17/11/2026) : pas un niveau de météo, une pastille de plus, en union avec les bandes. */}
+              {(() => {
+                const on = meteoFilter.includes(REPECHE_FILTER);
+                return (
+                  <motion.button type="button" whileTap={{ scale: 0.96 }} aria-pressed={on}
+                    title="Clients repêchés : 2 mois après le repêchage, ou jusqu'à une météo « Satisfait » ou « À surveiller »"
+                    onClick={() => { navTo(16); setMeteoFilter((prev) => (prev.includes(REPECHE_FILTER) ? prev.filter((x) => x !== REPECHE_FILTER) : [...prev, REPECHE_FILTER])); }}
+                    className={`ob-chip${on ? " is-on" : ""}`}
+                    style={on ? { background: ETAT_STYLE["Signé"].bg, borderColor: ETAT_STYLE["Signé"].dot, color: ETAT_STYLE["Signé"].fg } : undefined}>
+                    <span className="ob-chip-ic"><LifebuoyIcon size={14} /></span>
+                    Repêchés
+                    <span className="ob-n" style={on ? { color: ETAT_STYLE["Signé"].fg } : undefined}>{meteoCounts[REPECHE_FILTER] || 0}</span>
+                  </motion.button>
+                );
+              })()}
             </div>
           </div>
           {/* Affiner : dates, onboarding et programmes, chacun dans UN menu (demande dev 2026-09-03). */}
@@ -2835,6 +2870,22 @@ function IntegrationOverdueBadge() {
 // page 60 fois par seconde. `phase` décale le cycle d'un fantôme à l'autre pour qu'ils ne bougent pas ensemble.
 const GHOST_HEM_A = "M5 18V10a7 7 0 0 1 14 0v8c-.78 1.9-3.89 1.9-4.67 0c-.78-1.4-3.89-1.4-4.67 0c-.78 1.9-3.89 1.9-4.66 0Z";
 const GHOST_HEM_B = "M5 18V10a7 7 0 0 1 14 0v8c-.78-1.4-3.89-1.4-4.67 0c-.78 1.9-3.89 1.9-4.67 0c-.78-1.4-3.89-1.4-4.66 0Z";
+// Bouée des clients repêchés (dev 17/11/2026) : anneau blanc à quatre bandes rouges et un reflet, cerclé de l'encre du
+// texte. Elle arrive en tanguant dans l'encart de la fenêtre météo, et tangue un peu au survol de sa pastille.
+function LifebuoyIcon({ size = 18 }) {
+  return (
+    <svg className="ob-buoy" width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" style={{ flexShrink: 0, overflow: "visible" }}>
+      <g className="ob-buoy-ring">
+        <circle cx="12" cy="12" r="7.2" fill="none" stroke="#fff" strokeWidth="5" />
+        <circle cx="12" cy="12" r="7.2" fill="none" stroke="#e0504c" strokeWidth="5" strokeDasharray="5.655 5.655" strokeDashoffset="-2.83" />
+        <circle cx="12" cy="12" r="9.7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <circle cx="12" cy="12" r="4.7" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        <path d="M5.6 8.4A7.2 7.2 0 0 1 8.4 5.6" fill="none" stroke="#fff" strokeOpacity=".55" strokeWidth="1.1" strokeLinecap="round" />
+      </g>
+    </svg>
+  );
+}
+
 function GhostIcon({ size = 18, phase = 0 }) {
   const reduce = useReducedMotion();
   const gid = `ob-ghost-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -2899,11 +2950,19 @@ const ONBOARDING_FLOW_ROLES = ["customer_success_manager", "admin", "ceo"];
 // Onboarding « à confirmer, en attente de qualification » (dev 10/11/2026) : le Client Success tranche en un geste.
 // « Réalisé » pose la date réelle (souvent passée) ; « Pas encore fait » le remet en « à faire ». Pur suivi : ni
 // e-mail au client, ni agenda, ni facturation (même enregistrement que « Marquer l'onboarding réalisé sans le parcours »).
-function OnboardingToConfirm({ row, onDone, onNotDone }) {
+// « No show » (dev 17/11/2026) : sur un onboarding passé, la qualification est gardée pour toujours (historique de la
+// fiche, statistique des no shows) et l'onboarding redevient « pas encore fait ».
+function OnboardingToConfirm({ row, onDone, onNotDone, onNoShow }) {
   const todayParis = _todayParisISO();
   const planned = String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date || "").slice(0, 10);
   const [day, setDay] = useState(() => String(row.rdv_onboarding_done_date || "").slice(0, 10)
     || (planned && planned <= todayParis ? planned : todayParis));
+  const [noShow, setNoShow] = useState({ saving: false, error: "" });
+  const qualify = async () => {
+    setNoShow({ saving: true, error: "" });
+    try { await onNoShow(planned); setNoShow({ saving: false, error: "" }); }
+    catch (e) { setNoShow({ saving: false, error: typeof e?.data?.detail === "string" ? e.data.detail : "La qualification n'a pas été enregistrée. Réessayez." }); }
+  };
   return (
     <div style={{ border: "1px solid #d6d4f6", background: "#f6f5fd", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
       <div style={{ fontSize: 13, fontWeight: 500, color: "#4a3fc4" }}>Onboarding à confirmer</div>
@@ -2919,7 +2978,15 @@ function OnboardingToConfirm({ row, onDone, onNotDone }) {
         </label>
         <button type="submit" className="ob-composer-send" disabled={!day}>Réalisé</button>
         <button type="button" className="ob-btn-ghost" onClick={onNotDone}>Pas encore fait</button>
+        {onNoShow && planned && planned <= todayParis && (
+          <button type="button" className="ob-btn-ghost" disabled={noShow.saving} onClick={qualify}
+            title={`No show à l'onboarding du ${fmt(planned)} : la trace reste, même si l'onboarding est réalisé plus tard`}
+            style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+            <GhostIcon size={14} />{noShow.saving ? "Enregistrement…" : "No show"}
+          </button>
+        )}
       </form>
+      {noShow.error && <div role="alert" style={{ fontSize: 12, color: "#c5221f", marginTop: 8 }}>{noShow.error}</div>}
     </div>
   );
 }
@@ -3613,7 +3680,7 @@ function CsmRows({ row, num, patch, onChanged }) {
   );
 }
 
-function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContactsChanged, recordMeteo, onChanged }) {
+function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContactsChanged, recordMeteo, onChanged, onHistoryChanged }) {
   const [editing, setEditing] = useState(false);
   // E-mails et téléphones par rang (primaire, secondaire…) ; l'e-mail affiché reste celui d'envoi des contrats.
   const contactEditable = !!num && CONTACT_EDIT_ROLES.includes(roleOf()) && !isBoardReadOnly();
@@ -3677,10 +3744,10 @@ function ClientInfoSection({ row, num, patch, onEmailSaved, changeEtat, onContac
           {/* Suivi */}
           <div className="ob-props-group">
             <div className="ob-props-title">Suivi</div>
-            <PropRow icon="situation" label="Situation" top={2}><EtatSection row={row} num={num} changeEtat={changeEtat} bare /></PropRow>
+            <PropRow icon="situation" label="Situation" top={2}><EtatSection row={row} num={num} changeEtat={changeEtat} onConservation={onHistoryChanged} bare /></PropRow>
             <PropRow icon="meteo" label="Météo">
               <span className="ob-pv-line" title="À mettre à jour à chaque échange avec le client, avant ou après l'onboarding.">
-                <MeteoPicker score={row.meteo_score} context={row.meteo_context} disabled={!num} inline readOnly={isBoardReadOnly()} onSave={(payload) => recordMeteo(num, payload)} />
+                <MeteoPicker score={row.meteo_score} context={row.meteo_context} disabled={!num} inline readOnly={isBoardReadOnly()} repeche={row.repeche} onSave={(payload) => recordMeteo(num, payload)} />
                 {row.meteo_by && row.meteo_score != null && <span className="ob-pv-sub">par {row.meteo_by}{row.meteo_at ? ` · ${timeAgo(row.meteo_at)}` : ""}</span>}
               </span>
             </PropRow>
@@ -4111,8 +4178,10 @@ const etatAuthor = (h) => {
 // Bloc "État du client" (détail, sous le SIREN) : sélecteur d'état + date(s) selon l'état
 // (fiscaliste), révélation animée. Toute pose passe par changeEtat -> trace l'historique.
 // `bare` : sans libellé, pour la ligne « Situation » des propriétés de la fiche.
-function EtatSection({ row, num, changeEtat, compact = false, bare = false }) {
+// `onConservation` (dev 17/11/2026) : la fiche de conservation enregistrée, la fiche relit le board et son historique.
+function EtatSection({ row, num, changeEtat, compact = false, bare = false, onConservation }) {
   const readOnly = isBoardReadOnly();  // rôles en lecture seule : état affiché, dates en champs désactivés
+  const [conservationOpen, setConservationOpen] = useState(false);
   const etat = row.etat_manuel || displayEtat(row);  // le détail montre l'état POSÉ (pour éditer sa date d'effet, même s'il est encore prévu)
   const cfg = ETAT_DATE_CONFIG[etat];
   // Mode fin de pause : connue (date de fin) vs indéterminée (date de relance). Dérivé des
@@ -4133,6 +4202,15 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false }) {
     <div style={{ marginBottom: compact || bare ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
       {bare ? null : compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num || readOnly} onPick={(v) => changeEtat(num, { etat: v })} />
+      {/* Client « En cours de résiliation » : après son appel, le Client Success remplit la fiche de conservation. */}
+      {num && !readOnly && row.etat_manuel === RESILIATION && CONSERVATION_ROLES.includes(roleOf()) && (
+        <button type="button" className="ob-btn-ghost" onClick={() => setConservationOpen(true)}
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 9, fontSize: 12, padding: "5px 11px" }}>
+          <PencilIcon size={13} />Fiche de conservation
+        </button>
+      )}
+      {conservationOpen && <ConservationModal row={row} num={num} onClose={() => setConservationOpen(false)}
+        onSaved={() => onConservation?.()} />}
       {num && row.finance_review_status === 'pending' && <div style={{marginTop:9,padding:'8px 10px',borderRadius:8,background:'#fff8e9',color:'#866013',fontSize:12,lineHeight:1.5}}>
         Situation enregistrée dans le board. La finance doit en traiter les conséquences sur les montants ; elle ne valide pas le changement de situation.
       </div>}
@@ -4194,7 +4272,8 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false }) {
   );
 }
 
-// Timeline verticale de l'historique des états (audit fiscaliste). Le plus récent en haut.
+// Timeline verticale de l'historique des états (audit fiscaliste). Le plus récent en haut. Avec (dev 17/11/2026) les
+// fiches de conservation et les onboardings qualifiés no show du client, sur le même fil.
 function EtatHistory({ num, version }) {
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -4205,7 +4284,7 @@ function EtatHistory({ num, version }) {
     // changement de client : on vide d'abord (évite d'afficher l'historique du client précédent).
     if (prevNum.current !== num) { setItems([]); setLoaded(false); prevNum.current = num; }
     apiClient.get(`/api/v1/optilex/etat-history?numero_client=${encodeURIComponent(num)}`)
-      .then((r) => { if (alive) setItems(r.history || []); })
+      .then((r) => { if (alive) setItems(historyItems(r)); })
       .catch(() => {})
       .finally(() => { if (alive) setLoaded(true); });
     return () => { alive = false; };
@@ -4213,6 +4292,8 @@ function EtatHistory({ num, version }) {
   // Rien tant qu'on ne SAIT pas qu'il y a quelque chose à montrer : évite le flash du titre
   // (apparu puis retiré) sur les clients sans historique, à chaque ouverture de fiche.
   if (!num || !loaded || items.length === 0) return null;
+  const line = { fontSize: 11.5, color: MUTED, marginTop: 1, overflowWrap: "anywhere" };
+  const foot = { fontSize: 10.5, color: "#a8a39b", marginTop: 1 };
   return (
     <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
       transition={{ duration: 0.26, ease: [0.22, 1, 0.36, 1] }} style={{ overflow: "hidden" }}>
@@ -4222,17 +4303,37 @@ function EtatHistory({ num, version }) {
         <div style={{ position: "absolute", left: 4, top: 5, bottom: 5, width: 2, background: BORDER }} />
         {items.map((h, i) => {
           const st = ETAT_STYLE[h.etat] || {};
+          const pin = (icon) => <span style={{ position: "absolute", left: -22, top: 1, padding: 1, borderRadius: "50%", background: CARD, lineHeight: 0, color: TEXT }}>{icon}</span>;
           return (
-            <motion.div key={h.id} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
+            <motion.div key={h.key} initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1], delay: Math.min(i, 6) * 0.03 }}
               style={{ position: "relative", paddingBottom: i === items.length - 1 ? 0 : 15 }}>
-              {/* Même icône d'état que le tableau et les onglets (dev 29/10/2026), posée sur le fil. */}
-              <span style={{ position: "absolute", left: -22, top: 1, padding: 1, borderRadius: "50%", background: CARD, lineHeight: 0 }}><EtatIcon etat={h.etat} size={12} /></span>
-              <div style={{ fontSize: 13, fontWeight: 500, color: st.fg || TEXT }}>{h.etat}</div>
-              <div style={{ fontSize: 11.5, color: MUTED, marginTop: 1 }}>{etatHistDates(h)}</div>
-              <div style={{ fontSize: 10.5, color: "#a8a39b", marginTop: 1 }}>
-                {etatAuthor(h) ? `${etatAuthor(h)} · ` : ""}{timeAgo(h.created_at)}
-              </div>
+              {h.kind === "conservation" ? (
+                <>
+                  {pin(h.issue === "repeche" ? <LifebuoyIcon size={12} /> : <EtatIcon etat={RESILIATION} size={12} />)}
+                  <div style={{ fontSize: 13, fontWeight: 500, color: h.issue === "repeche" ? GREEN : TEXT }}>Fiche de conservation · {h.issue_label}</div>
+                  <div style={line}>Motifs : {h.motifs}</div>
+                  {h.actions && <div style={line}>Proposé ou fait : {h.actions}</div>}
+                  {h.rdv_slot && <div style={line}>Rendez-vous de 30 min le {slotLabel(h.rdv_slot)}</div>}
+                  <div style={foot}>{h.author_name ? `${h.author_name} · ` : ""}{timeAgo(h.created_at)}</div>
+                </>
+              ) : h.kind === "no_show" ? (
+                <>
+                  {pin(<GhostIcon size={12} />)}
+                  <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{noShowLine(h)}</div>
+                  <div style={foot}>{timeAgo(h.created_at)}</div>
+                </>
+              ) : (
+                <>
+                  {/* Même icône d'état que le tableau et les onglets (dev 29/10/2026), posée sur le fil. */}
+                  {pin(<EtatIcon etat={h.etat} size={12} />)}
+                  <div style={{ fontSize: 13, fontWeight: 500, color: st.fg || TEXT }}>{h.etat}</div>
+                  <div style={line}>{etatHistDates(h)}</div>
+                  <div style={foot}>
+                    {etatAuthor(h) ? `${etatAuthor(h)} · ` : ""}{timeAgo(h.created_at)}
+                  </div>
+                </>
+              )}
             </motion.div>
           );
         })}
@@ -4470,6 +4571,13 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
   const [transferTo, setTransferTo] = useState(null);      // « Transférer à … » : animateur cible (dev 29/10/2026)
+  // Fiche de conservation ou no show qualifié (dev 17/11/2026) : le board se relit et l'historique de la fiche aussi.
+  const [histBump, setHistBump] = useState(0);
+  const afterHistory = () => { setHistBump((v) => v + 1); reload(); };
+  const qualifyNoShow = async (day) => {
+    await apiClient.post("/api/v1/optilex/onboarding-no-show", { numero_client: num, rdv_date: day });
+    afterHistory();
+  };
   const onboardingHost = useOnboardingHost(num, ONBOARDING_FLOW_ROLES.includes(roleOf()) && !row.rdv_onboarding_done
     && !!(row.rdv_onboarding_date_manual || row.rdv_onboarding_date), apptVersion);
   // Antériorité emails : à l'ouverture d'une fiche, on enregistre les emails vus (Owner + Opti'Lex
@@ -4530,7 +4638,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num && row.onboarding_to_confirm && (
             <OnboardingToConfirm key={num} row={row}
               onDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
-              onNotDone={() => patch(num, { rdv_onboarding_done: false })} />
+              onNotDone={() => patch(num, { rdv_onboarding_done: false })} onNoShow={qualifyNoShow} />
           )}
           {ONBOARDING_FLOW_ROLES.includes(roleOf()) && !!num ? (
             // Onglet Détails allégé (dev 24/09/2026) : un seul bouton, le reste vit dans le parcours.
@@ -4625,7 +4733,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             </div>
           )}
           <div className="ob-sec ob-dp-block" style={{ animationDelay: "0.04s" }}>
-            <ClientInfoSection row={row} num={num} patch={patch} recordMeteo={recordMeteo} onChanged={reload} onEmailSaved={() => { setSigRefresh((v) => v + 1); setAlertPrefill("email_changed"); }} changeEtat={changeEtat} onContactsChanged={reload} />
+            <ClientInfoSection row={row} num={num} patch={patch} recordMeteo={recordMeteo} onChanged={reload} onEmailSaved={() => { setSigRefresh((v) => v + 1); setAlertPrefill("email_changed"); }} changeEtat={changeEtat} onContactsChanged={reload} onHistoryChanged={afterHistory} />
           </div>
 
           {appointments}
@@ -4720,7 +4828,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
 
           {/* Historique de la situation (audit fiscaliste). */}
           <div role="tabpanel" id="ob-panel-historique" aria-labelledby="ob-tab-historique" hidden={tab !== "historique"} className="ob-tabpanel">
-            <EtatHistory num={num} version={etatHistVersion} />
+            <EtatHistory num={num} version={etatHistVersion + histBump} />
           </div>
 
           </div>
@@ -5064,6 +5172,147 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
   );
 }
 
+// Fiche de conservation (dev 17/11/2026) : après son appel avec un client « En cours de résiliation », le Client Success
+// note les motifs du départ (obligatoires), ce qui a été proposé ou fait, et l'issue. Repêché : le client repasse
+// « Signé », la direction et le juriste référent sont prévenus. Problème opérationnel : un créneau de 30 min dans
+// l'agenda du juriste du pôle social, choisi en pastilles, la fiche dans l'invitation. Le client part : rien d'automatique.
+function ConservationModal({ row, num, onClose, onSaved }) {
+  const [motifs, setMotifs] = useState("");
+  const [actions, setActions] = useState("");
+  const [issue, setIssue] = useState(null);
+  const [slots, setSlots] = useState(null);       // { host, days } | { error }
+  const [day, setDay] = useState(null);
+  const [slot, setSlot] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [done, setDone] = useState(null);
+  const label = ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num;
+  const operational = issue === "probleme_operationnel";
+  useEffect(() => {
+    if (!operational || slots) return undefined;
+    let alive = true;
+    apiClient.get("/api/v1/optilex/conservation/rdv-slots")
+      .then((r) => { if (alive) { setSlots(r); setDay((r.days || [])[0]?.date || null); } })
+      .catch(() => { if (alive) setSlots({ error: "Impossible de charger l'agenda. Réessayez." }); });
+    return () => { alive = false; };
+  }, [operational, slots]);
+  const ready = !!motifs.trim() && !!issue && (!operational || !!slot);
+  const save = async () => {
+    if (!ready || saving) return;
+    setSaving(true); setError(null);
+    try {
+      const out = await apiClient.post("/api/v1/optilex/conservation", {
+        numero_client: num, motifs, actions, issue, rdv_slot: operational ? `${day}T${slot}` : null });
+      setDone(out.sheet);
+      onSaved();
+    } catch (e) {
+      setError(typeof e?.data?.detail === "string" ? e.data.detail : "La fiche n'a pas été enregistrée. Réessayez.");
+      // Créneau pris entre-temps : l'agenda se recharge, le reste de la fiche est gardé.
+      if (e?.status === 409 && operational) { setSlots(null); setSlot(null); }
+    }
+    setSaving(false);
+  };
+  const close = () => { if (!saving) onClose(); };
+  const dayLabel = (iso) => { try { return new Date(iso + "T00:00:00").toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" }); } catch { return iso; } };
+  const pill = (on) => ({ display: "inline-flex", alignItems: "center", gap: 7, padding: "6px 12px", borderRadius: 999, border: `1px solid ${on ? CHARCOAL : BORDER}`,
+    background: on ? CHARCOAL : CARD, color: on ? "#fff" : NAVY, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all .12s ease" });
+  const area = { ...inputStyle, width: "100%", minHeight: 74, resize: "vertical", lineHeight: 1.5, marginTop: 6 };
+  const freeDays = (slots?.days || []).filter((d) => d.slots.some((x) => x.free));
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Fiche de conservation" style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={close}
+        style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)" }} />
+      <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ position: "relative", width: "min(600px, 100%)", maxHeight: "86vh", display: "flex", flexDirection: "column", background: CARD, borderRadius: 22, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(28,27,25,.14)", overflow: "hidden" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 500, color: NAVY }}>{done ? "Fiche de conservation enregistrée" : "Fiche de conservation"}</div>
+            <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label} · lue par Owner et le cabinet</div>
+          </div>
+          <button type="button" aria-label="Fermer la fiche de conservation" disabled={saving} onClick={close} style={{ border: "none", background: "none", cursor: "pointer", color: MUTED, fontSize: 17, lineHeight: 1, padding: 4, flexShrink: 0 }}>✕</button>
+        </div>
+        {done ? (
+          <div style={{ padding: "18px 20px" }}>
+            <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.55, margin: 0 }}>
+              {done.issue === "repeche" ? "Le client repasse « Signé ». La direction et le juriste référent sont prévenus."
+                : done.issue === "probleme_operationnel" ? `Rendez-vous de 30 min posé le ${slotLabel(done.rdv_slot)}, la fiche dans l'invitation.`
+                : "La fiche est dans l'historique du client. La résiliation s'acte comme d'habitude."}
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
+              <button type="button" className="ob-composer-send" onClick={onClose} autoFocus>Fermer</button>
+            </div>
+          </div>
+        ) : (
+          <>
+            <div style={{ padding: "16px 20px", overflowY: "auto", flex: 1 }}>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: TEXT }}>
+                Motifs du départ <span style={{ color: MUTED, fontWeight: 400 }}>· obligatoire</span>
+                <textarea value={motifs} onChange={(e) => setMotifs(e.target.value)} maxLength={4000} disabled={saving} autoFocus style={area} />
+              </label>
+              <label style={{ display: "block", fontSize: 13, fontWeight: 500, color: TEXT, marginTop: 14 }}>
+                Ce qui a été proposé ou fait
+                <textarea value={actions} onChange={(e) => setActions(e.target.value)} maxLength={4000} disabled={saving} style={area} />
+              </label>
+              <div style={{ fontSize: 13, fontWeight: 500, color: TEXT, marginTop: 14 }}>Issue</div>
+              <div role="radiogroup" aria-label="Issue de l'appel" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 7 }}>
+                {CONSERVATION_ISSUES.map((o) => (
+                  <button key={o.key} type="button" role="radio" aria-checked={issue === o.key} disabled={saving}
+                    onClick={() => setIssue(o.key)} style={pill(issue === o.key)}>
+                    {o.key === "repeche" && <span style={{ display: "inline-flex", color: issue === o.key ? "#fff" : TEXT }}><LifebuoyIcon size={15} /></span>}
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+              {operational && (
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${BORDER}` }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 500, color: NAVY }}>
+                    Rendez-vous de 30 min{slots?.host ? ` avec ${slots.host}` : ""} · heure de Paris
+                  </div>
+                  {!slots ? <div style={{ padding: "14px 0", color: MUTED, fontSize: 13 }}>Chargement des créneaux…</div>
+                    : slots.error ? <div role="alert" style={{ padding: "10px 0", color: "#c5221f", fontSize: 12.5 }}>{slots.error}</div>
+                    : freeDays.length === 0 ? <div style={{ padding: "14px 0", color: MUTED, fontSize: 13 }}>Aucun créneau libre sur les trois prochaines semaines.</div>
+                    : (
+                      <>
+                        <div role="radiogroup" aria-label="Jour" style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 9 }}>
+                          {freeDays.map((d) => (
+                            <button key={d.date} type="button" role="radio" aria-checked={day === d.date} disabled={saving}
+                              onClick={() => { setDay(d.date); setSlot(null); }} style={{ ...pill(day === d.date), textTransform: "capitalize" }}>{dayLabel(d.date)}</button>
+                          ))}
+                        </div>
+                        <div role="radiogroup" aria-label="Heure" style={{ display: "flex", flexWrap: "wrap", gap: 7, marginTop: 10 }}>
+                          {(freeDays.find((d) => d.date === day)?.slots || []).filter((x) => x.free).map((x) => {
+                            const on = slot === x.t;
+                            return (
+                              <button key={x.t} type="button" role="radio" aria-checked={on} disabled={saving} onClick={() => setSlot(x.t)}
+                                style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${on ? GREEN : BORDER}`, background: on ? GREEN : CARD,
+                                  color: on ? "#fff" : NAVY, fontSize: 12.5, fontWeight: 500, cursor: "pointer", fontFamily: "inherit", transition: "all .12s ease" }}>{x.t}</button>
+                            );
+                          })}
+                        </div>
+                      </>
+                    )}
+                </div>
+              )}
+            </div>
+            <div style={{ padding: "14px 20px", borderTop: `1px solid ${BORDER}`, display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span role={error ? "alert" : undefined} style={{ fontSize: 12, color: error ? "#c5221f" : MUTED, minWidth: 0, overflowWrap: "anywhere", lineHeight: 1.5 }}>
+                {error || (operational ? (slot ? `Rendez-vous le ${dayLabel(day)} à ${slot}` : "Choisissez un créneau")
+                  : ready ? "" : "Motifs et issue à renseigner")}
+              </span>
+              <motion.button type="button" whileTap={ready ? { scale: 0.97 } : undefined} disabled={!ready || saving} onClick={save}
+                style={{ padding: "9px 18px", borderRadius: 10, border: "none", background: ready ? CHARCOAL : "#ece9e4", color: ready ? "#fff" : MUTED, fontSize: 13, fontWeight: 500, cursor: ready && !saving ? "pointer" : "default", fontFamily: "inherit", flexShrink: 0 }}>
+                {saving ? "Enregistrement…" : "Enregistrer la fiche"}
+              </motion.button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
 // alwaysDate : la date est TOUJOURS saisissable (RDV à planifier), pas seulement une
 // fois "effectué". Sinon (statut fait/pas-fait), la date se révèle au passage à Oui.
 // `readOnly` (rôles en lecture seule) : bascule et date visibles, désactivées.
@@ -5116,7 +5365,7 @@ function MeteoSection({ row, num, recordMeteo, version, onChanged, onCount }) {
   return <div>
     {weatherPresentation(current?.score,current?.weather_context)?.legacy && <p className="wc-legacy-notice">Cette évaluation utilise l’ancienne échelle. Elle est conservée telle qu’elle a été saisie. La prochaine météo utilisera les 5 niveaux ci-dessous.</p>}
     {error && <p role="alert" className="ob-thread-error">{error} <button type="button" onClick={()=>setRefresh(v=>v+1)}>Réessayer</button></p>}
-    <CommentThread numero={num} readOnly={readOnly} onCount={setCommentCount} onAddWeather={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false)setRefresh(v=>v+1);return ok;}} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
+    <CommentThread numero={num} readOnly={readOnly} repeche={row.repeche} onCount={setCommentCount} onAddWeather={async payload=>{const ok=await recordMeteo(num,payload);if(ok!==false)setRefresh(v=>v+1);return ok;}} ratings={hist} ratingsLoading={!loaded&&!error} onRatingEdited={updated=>{setHist(items=>items.map(item=>item.id===updated.id?updated:item));onChanged();}} onRatingDeleted={()=>{setRefresh(v=>v+1);onChanged();}} onRatingConflict={()=>setRefresh(v=>v+1)}/>
     <WeatherScaleGuide/>
   </div>;
 }
@@ -5433,7 +5682,7 @@ const CLIP_ICON = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" st
 const EMOJI_ICON = <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M8 14.5s1.4 2 4 2 4-2 4-2" /><path d="M9 9.5h.01M15 9.5h.01" strokeWidth="2.6" /></svg>;
 // `readOnly` (rôles en lecture seule, main 850b0d3) : fil, notations et réactions affichés ; saisie, pièces, météo, réponses,
 // réactions, modification et suppression visibles et désactivées, et aucune écriture ne part.
-function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict, onCount, readOnly = false }) {
+function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = false, onRatingEdited, onRatingDeleted, onRatingConflict, onCount, readOnly = false, repeche = null }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
   const [comments, setComments] = useState([]);
   const [reactions, setReactions] = useState({});   // « comment:<id> » | « rating:<id> » -> [{ emoji, count, mine, names }]
@@ -5696,7 +5945,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
             aria-label="Joindre des fichiers" title="Joindre des fichiers (PDF, image, e-mail, audio · 20 Mo au plus) ou les glisser ici">{CLIP_ICON}</button>
           <EmojiPalette label="Insérer un emoji" className="ob-composer-tool" onPick={insertEmoji}>{EMOJI_ICON}</EmojiPalette>
           <input ref={fileInput} type="file" hidden multiple accept={MESSAGE_FILE_ACCEPT} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
-          {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero} readOnly={readOnly} />}
+          {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero} readOnly={readOnly} repeche={repeche} />}
           <span className="ob-composer-hint" aria-hidden="true">{isMac ? "⌘" : "Ctrl"} Entrée</span>
           <button type="button" className="ob-composer-send" onClick={submit} disabled={(!draft.trim() && !files.length) || posting || !!blocker} {...ro}>{posting ? "Envoi…" : "Envoyer"}</button>
         </div>
