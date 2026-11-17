@@ -4272,8 +4272,8 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false, onCo
   );
 }
 
-// Timeline verticale de l'historique des états (audit fiscaliste). Le plus récent en haut. Avec (dev 17/11/2026) les
-// fiches de conservation et les onboardings qualifiés no show du client, sur le même fil.
+// Timeline verticale de l'historique des états (audit fiscaliste), dans l'ordre du temps : le plus ancien en haut
+// (dev 17/11/2026). Avec les fiches de conservation et les no shows d'onboarding du client, sur le même fil.
 function EtatHistory({ num, version }) {
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
