@@ -1,9 +1,12 @@
-// Emails et téléphones du client, depuis la fiche du board (Client Success).
+// Emails, téléphones et numéros WhatsApp du client, depuis la fiche du board (Client Success).
 // Même table que la page Finance (client_contact) : ce qui est saisi ici est
 // visible côté finance, et inversement. Un contact retiré est archivé, jamais
-// effacé.
+// effacé. Le numéro WhatsApp (dev 17/11/2026) sert la facturation : il n'est
+// jamais le téléphone du client ni le principal.
 import { useState } from 'react';
 import apiClient from '../services/apiClient';
+import { sharedOf } from '../utils/boardContacts.js';
+import { WhatsAppTag } from './BoardContactLine.jsx';
 
 const TEXT = '#1c1b19';
 const MUTED = '#8b867e';
@@ -14,6 +17,7 @@ const RED = '#c5221f';
 const KINDS = [
   { kind: 'email', title: 'Emails', placeholder: 'adresse@exemple.fr', type: 'email' },
   { kind: 'phone', title: 'Téléphones', placeholder: '06 12 34 56 78', type: 'tel' },
+  { kind: 'whatsapp', title: 'Numéros WhatsApp', placeholder: '06 12 34 56 78', type: 'tel' },
 ];
 
 const input = { flex: 1, minWidth: 0, padding: '6px 9px', borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 12.5, fontFamily: 'inherit', color: TEXT, background: '#fff' };
@@ -23,7 +27,7 @@ const small = (primary) => ({
 });
 const link = { border: 'none', background: 'transparent', padding: '0 2px', fontSize: 11.5, fontFamily: 'inherit', cursor: 'pointer', color: MUTED };
 
-function ContactRow({ contact, busy, onSave, onRemove }) {
+function ContactRow({ kind, contact, busy, onSave, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(contact.value);
   const [confirm, setConfirm] = useState(false);
@@ -40,6 +44,7 @@ function ContactRow({ contact, busy, onSave, onRemove }) {
   return (
     <div style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', padding: '5px 0', borderBottom: `1px solid ${BORDER}` }}>
       <span style={{ fontSize: 12.5, fontWeight: 500, color: TEXT, overflowWrap: 'anywhere' }}>{contact.value}</span>
+      {kind === 'whatsapp' && <WhatsAppTag />}
       {contact.is_primary && <span style={{ fontSize: 10.5, fontWeight: 500, color: '#0b7a4b' }}>principal</span>}
       {contact.label && <span style={{ fontSize: 11, color: MUTED }}>{contact.label}</span>}
       <span style={{ marginLeft: 'auto', display: 'inline-flex', gap: 6, alignItems: 'baseline' }}>
@@ -61,7 +66,7 @@ function ContactRow({ contact, busy, onSave, onRemove }) {
 }
 
 export default function BoardContactsEditor({ numero, contacts, onChanged }) {
-  const [drafts, setDrafts] = useState({ email: '', phone: '' });
+  const [drafts, setDrafts] = useState({ email: '', phone: '', whatsapp: '' });
   const [busy, setBusy] = useState(null);
   const [error, setError] = useState('');
 
@@ -79,12 +84,12 @@ export default function BoardContactsEditor({ numero, contacts, onChanged }) {
   return (
     <div style={{ marginTop: 14, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
       {KINDS.map(({ kind, title, placeholder, type }) => {
-        const list = contacts?.[kind === 'email' ? 'emails' : 'phones'] || [];
+        const list = sharedOf(contacts, kind);
         return (
           <div key={kind} style={{ minWidth: 0 }}>
             <div style={{ fontSize: 11, color: MUTED, marginBottom: 4 }}>{title} (partagés avec la finance)</div>
             {list.map((c) => (
-              <ContactRow key={c.id} contact={c} busy={busy === c.id}
+              <ContactRow key={c.id} kind={kind} contact={c} busy={busy === c.id}
                 onSave={(value) => run(c.id, () => apiClient.patch(`/api/v1/optilex/contacts/${c.id}`, { value }))}
                 onRemove={() => run(c.id, () => apiClient.delete(`/api/v1/optilex/contacts/${c.id}`))} />
             ))}

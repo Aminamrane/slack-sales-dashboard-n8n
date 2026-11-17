@@ -5,7 +5,8 @@
 // le client concerné : son nom, son numéro de client, puis le téléphone.
 //
 // On rapproche donc le numéro des téléphones que la page connaît déjà :
-//   - les fiches du mois affiché (téléphone principal + contacts secondaires) ;
+//   - les fiches du mois affiché (téléphone principal + contacts secondaires,
+//     numéros WhatsApp compris : le même numéro sert souvent aux deux) ;
 //   - le board Owner/Opti'Lex, déjà chargé par la page : téléphone d'origine,
 //     téléphone corrigé à la main (`phone_ovr`), contacts partagés — et les
 //     clients qui n'ont pas (encore) de fiche ce mois-ci.
@@ -86,7 +87,7 @@ export function buildCallClientIndex(rows, boardRows) {
     const name = societeName || representant || null;
     if (!name && !numero) continue;
     const entry = create(key, name, numero);
-    for (const phone of [client.phone, ...(client.contact_phones || [])]) remember(entry, phone);
+    for (const phone of [client.phone, ...(client.contact_phones || []), ...(client.contact_whatsapp || [])]) remember(entry, phone);
   }
 
   // Le board : même client (même numéro) → ses téléphones s'ajoutent à la fiche ;
@@ -105,7 +106,7 @@ export function buildCallClientIndex(rows, boardRows) {
       const key = `board:${board.row_key ?? numero ?? name}`;
       entry = entries.get(key) || create(key, name, numero);
     }
-    const shared = (board.shared_contacts?.phones || []).map((phone) => phone?.value);
+    const shared = [...(board.shared_contacts?.phones || []), ...(board.shared_contacts?.whatsapp || [])].map((phone) => phone?.value);
     for (const phone of [board.contact_phone, board.phone_ovr, ...shared]) remember(entry, phone);
   }
   return index;

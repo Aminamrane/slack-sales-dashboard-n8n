@@ -1,6 +1,12 @@
 // Contacts partagés entre le board Owner/Opti'Lex et la page Finance
 // (table client_contact, servie par le board dans `row.shared_contacts`).
-// Ce que la finance ajoute (email, téléphone) doit se voir sur la fiche.
+// Ce que la finance ajoute (email, téléphone, numéro WhatsApp) doit se voir sur la fiche.
+
+// Liste de `row.shared_contacts` où se range chaque type (le numéro WhatsApp à part depuis le 17/11/2026 :
+// jamais un téléphone du board, jamais primaire).
+const BUCKETS = { email: 'emails', phone: 'phones', whatsapp: 'whatsapp' };
+export const sharedOf = (contacts, kind) => contacts?.[BUCKETS[kind]] || [];
+const isNumber = (kind) => kind === 'phone' || kind === 'whatsapp';
 
 // Numéro comparable : chiffres seuls, indicatif français ramené à 0.
 export function phoneKey(value) {
@@ -23,7 +29,7 @@ export function sharedEmailOptions(row) {
 // est la primaire. Libellés : Primaire, Secondaire, Tertiaire, puis 4e, 5e…
 const RANKS = ['Primaire', 'Secondaire', 'Tertiaire'];
 export const rankLabel = (i) => RANKS[i] || `${i + 1}e`;
-const keyOf = (kind, value) => (kind === 'phone' ? phoneKey(value) : String(value || '').trim().toLowerCase());
+const keyOf = (kind, value) => (isNumber(kind) ? phoneKey(value) : String(value || '').trim().toLowerCase());
 
 // Tous les e-mails ou téléphones du client, sans doublon : la valeur du board (chaque numéro d'un champ
 // « +33… - 06… » compte), puis les contacts partagés avec la finance. Chacun porte son rang.
@@ -33,7 +39,7 @@ export function contactEntries(kind, boardValue, shared = []) {
   const push = (value, contact) => {
     const v = String(value || '').trim();
     const k = keyOf(kind, v);
-    if (!v || (kind === 'phone' ? k.length < 8 : !k)) return;
+    if (!v || (isNumber(kind) ? k.length < 8 : !k)) return;
     const prev = seen.get(k);
     if (prev) {
       if (contact && !prev.id) Object.assign(prev, { id: contact.id, primary: !!contact.is_primary });

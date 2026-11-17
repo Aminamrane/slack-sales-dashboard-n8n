@@ -1,0 +1,35 @@
+/* CommentAudience.css : choix Interne / Board / Sales, badges des messages, dernier commentaire du sales (dev 17/11/2026).
+   Langue de la page Finance et du board (docs/STYLE-OWNER.md) : grège, encre chaude, pastels à liseré. Préfixe ca-. */
+.ca-toggle { position:relative; display:inline-flex; flex-shrink:0; padding:2px; border-radius:10px; background:#ebe8e3; }
+.ca-toggle button { position:relative; padding:0; border:0; background:transparent; color:#8b867e; font:inherit; font-size:12px; font-weight:500; cursor:pointer; transition:color .18s; }
+.ca-toggle button > span:last-child { position:relative; display:inline-flex; align-items:center; gap:5px; padding:4px 9px; white-space:nowrap; }
+.ca-toggle button:hover { color:#4a4540; }
+.ca-toggle button.is-on { color:#1c1b19; }
+.ca-toggle button.is-on.is-internal { color:#c2500e; }
+.ca-toggle button.is-on.is-sales { color:#1b6fd0; }
+.ca-toggle button:disabled { cursor:not-allowed; }
+.ca-toggle-thumb { position:absolute; inset:0; border-radius:8px; background:#fff; box-shadow:0 1px 2px rgba(28,27,25,.1), 0 0 0 1px rgba(28,27,25,.03); }
+
+.ca-badge { display:inline-flex; align-items:center; gap:4px; flex-shrink:0; padding:2px 7px; border:1px solid; border-radius:7px; font-size:11px; font-weight:500; line-height:1.35; white-space:nowrap; }
+.ca-badge.is-internal { border-color:#f8d4ba; background:#fde9da; color:#c2500e; }
+.ca-badge.is-sales { border-color:#c9e0fa; background:#e4f0fd; color:#1b6fd0; }
+.ca-badge.is-author { border-color:#e3ded6; background:#f1eee9; color:#4a4540; }
+
+/* Composer teinté selon le choix : on voit toujours à qui l'on écrit. */
+.ca-scope { display:flex; align-items:center; gap:6px; margin:8px 4px 0; font-size:11.5px; line-height:1.4; color:#a8a39b; }
+.ca-scope.is-internal { color:#c2500e; }
+.ca-scope.is-sales { color:#1b6fd0; }
+.ca-scope.is-blocked { color:#c5221f; }
+.ca-scope svg { flex-shrink:0; }
+
+.ca-last { display:flex; flex-direction:column; gap:3px; width:100%; max-width:300px; margin-top:2px; padding:8px 10px; border:1px solid #c9e0fa; border-radius:12px; background:#f5f9fe;
+  text-align:left; font:inherit; color:#1c1b19; cursor:pointer; transition:border-color .2s, box-shadow .25s, transform .3s cubic-bezier(.22,1,.36,1); }
+.ca-last:hover { border-color:#a9cdf5; box-shadow:0 8px 20px -12px rgba(27,111,208,.35); transform:translateY(-1px); }
+.ca-last:focus-visible { outline:2px solid #1b6fd0; outline-offset:2px; }
+.ca-last-top { display:flex; align-items:center; gap:6px; font-size:10.5px; font-weight:500; letter-spacing:.04em; color:#1b6fd0; white-space:nowrap; }
+.ca-last-top time { margin-left:auto; font-weight:400; color:#8b867e; letter-spacing:0; }
+.ca-last-top svg { flex-shrink:0; color:#1b6fd0; transition:transform .3s cubic-bezier(.34,1.56,.64,1); }
+.ca-last:hover .ca-last-top svg { transform:translate(2px,-2px); }
+.ca-last-text { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:12.5px; font-weight:400; line-height:1.45; color:#4a4540; white-space:normal; }
+
+@media (prefers-reduced-motion:reduce) { .ca-last, .ca-last-top svg { transition:none; } }

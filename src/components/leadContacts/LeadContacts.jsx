@@ -1,6 +1,8 @@
-import React, { useEffect, useState, useSyncExternalStore } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowUpToLine, Check, Copy, Plus, X } from 'lucide-react';
 import apiClient from '../../services/apiClient';
+import { formatPhoneDisplay } from '../../utils/phoneDisplay.js';
+import { load, useContacts } from './leadContactsStore.js';
 
 // Autres téléphones et e-mails d'un lead (dev 11 et 12/11/2026), rangés sous les champs « Téléphone » et « Email » de
 // la fiche. Au repos, RIEN ne s'affiche de plus que le champ : un petit « +2 » (ou un « + » s'il n'y en a pas) à côté
@@ -15,26 +17,6 @@ const KINDS = {
 };
 const urlOf = (leadId) => `/api/v1/tracking/leads/${leadId}/contacts`;
 
-// Un petit magasin par lead : le compteur du champ et la liste dépliée lisent les mêmes données, chargées une seule
-// fois par ouverture de fiche. `open` : le type de contact déplié ('phone', 'email' ou rien).
-const stores = new Map();
-function storeOf(leadId) {
-  let store = stores.get(leadId);
-  if (!store) { store = { snapshot: { data: null, open: null }, listeners: new Set(), loadedAt: 0 }; stores.set(leadId, store); }
-  return store;
-}
-function emit(store, patch) { store.snapshot = { ...store.snapshot, ...patch }; store.listeners.forEach((listener) => listener()); }
-async function load(leadId) {
-  const store = storeOf(leadId);
-  store.loadedAt = Date.now();
-  try { emit(store, { data: await apiClient.get(urlOf(leadId)) }); } catch { emit(store, { data: null }); }
-}
-function useContacts(leadId) {
-  const store = storeOf(leadId);
-  const snapshot = useSyncExternalStore((listener) => { store.listeners.add(listener); return () => store.listeners.delete(listener); }, () => store.snapshot);
-  useEffect(() => { if (Date.now() - store.loadedAt > 5000) load(leadId); }, [leadId, store]);
-  return [snapshot, (patch) => emit(store, patch)];
-}
 const countOf = (data, kind) => (data?.contacts || []).filter((contact) => contact.kind === kind).length;
 
 const tagStyle = (darkMode, strong) => {
@@ -137,7 +119,7 @@ export default function LeadContactRows({ leadId, kind, mainValue, onPromote, C,
         <div key={contact.id}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span title={contact.value} style={{ minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: 12, color: kind === 'phone' ? C.text : C.secondary,
-              fontFamily: kind === 'phone' ? "'SF Mono', 'Fira Code', monospace" : 'inherit', fontWeight: kind === 'phone' ? 500 : 400 }}>{contact.value}</span>
+              fontFamily: kind === 'phone' ? "'SF Mono', 'Fira Code', monospace" : 'inherit', fontWeight: kind === 'phone' ? 500 : 400 }}>{kind === 'phone' ? formatPhoneDisplay(contact.value) : contact.value}</span>
             <span style={tagStyle(darkMode, contact.category === 'a_contacter' || contact.category === 'personne_a_contacter')}>{contact.label}</span>
             <span style={{ flex: 1 }} />
             {copied === contact.id

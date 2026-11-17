@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { contactEntries, phoneKey, rankLabel, sharedEmailOptions } from './boardContacts.js';
+import { contactEntries, phoneKey, rankLabel, sharedEmailOptions, sharedOf } from './boardContacts.js';
 
 test('french numbers compare whatever their format', () => {
   assert.equal(phoneKey('+33 6 75 82 86 69'), '0675828669');
@@ -30,4 +30,13 @@ test('finance emails are labelled for the email menu', () => {
     { email: 'b@crepes.fr', source: 'Finance' },
   ]);
   assert.deepEqual(sharedEmailOptions({}), []);
+});
+
+test('whatsapp numbers are read apart from phones and compared like phones', () => {
+  const contacts = { phones: [{ id: 1, value: '0600000001' }], whatsapp: [{ id: 2, value: '+33600000001' }, { id: 3, value: '06 00 00 00 01' }, { id: 4, value: '0600000002' }] };
+  assert.deepEqual(sharedOf(contacts, 'phone').map((c) => c.id), [1]);
+  assert.deepEqual(sharedOf(contacts, 'email'), []);
+  assert.deepEqual(sharedOf(undefined, 'whatsapp'), []);
+  assert.deepEqual(contactEntries('whatsapp', null, sharedOf(contacts, 'whatsapp')).map((e) => [e.value, e.id]), [['+33600000001', 2], ['0600000002', 4]]);
+  assert.deepEqual(contactEntries('whatsapp', null, [{ id: 5, value: '06 00' }]), []);
 });

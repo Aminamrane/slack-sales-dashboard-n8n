@@ -227,7 +227,8 @@ function ReschedModal({ numeroClient, label, onClose, onDone }) {
 
 // ── Bloc principal, inséré dans la section « Rendez-vous » du panneau détail ──
 // `readOnly` (rôles en lecture seule) : les deux boutons restent visibles, désactivés.
-export default function OnboardingFacturation({ numeroClient, boardRow, readOnly = false }) {
+// `alreadyPaid` : le client a déjà réglé, la question de la validation ne se pose plus (dev 17/11/2026).
+export default function OnboardingFacturation({ numeroClient, boardRow, readOnly = false, alreadyPaid = false }) {
   const [done, setDone] = useState(!!boardRow?.rdv_onboarding_facturation_done);
   const [when, setWhen] = useState(
     boardRow?.rdv_onboarding_date_manual || boardRow?.rdv_onboarding_date || null
@@ -285,13 +286,21 @@ export default function OnboardingFacturation({ numeroClient, boardRow, readOnly
         {when ? whenLabel(when) : "Aucune date de rendez-vous connue"}
       </div>
 
-      <div style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
-        Le rendez-vous a-t-il été validé ?
-      </div>
-      <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-        <Choice value label="Validé" tone={GREEN} />
-        <Choice value={false} label="Non effectué" tone={RED} />
-      </div>
+      {alreadyPaid ? (
+        <div style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
+          Le client a déjà payé : rien à valider.
+        </div>
+      ) : (
+        <>
+          <div style={{ fontSize: 11.5, color: MUTED, marginTop: 10 }}>
+            Le rendez-vous a-t-il été validé ?
+          </div>
+          <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+            <Choice value label="Validé" tone={GREEN} />
+            <Choice value={false} label="Non effectué" tone={RED} />
+          </div>
+        </>
+      )}
 
       {err && (
         <div style={{ fontSize: 11, color: RED, marginTop: 8, lineHeight: 1.45 }}>{err}</div>

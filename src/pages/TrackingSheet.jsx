@@ -3,6 +3,7 @@ import { ContractFolders } from '../components/BoardClientFiles.jsx';
 import { createLiveListener } from "../utils/liveDictation.js";
 import { revealInRail } from "../utils/tabRail.js";
 import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
+import WhatsAppField from '../components/leadContacts/WhatsAppField.jsx';
 import LeadTransfer from '../components/leadTransfer/LeadTransfer.jsx';
 import LeadCard from '../components/trackingSheet/LeadCard.jsx';
 import { useStableActions } from '../components/trackingSheet/useStableActions.js';
@@ -38,6 +39,7 @@ import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
 import LeadDocuments from '../components/salesJourney/LeadDocuments';
+import SalesClientThread, { LeadCommentLink } from '../components/clientComments/SalesClientThread.jsx';
 import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
 import { qualificationPatch } from '../utils/r2Qualification';
@@ -6144,6 +6146,8 @@ export default function TrackingSheet() {
                 )}
                 {/* Autres numéros du lead : cachés au repos, dépliés par le « +2 » du champ (le numéro du champ est le prioritaire) */}
                 <LeadContactRows leadId={lead.id} kind="phone" mainValue={lead.phone} onPromote={promoteLeadContact(lead.id)} C={C} darkMode={darkMode} readOnly={isAdminView} />
+                {/* Numéro WhatsApp du client, pour la facturation (dev 17/11/2026) : un champ à part, jamais prioritaire */}
+                <WhatsAppField leadId={lead.id} phone={lead.phone} C={C} darkMode={darkMode} readOnly={isAdminView} />
                 {/* Email */}
                 {editingField?.leadId === lead.id && editingField?.field === 'email' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -7840,6 +7844,8 @@ export default function TrackingSheet() {
                   </div>
                 )}
               </div>}
+              {/* Commentaires facturation du client (dev 17/11/2026) : fil partagé avec la finance et les CSM, lead signé seulement. */}
+              {activeCat.key === 'signed' && <SalesClientThread key={`billing-${lead.id}`} leadId={lead.id} dark={darkMode} />}
               </div>{/* fin du volet Infos, 2e partie */}
 
             </div>{/* end detail padding */}
@@ -8026,6 +8032,10 @@ export default function TrackingSheet() {
           </div>
         </div>
       )}
+
+      {/* Lien direct d'un commentaire facturation (?lead=<id>&focus=comments&comment=<id>, dev 17/11/2026) : ouvre la fiche du lead. */}
+      <LeadCommentLink leads={leads} ready={!loading} dark={darkMode} onOpen={(lead) => { const tab = CATEGORIES.findIndex(c => c.key === lead.status);
+        setSidebarView('leads'); if (tab >= 0) handleTabChange(tab); setSelectedLead(lead.id); setPanelTab({ leadId: lead.id, tab: 'infos' }); }} />
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* ── NDA GENERATION POPUP ─────────────────────────────────────────── */}
