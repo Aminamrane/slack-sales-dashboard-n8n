@@ -195,24 +195,7 @@
 
 /* Rappel des derniers échanges dans « Paiements » : une carte cliquable qui ouvre le fil. En fiche étroite on
    ne lit que le premier ; en plein écran, la colonne de droite montre les trois. */
-.fx-last { display:flex; flex-direction:column; gap:12px; width:100%; padding:14px 16px 15px; border:1px solid var(--fx-line); border-radius:18px; background:#fff; text-align:left; cursor:pointer;
   transition:border-color .2s, box-shadow .25s, transform .3s var(--fx-ease); }
-.fx-last:hover { border-color:#ddd8d0; box-shadow:0 8px 22px -12px rgba(28,27,25,.22); transform:translateY(-1px); }
-.fx-last:focus-visible { outline:2px solid #1c1b19; outline-offset:2px; }
-.fx-last-top { display:flex; align-items:center; justify-content:space-between; gap:10px; }
-.fx-last-label { font-size:10.5px; font-weight:500; letter-spacing:.09em; text-transform:uppercase; color:var(--fx-faint); }
-.fx-last-go { display:inline-flex; align-items:center; gap:4px; font-size:12px; font-weight:500; color:var(--fx-muted); transition:color .15s; }
-.fx-last-go svg { transition:transform .3s var(--fx-spring); }
-.fx-last:hover .fx-last-go { color:var(--fx-ink); }
-.fx-last:hover .fx-last-go svg { transform:translate(2px,-2px); }
-.fx-last-row { display:flex; gap:10px; min-width:0; }
-.fx-last-row + .fx-last-row { display:none; padding-top:12px; border-top:1px solid var(--fx-hair); }
-.fd-scroll[data-wide="true"] .fx-last-row + .fx-last-row { display:flex; }
-.fx-last-main { display:flex; flex-direction:column; gap:2px; min-width:0; flex:1; }
-.fx-last-who { display:flex; align-items:center; gap:7px; min-width:0; font-size:12px; color:var(--fx-faint); white-space:nowrap; }
-.fx-last-who b { overflow:hidden; text-overflow:ellipsis; font-size:13px; font-weight:500; color:var(--fx-ink); }
-.fx-last-text { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:13px; line-height:1.5; color:#4a4540; }
-.fx-last-none { font-size:12.5px; line-height:1.5; color:var(--fx-muted); }
 
 /* ── Liste des mentions (@) ────────────────────────────────────────────
    Le champ est celui du board (MentionTextarea, styles en ligne aux tons

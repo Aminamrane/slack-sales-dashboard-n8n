@@ -358,31 +358,6 @@ function NoteCard({ e, t }) {
   );
 }
 
-// Rappel des derniers échanges, hors de l'onglet (rubrique « Paiements ») : la finance lit le dernier mot, ou la
-// note épinglée, sans changer de rubrique ; un clic ouvre le fil. `summary` vient de `onSummary`.
-export function LastExchange({ summary, onOpen }) {
-  if (!summary) return null;
-  const { count, recent } = summary;
-  return (
-    <button type="button" className="fx fx-last" onClick={onOpen}>
-      <span className="fx-last-top">
-        <span className="fx-last-label">{recent[0]?.pinned ? 'Note épinglée' : count > 1 ? 'Derniers échanges' : 'Dernier échange'}</span>
-        <span className="fx-last-go">{count ? `Voir ${count > 1 ? `les ${count} échanges` : 'l’échange'}` : 'Écrire'}<ArrowUpRight size={13} strokeWidth={2.2} /></span>
-      </span>
-      {recent.length ? recent.map((e, i) => (
-        <span key={`${e.at}-${i}`} className="fx-last-row">
-          <Avatar name={e.author} size={26} />
-          <span className="fx-last-main">
-            <span className="fx-last-who"><b>{e.author}</b><i className="fx-dot" /><span>{timeAgo(e.at)}</span>
-              {e.internal && <span className="fx-tag"><Lock size={10} strokeWidth={2.2} />Interne</span>}</span>
-            <span className="fx-last-text">{e.text}</span>
-          </span>
-        </span>
-      )) : <span className="fx-last-none">Aucun échange pour ce client. Écrivez à Owner, au cabinet ou laissez une note interne.</span>}
-    </button>
-  );
-}
-
 const KINDS = [['all', 'Tout', 'échange'], ['comment', 'Messages', 'message'], ['rating', 'Météo', 'notation'], ['note', 'Interne', 'note interne']];
 const plural = (n, unit) => `${n} ${unit.split(' ').map((w) => (n > 1 ? `${w}s` : w)).join(' ')}`;
 
