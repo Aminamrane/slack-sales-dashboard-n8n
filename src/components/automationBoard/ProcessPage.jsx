@@ -14,7 +14,7 @@
 // formulaire replié à confirmer. Un commentaire part au cabinet par défaut : c'est un échange avec lui.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import apiClient from "../../services/apiClient";
-import { countLabel, dayLabel, errorText, journey, missionComments, periodHint, sizeLabel, turnOf, voices } from "../../utils/automationBoard";
+import { countLabel, dayLabel, errorText, journey, missionComments, periodHint, sizeLabel, stateChoices, turnOf, voices } from "../../utils/automationBoard";
 import { ArrowLeft, BarChart3, Check, CloudUpload, Code2, FileText, FlaskConical, Layers, ListTree, Lock, MessageCircle, Route, Send, Tags, Users, Wrench } from "lucide-react";
 import { Card, Empty, Page, Reveal, Tag } from "../../pages/TrackingSheetFinance/components/PageKit.jsx";
 import "../../pages/TrackingSheetFinance/components/ExchangeThread.css";
@@ -22,6 +22,7 @@ import { ExternalIcon, Face, Usage } from "./parts";
 import { Composer, Feedback, Files } from "./Followup.jsx";
 import Journey from "./Journey.jsx";
 import { Hero, Voices } from "./MissionHero.jsx";
+import StateMenu from "./StateMenu.jsx";
 import { FILE_ACCEPT, followupApi, partnerFile, pickFiles } from "./followupApi.js";
 import { TONE_OF } from "./theme";
 
@@ -141,6 +142,27 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
     if (gesture.action) send(gesture.key, () => apiClient.post(`${API}/${id}/action`, { action: gesture.action, note: text || null }), gesture.action);
     else send(gesture.key, () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: gesture.step, comment: text || null }), "step");
   };
+  // Le menu d'état (17/11/2026) : l'étiquette se clique, on choisit l'état, un clic l'enregistre. Rend vrai si c'est fait.
+  const [stateMenu, setStateMenu] = useState({ busy: "", error: "" });
+  const chooseState = async (choice, text) => {
+    if (stateMenu.busy || !row) return false;
+    setSaved("");
+    setStateMenu({ busy: choice.key, error: "" });
+    try {
+      const comment = text ? text.slice(0, NOTE_MAX) : null;
+      if (choice.action) await apiClient.post(`${API}/${id}/action`, { action: choice.action, note: comment });
+      else await apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: choice.step, comment });
+      setStateMenu({ busy: "", error: "" });
+      setSaved(choice.action || "step");
+      await load();
+      onChanged();
+      return true;
+    } catch (err) {
+      setStateMenu({ busy: "", error: errorText(err, "L’état n’a pas été enregistré.") });
+      if (err?.status === 409) load();
+      return false;
+    }
+  };
   const savePicked = () => send("pick", () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: picked, comment: note.trim().slice(0, NOTE_MAX) || null }), "step");
   // « À confirmer » : le classement proposé par le logiciel, que personne n'a revu. Le renvoyer tel quel le confirme.
   const confirmRank = () => send("confirm", () => apiClient.post(`${API}/${id}/classification`, { classification: row.classification, step: row.step, comment: null }), "confirm");
@@ -161,6 +183,8 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
   };
 
   const classification = classifications.find((item) => item.value === row?.classification);
+  const choices = useMemo(() => (row ? stateChoices(row, steps, turn) : []), [row, steps, turn]);
+  const menu = { choices, onChoose: chooseState, busy: stateMenu.busy, error: stateMenu.error, locked, validated: row?.validated, url: row?.url };
   // Cahier des charges : les documents déposés depuis Owner, puis ceux que le cabinet a déposés dans Opti'Lex. Tous se
   // téléchargent ici.
   const docs = [
@@ -174,9 +198,9 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
       actions={<button ref={closeRef} type="button" className="fst-btn" onClick={onClose}><ArrowLeft size={14} />Toutes les missions</button>}>
       {row && (
         <div className="ab-tags">
-          <Tag tone={TONE_OF[row.classification]} title={classification?.help}>{classification?.label || "Non classée"}</Tag>
+          <StateMenu {...menu} tone={TONE_OF[row.classification]} label={`${classification?.help || "Classement de la mission"} Cliquez pour changer l’état.`}>{classification?.label || "Non classée"}</StateMenu>
           {row.pole?.label && <Tag>{row.pole.label}</Tag>}
-          {row.validated && <Tag tone="green">Validé par la direction</Tag>}
+          {row.validated && <Tag tone="green"><Lock size={12} strokeWidth={2.2} />Validé par la direction</Tag>}
           {!row.validated && row.toConfirm && <Tag tone="peach" title="Classement proposé par le logiciel, que personne n’a encore revu.">Classement à confirmer</Tag>}
           {!row.validated && row.toConfirm && <button type="button" className="ab-textlink" style={{ fontSize: 12.5 }} disabled={Boolean(acting.busy)} onClick={confirmRank}>{acting.busy === "confirm" ? "Confirmation…" : "Confirmer ce classement"}</button>}
           {data.parent && <button type="button" className="ab-textlink" style={{ fontSize: 12.5, marginLeft: 4 }} onClick={() => onOpen(data.parent.id)}>Voir le process</button>}
@@ -194,7 +218,7 @@ export default function ProcessPage({ id, period, frame, onClose, onOpen, onChan
               <>
                 {turn.working && <Tag tone="blue">En cours chez les développeurs</Tag>}
                 {/* « Chez les développeurs » ne dit rien de plus quand ils y travaillent déjà. */}
-                {locked ? <Tag tone="green">Validé le {row.validated.at}</Tag> : !(turn.working && turn.who === "build") && <Tag tone={turn.tone}>{turn.tag}</Tag>}
+                {locked ? <StateMenu {...menu}>Validé le {row.validated.at}</StateMenu> : !(turn.working && turn.who === "build") && <StateMenu {...menu} tone={turn.tone}>{turn.tag}</StateMenu>}
               </>
             )}
             onPick={locked ? undefined : setPicked} picked={picked}
