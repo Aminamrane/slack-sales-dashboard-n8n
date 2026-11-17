@@ -76,7 +76,7 @@ import { canEditPaymentDates, financeRole, loadPaymentDateAccess, paymentDateIde
 import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : l'état affiché sur le board Owner/Opti'Lex, calculé par le
 // back (`etat_affiche`) — la même valeur que le board, jamais recalculée ici.
-import { matchesLateOnboarding, matchesAnnualRenewal } from './followupFilters.js';
+import { matchesLateOnboarding, matchesAnnualRenewal, isRetractedEtat } from './followupFilters.js';
 import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
@@ -657,10 +657,12 @@ export default function TrackingSheetFinance() {
         // antérieures relève de la vue « Créances antérieures », plus de
         // celle-ci : les deux vues sont disjointes (dev 2026-09-18, n°164 :
         // 2 400 € d'antérieur, sortait encore en « retard du mois »).
-        return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0 && matchesLateOnboarding(r, lateOnboarding);
+        // Un client rétracté ne doit rien : il n'a rien à faire ici (dev 17/11/2026).
+        return scopedOverdueCurrent(r, scope) > 0 && scopedOverdueCum(r, scope) <= 0 && matchesLateOnboarding(r, lateOnboarding)
+          && !isRetractedEtat(boardEtatOf(r));
       case 'annual_renewals': return matchesAnnualRenewal(r, scope, renewals);
       case 'creances':
-        // Les dossiers réglés restent dans leur cohorte et leur tranche d’ancienneté.
+        // Créances régularisées : sorties de la vue, il ne reste rien à recouvrer (dev 17/11/2026).
         return matchesPriorDebt(r, scope, creanceAge, period);
       case 'trop_percu':
         return scopedCredit(r, scope) > 0;
@@ -669,6 +671,8 @@ export default function TrackingSheetFinance() {
         // et visions confondues : un client qui a déjà réglé n'est plus un
         // onboarding à suivre, passé ou à venir.
         if (hasEverPaid(r)) return false;
+        // Rétracté : il n'y aura pas d'onboarding à suivre (dev 17/11/2026).
+        if (isRetractedEtat(boardEtatOf(r))) return false;
         // Deux phases, sur la seule date d'onboarding Owner (comme le board) :
         // sans date connue, la ligne n'est ni passée ni à venir.
         if (onboardingPhaseOf(r) !== onboardingPhase) return false;
