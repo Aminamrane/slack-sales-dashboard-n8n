@@ -20,7 +20,8 @@ import { appointmentConfirmation, appointmentFailure } from "../utils/appointmen
 import { DetailText } from "../components/OptilexClientDetail";
 import { MissionsValue } from "../components/BoardMissions.jsx";
 import { BoardCsmContext, CSM_CSS, CsmFace, CsmValue, useBoardCsm } from "../components/BoardCsm.jsx";
-import { csmIndex, csmMenuEntries, csmTagLabel, matchesCsm } from "../utils/boardCsm.js";
+import { assignableCsms, assignInBatches, createLongPress, csmIndex, csmMenuEntries, csmTagLabel, isPickable, matchesCsm, pickModeAvailable } from "../utils/boardCsm.js";
+import CsmBulkBar, { BULK_CSS } from "../components/BoardCsmBulk.jsx";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
@@ -1215,16 +1216,44 @@ function SigCell({ status, sentAt, signedAt, scheduledAt, grouped }) {
 // Ligne du tableau, mémorisée (dev 28/10/2026) : elle ne se redessine que si SES données changent (client,
 // sélection, no show, entrée animée). Avant, tout rendu de la page redessinait les 700 à 900 lignes
 // (400 à 550 ms à chaque onglet, chaque sélection) ; les rappels reçus sont stables (useCallback, setState).
-const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo, readOnly = false, csm = null }) {
+const BoardRow = memo(function BoardRow({ r, rk, isSel, newIdx, noShow, renewal, onSelect, patch, changeEtat, recordMeteo, readOnly = false, csm = null, pick = "", picking = false, onPick }) {
   const td = ROW_TD;
+  // Attribution groupée (16/11/2026) : `pick` = "" (hors sélection) | "can" (sélectionnable) | "on" | "saving" | "done" | "leaving" | "failed".
+  // Appui long (souris ou doigt) sur une ligne « can » = mode sélection ; ensuite un clic coche ou décoche, sans ouvrir la fiche.
+  const [pressing, setPressing] = useState(false);
+  const skipClick = useRef(false);
+  const numero = r.numero_client;
+  const hold = useMemo(() => createLongPress({ onFire: () => { skipClick.current = true; setPressing(false); onPick?.(numero); } }), [numero, onPick]);
+  useEffect(() => () => hold.cancel(), [hold]);
+  const holdable = pick === "can" && !picking;
+  const interactive = (el) => !!el.closest?.("button, a, input, select, textarea, [role='button'], [role='menu'], [role='listbox']");
   return (
-    <tr onClick={() => onSelect(rk)} className={`ob-row${isSel ? " is-sel" : ""}`}
+    <tr onClick={() => {
+        if (skipClick.current) { skipClick.current = false; return; }
+        if (picking || (pick && pick !== "can")) { if (pick === "can" || pick === "on" || pick === "failed") onPick?.(numero); return; }
+        onSelect(rk);
+      }}
+      onPointerDown={(e) => { skipClick.current = false; if (!holdable || (e.pointerType === "mouse" && e.button !== 0) || interactive(e.target)) return; hold.start(e.clientX, e.clientY); setPressing(true); }}
+      onPointerMove={holdable ? (e) => { hold.move(e.clientX, e.clientY); if (!hold.pending) setPressing(false); } : undefined}
+      onPointerUp={holdable ? () => { hold.cancel(); setPressing(false); } : undefined}
+      onPointerLeave={holdable ? () => { hold.cancel(); setPressing(false); } : undefined}
+      onPointerCancel={holdable ? () => { hold.cancel(); setPressing(false); } : undefined}
+      onContextMenu={pick ? (e) => { if (hold.pending || skipClick.current) e.preventDefault(); } : undefined}
+      title={holdable ? "Appui long pour sélectionner" : undefined}
+      className={`ob-row${isSel ? " is-sel" : ""}${pick ? " is-pickable" : ""}${pressing ? " is-pressing" : ""}${pick && pick !== "can" ? ` is-${pick === "on" ? "picked" : pick}` : ""}`}
       style={newIdx !== undefined ? { animation: "obRowIn 0.28s cubic-bezier(0.16,1,0.3,1) both", animationDelay: `${Math.min(newIdx, 14) * 20}ms` } : undefined}>
       <td style={td}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, minWidth: 0 }}>
           {/* CSM attitré (portefeuille client, dev 13/11/2026) : sa photo posée sur le coin de l'avatar du client. */}
           <span style={{ position: "relative", display: "inline-flex", flexShrink: 0 }}>
             <Avatar name={primaryName(r)} n={r.sheet_num} size={32} />
+            {pick && pick !== "can" && pick !== "leaving" && (
+              <span className={`bk-badge${pick === "done" ? " is-done" : pick === "failed" ? " is-failed" : ""}`} role="img" aria-label={pick === "done" ? "Attribué" : pick === "failed" ? "Échec de l'attribution" : "Sélectionné"}>
+                {pick === "failed"
+                  ? <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" aria-hidden="true"><path d="M12 6v7M12 18h.01" /></svg>
+                  : <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5" /></svg>}
+              </span>
+            )}
             {csm && <span style={{ position: "absolute", right: -5, bottom: -4, display: "inline-flex" }}><CsmFace csm={csm} size={17} ring /></span>}
           </span>
           <div style={{ minWidth: 0 }}>
@@ -1733,6 +1762,81 @@ export default function OptilexBoard({ embed = false }) {
   }, [moreRows, settledKey, view.key, view.limit]);
   const shownRows = moreRows ? filtered.slice(0, view.limit) : filtered;
 
+  // Attribution groupée de CSM (dev 16/11/2026), depuis l'étiquette « Sans CSM » : appui long sur un client = mode
+  // sélection (ligne bleue) ; un clic coche ou décoche ; le panneau des CSM entre à droite de l'étiquette ; « Attribuer »
+  // enregistre chaque client comme la fiche (PATCH board-tracking, csm_user_id). Rien de nouveau côté serveur.
+  const pickAvailable = pickModeAvailable(csmSel, canAssignCsm && !readOnly);
+  const pickChoices = useMemo(() => assignableCsms(csmList), [csmList]);
+  const [picked, setPicked] = useState([]);          // numéros de client sélectionnés
+  const [pickCsm, setPickCsm] = useState(null);      // CSM choisi
+  const [pickPhase, setPickPhase] = useState("idle"); // idle | saving | done | leaving
+  const [pickOk, setPickOk] = useState([]);          // clients enregistrés pendant la confirmation
+  const [pickFailed, setPickFailed] = useState([]);  // clients restés en échec
+  const pickPhaseRef = useRef("idle");
+  const setPhase = (v) => { pickPhaseRef.current = v; setPickPhase(v); };
+  const pickedSet = useMemo(() => new Set(picked), [picked]);
+  const togglePick = useCallback((numero) => {
+    if (pickPhaseRef.current !== "idle") return;
+    setPicked((p) => (p.includes(numero) ? p.filter((x) => x !== numero) : [...p, numero]));
+    setPickFailed((f) => f.filter((x) => x !== numero));
+  }, []);
+  const cancelPick = useCallback(() => {
+    if (pickPhaseRef.current !== "idle") return;
+    setPicked([]); setPickCsm(null); setPickFailed([]);
+  }, []);
+  // Sortie du mode : plus de sélection, plus d'étiquette « Sans CSM », client masqué par la recherche ou CSM devenu indisponible.
+  useEffect(() => { if (!pickAvailable) cancelPick(); }, [pickAvailable, cancelPick]);
+  useEffect(() => {
+    if (pickPhaseRef.current !== "idle") return;
+    const visible = new Set(filtered.map((r) => r.numero_client));
+    setPicked((p) => (p.every((n) => visible.has(n)) ? p : p.filter((n) => visible.has(n))));
+  }, [filtered]);
+  useEffect(() => { if (picked.length === 0 && pickPhase === "idle") setPickCsm(null); }, [picked.length, pickPhase]);
+  useEffect(() => { if (pickCsm && !pickChoices.some((c) => c.id === pickCsm)) setPickCsm(null); }, [pickChoices, pickCsm]);
+  useEffect(() => {
+    if (!picked.length) return undefined;
+    const onKey = (e) => { if (e.key === "Escape" && !e.defaultPrevented) cancelPick(); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [picked.length, cancelPick]);
+  const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+  const [pickDone, setPickDone] = useState(0);
+  const assignPicked = async () => {
+    const ids = picked, csmId = pickCsm;
+    if (!csmId || !ids.length || pickPhaseRef.current !== "idle" || isBoardReadOnly()) return;
+    setPhase("saving"); setPickFailed([]);
+    mutSeq.current += 1;   // une lecture partie avant l'attribution n'écrase pas le résultat
+    const { ok, failed } = await assignInBatches(
+      (numero, id) => apiClient.patch("/api/v1/optilex/board-tracking", { numero_client: numero, csm_user_id: id }), ids, csmId);
+    mutSeq.current += 1;
+    if (failed.length) {
+      console.error("bulk csm assignment failed", failed);
+      const first = failed[0].error;
+      flagSaveError(first?.status >= 400 && first.status < 500 && typeof first?.data?.detail === "string" ? first
+        : { status: 400, data: { detail: `${failed.length} client${failed.length > 1 ? "s" : ""} n’${failed.length > 1 ? "ont" : "a"} pas pu être attribué${failed.length > 1 ? "s" : ""}. Rien n’a changé pour ${failed.length > 1 ? "eux" : "lui"} : réessayez.` } });
+      setPickFailed(failed.map((f) => f.numero));
+    }
+    if (ok.length) {
+      setPickOk(ok); setPickDone(ok.length); setPhase("done");
+      await pause(reduceMotion ? 250 : 800);                       // la confirmation se lit avant que les lignes partent
+      setPhase("leaving");
+      await pause(reduceMotion ? 0 : 220);
+      setRows((prev) => prev.map((r) => (ok.includes(r.numero_client) ? { ...r, csm_user_id: csmId } : r)));
+      setPicked((p) => p.filter((n) => !ok.includes(n)));
+      setPickOk([]);
+    }
+    setPhase("idle");
+    if (!failed.length) setPickCsm(null);
+  };
+  const pickOf = (r) => {
+    if (!pickAvailable || !isPickable(r, csmById)) return "";
+    const n = r.numero_client;
+    if (!pickedSet.has(n)) return "can";
+    if (pickPhase === "saving") return "saving";
+    if (pickOk.includes(n)) return pickPhase === "leaving" ? "leaving" : "done";
+    return pickFailed.includes(n) ? "failed" : "on";
+  };
+
   // Entrée SEEN-KEYS : seules les lignes jamais affichées s'animent. Au changement de vue, la glissade porte
   // toute la liste : ses lignes sont marquées vues d'emblée (pas de cascade en plus). Les lignes révélées par la
   // recherche (backspace) entrent proprement SANS faire clignoter celles déjà en place. Le polling ne rejoue rien.
@@ -1823,6 +1927,7 @@ export default function OptilexBoard({ embed = false }) {
   return (
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", fontFeatureSettings: "'cv11','ss01'", color: TEXT }} className="ob-root">
       <style>{CSM_CSS}</style>
+      <style>{BULK_CSS}</style>
       <style>{`
         .ob-alert-chip .ob-chip-ic{color:var(--al-ink)}
         .ob-alert-chip.is-on{background:var(--al-tile);border-color:transparent;color:var(--al-ink)}
@@ -2554,6 +2659,10 @@ export default function OptilexBoard({ embed = false }) {
                 </button>
               </motion.span>
             ))}
+            {pickAvailable && (picked.length > 0 || pickPhase !== "idle") && (
+              <CsmBulkBar key="bulk" count={pickPhase === "done" || pickPhase === "leaving" ? pickDone : picked.length} csms={pickChoices} chosenId={pickCsm}
+                onChoose={setPickCsm} onAssign={assignPicked} onCancel={cancelPick} phase={pickPhase} failed={pickFailed.length} doneCount={pickDone} />
+            )}
             {activeTags.length > 1 && (
               <motion.button key="clear" layout type="button" className="ob-clear" onClick={clearRefinements}
                 initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0, transition: { duration: 0.12 } }}>
@@ -2650,7 +2759,8 @@ export default function OptilexBoard({ embed = false }) {
                         newIdx={newIdxByKey.get(key)}   // undefined = déjà vue -> pas d'animation
                         noShow={viewFilter.situationOf(r) === "noshow"} renewal={etatFilter === "Renouvellement client"}
                         onSelect={setSelected} patch={patch} changeEtat={changeEtat} recordMeteo={recordMeteo} readOnly={readOnly}
-                        csm={r.csm_user_id ? csmById[r.csm_user_id] || null : null} />
+                        csm={r.csm_user_id ? csmById[r.csm_user_id] || null : null}
+                        pick={pickOf(r)} picking={picked.length > 0} onPick={togglePick} />
                     );
                   })}
                   {filtered.length === 0 && (
