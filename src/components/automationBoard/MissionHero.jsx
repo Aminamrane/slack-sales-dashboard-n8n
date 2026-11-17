@@ -47,12 +47,32 @@ function Track({ value, steps, onPick, picked }) {
   );
 }
 
-export function Hero({ row, steps, stepNow, last, since, tags, onPick, picked, pickBar, footnote }) {
-  const kpis = [
+// Les chiffres clés d'une mission : part passée par le logiciel, réalisées, demandées par la messagerie.
+function kpisOf(row) {
+  return [
     { key: "usage", label: "passées par le logiciel", value: row.usage ? row.usage.bar : null, unit: " %", note: row.usage?.short || "pas dans le logiciel", title: row.usage?.detail },
     { key: "done", label: "réalisées", value: row.total, unit: "", note: `dont ${Number(row.recent || 0).toLocaleString("fr-FR")} sur 90 jours` },
     { key: "msg", label: "via la messagerie", value: row.messaging?.total ?? 0, unit: "", note: row.messaging?.total ? `${row.messaging.share} % des demandes` : "aucune demande" },
   ];
+}
+
+// Les mêmes chiffres, pour la rubrique « Chiffres » de la fiche (17/11/2026 : l'en-tête ne garde que l'étape et la frise).
+export function Kpis({ row }) {
+  return (
+    <dl className="ab-kpis">
+      {kpisOf(row).map((kpi) => (
+        <div key={kpi.key} title={kpi.title || undefined}>
+          <dd>{kpi.value == null ? "–" : <><Num value={kpi.value} />{kpi.unit}</>}</dd>
+          <dt>{kpi.label}</dt>
+          <span>{kpi.note}</span>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function Hero({ row, steps, stepNow, last, since, tags, onPick, picked, pickBar, footnote }) {
+  const kpis = kpisOf(row);
   return (
     <section className="ab-hero" aria-label="Où en est la mission">
       <div className="ab-hero-top">

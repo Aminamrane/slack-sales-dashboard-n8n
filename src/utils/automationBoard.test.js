@@ -307,3 +307,57 @@ test("stateChoices : l'étape 4 est l'état actuel ; une demande en cours prime"
   assert.deepEqual(stateNow(stateChoices({ step: 3 }, STATE_STEPS, { who: "dev" })), ["request_change"]);
   assert.equal(stateChoices({ step: 3 }, STATE_STEPS, { who: "done" }).find((item) => item.key === "deliver").label, "Nouvelle version, à tester par le juriste");
 });
+
+test("rowFollow : le geste de la ligne suit à qui c'est de jouer", async () => {
+  const { rowFollow, waitLabel, gestureCall } = await import('./automationBoard.js');
+  const now = new Date("2026-11-17T10:00:00").getTime();
+  // Rien de lancé : le premier geste est de dire qu'on y travaille.
+  assert.equal(rowFollow({ step: 0 }, STATE_STEPS, now).main.action, "start");
+  // Les développeurs y travaillent : le geste devient la livraison.
+  assert.equal(rowFollow({ step: 1, working: { by: "A", since: "15/11/2026 à 09:00" } }, STATE_STEPS, now).main.short, "Version livrée");
+  // Une version attend le juriste depuis 8 jours : le geste est la validation, l'attente se lit.
+  const waiting = rowFollow({ step: 2, awaiting: { who: "lawyer", by: "A", since: "09/11/2026 à 14:04", text: "V1" } }, STATE_STEPS, now);
+  assert.equal(waiting.main.action, "approve");
+  assert.equal(waiting.waitDays, 8);
+  assert.equal(waitLabel(waiting.waitDays), "depuis 8 j");
+  assert.equal(waiting.news.what, "a livré une version à tester");
+  // Modification demandée et reprise : la version corrigée.
+  const fixing = rowFollow({ step: 2, awaiting: { who: "dev", by: "J", since: "16/11/2026 à 10:00", text: "x" }, working: { by: "A", since: "16/11/2026 à 11:00", updatedAt: "16/11/2026 à 11:00" } }, STATE_STEPS, now);
+  assert.equal(fixing.main.short, "Version corrigée");
+  assert.equal(waitLabel(fixing.waitDays), "depuis hier");
+  // Version validée : pas de geste principal.
+  assert.equal(rowFollow({ step: 3 }, STATE_STEPS, now).main, null);
+  assert.equal(waitLabel(0), "");
+  // Un geste part en action du suivi, une étape en changement de classement.
+  assert.deepEqual(gestureCall({ classification: "automated" }, { action: "approve" }, "  ok "), { path: "action", body: { action: "approve", note: "ok" } });
+  assert.deepEqual(gestureCall({ classification: "not_automated" }, { step: 1 }, ""), { path: "classification", body: { classification: "not_automated", step: 1, comment: null } });
+});
+
+test("followGroups : les missions se rangent par ce qu'elles attendent, le retard et le cabinet sans réponse en tête", async () => {
+  const { rowFollow, followGroups, followTotals, planPeople } = await import('./automationBoard.js');
+  const now = new Date("2026-11-17T10:00:00").getTime();
+  const rows = [
+    { id: 1, name: "Bilan", rank: 1, step: 2, awaiting: { who: "lawyer", by: "Dev A", since: "05/11/2026 à 10:00", text: "V1" } },
+    { id: 2, name: "Paie", rank: 2, step: 2, awaiting: { who: "dev", by: "Juriste", since: "15/11/2026 à 10:00", text: "taux" }, lastWord: { who: "Juriste", at: "15/11/2026 à 10:00", what: "a demandé une modification", text: "taux", tone: "change", side: "cabinet" } },
+    { id: 3, name: "TVA", rank: 3, step: 1, working: { by: "Dev A", since: "16/11/2026 à 09:00", updatedAt: "16/11/2026 à 09:00" }, owner: { name: "Dev A" }, due: { date: "2026-11-10", late: true } },
+    { id: 4, name: "CFE", rank: 4, step: 0 },
+    { id: 5, name: "DSN", rank: 5, step: 3 },
+    { id: 6, name: "Liasse", rank: 6, step: 1, owner: { name: "Dev B" }, due: { date: "2026-11-19", late: false } },
+    { id: 7, name: "Process", rank: 7, step: 0, isParent: true },
+    { id: 8, name: "Fille", parentId: 7, step: 0 },
+  ];
+  const follows = new Map(rows.map((row) => [row.id, rowFollow(row, STATE_STEPS, now)]));
+  const groups = followGroups(rows, follows);
+  assert.deepEqual(groups.map((group) => [group.key, group.items.map((item) => item.row.id), group.open]),
+    [["redo", [2], true], ["working", [3], true], ["lawyer", [1], true], ["next", [6], true], ["done", [5], false], ["idle", [4, 8], false]]);
+  // Chez le cabinet, ce que le juriste doit tester passe en tête ; une recherche rouvre les groupes repliés.
+  assert.equal(followGroups(rows, follows, {}, { side: "cabinet" })[0].key, "lawyer");
+  assert.deepEqual(followGroups(rows, follows, { query: "cfe" }).map((group) => [group.key, group.open]), [["idle", true]]);
+  assert.deepEqual(followGroups(rows, follows, { focus: "late" }).map((group) => group.items.map((item) => item.row.id)), [[3]]);
+  // La mission fille dit de quel process elle vient ; le process seul n'apparaît pas.
+  assert.equal(groups.at(-1).items.at(-1).parent, "Process");
+  assert.deepEqual(followTotals(rows, follows), { redo: 1, working: 1, lawyer: 1, late: 1, lawyerLate: 1, unanswered: 1 });
+  assert.equal(follows.get(2).unanswered, true);
+  assert.deepEqual([follows.get(3).due.late, follows.get(6).due.soon, follows.get(6).due.label], [true, true, "19 nov."]);
+  assert.deepEqual(planPeople(rows), ["Dev A", "Dev B"]);
+});

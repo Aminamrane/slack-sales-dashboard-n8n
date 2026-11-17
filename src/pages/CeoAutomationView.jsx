@@ -2,10 +2,15 @@
 //
 // « Automatisation des missions » dans le dashboard (section Produit, sous le board Owner/Opti'Lex) :
 // le suivi des process d'Opti'Lex, lu en direct dans le logiciel. Même gabarit que les autres pages du
-// dashboard (menu de gauche filtré par rôle), au style Owner (12/11/2026). La liste donne la vue d'ensemble ;
-// un clic sur une ligne ouvre la page de la mission (`?process=<id>`, le retour du navigateur revient à la liste), où l'on
-// suit l'avancement, pose une note et règle le classement et l'étape. Les documents et la validation par la direction
-// du cabinet restent dans Opti'Lex. Accès : CEO et admin (onglet + route + API).
+// dashboard (menu de gauche filtré par rôle), au style Owner (12/11/2026).
+// Refonte du 17/11/2026 (« on est obligé de rentrer dans la fiche pour continuer le suivi, on ne peut pas faire le suivi
+// vis-à-vis du tableau ») : le tableau est l'endroit où l'on suit. Chaque ligne dit où en est la mission (l'étiquette se
+// clique pour changer l'état), donne la dernière parole posée dessus (on y répond sur place), qui la porte et pour
+// quand, et le geste du moment (on y travaille, version livrée, valider…), qui s'enregistre depuis la ligne. La page
+// s'ouvre sur « À suivre » : les missions rangées par ce qu'elles attendent, pas par volume ; les tuiles du haut sont
+// les compteurs du suivi et filtrent la liste. Un clic sur la ligne ouvre la fiche à droite (`?process=<id>`), sans
+// quitter la liste. La validation par la direction du cabinet reste dans Opti'Lex.
+// Accès : CEO et admin (onglet + route + API).
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
@@ -14,13 +19,13 @@ import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import { PERIODS, countLabel, visibleRows } from "../utils/automationBoard";
+import { PERIODS, countLabel, followGroups, followTotals, gestureCall, planPeople, rowFollow, visibleRows } from "../utils/automationBoard";
 import { AnimatePresence, motion as Motion } from "framer-motion";
-import { CheckCheck, ChevronRight, CircleCheck, CircleDashed, CircleDot, Gauge, Hourglass, ListChecks, MessageCircle, Milestone, Search, Tags, X } from "lucide-react";
+import { AlarmClock, ChevronRight, FlaskConical, Gauge, Hammer, ListChecks, MessageSquareQuote, Milestone, MousePointerClick, Search, UserRound, Wrench, X } from "lucide-react";
 import { Card, Empty, OpenCue, Page, Reveal, Segmented, Stat, Stats, TableBox, Tag, Th } from "./TrackingSheetFinance/components/PageKit.jsx";
-import { Bar, Steps, Usage } from "../components/automationBoard/parts";
 import { TONE_OF, number, palette } from "../components/automationBoard/theme";
-import ProcessPage from "../components/automationBoard/ProcessPage";
+import MissionSheet from "../components/automationBoard/MissionSheet";
+import { GestureCell, NewsCell, PlanCell, StateCell } from "../components/automationBoard/RowFollow";
 import DevBoard from "../components/automationBoard/DevBoard";
 import { COLUMN_HINTS, Hint } from "../components/automationBoard/Hint";
 import "../components/automationBoard/automation.css";
@@ -28,7 +33,6 @@ import "../components/automationBoard/automation.css";
 const ALLOWED_ROLES = new Set(["admin", "ceo"]);
 const TAB_ID = "optilex_automation";
 const API = "/api/v1/optilex/automation-board";
-const TILE_ICONS = { automated: CircleCheck, pending_validation: Hourglass, automated_unused: CircleDot, not_automated: CircleDashed };
 const SPRING = { type: "spring", stiffness: 520, damping: 40 };
 
 // Routes propres aux onglets de la barre ; les autres passent par navigateBackToDashboard.
@@ -108,9 +112,12 @@ export default function CeoAutomationView() {
   const [query, setQuery] = useState("");
   const [classification, setClassification] = useState("");
   const [pole, setPole] = useState("");
-  // Vue de la liste : tout, le suivi des développeurs (en cours, en attente du juriste, modification demandée), les classements à
-  // confirmer, ou « à qui de jouer » (juriste : version à tester ; développeurs : modification demandée).
-  const [view, setView] = useState("");
+  // Vue de la liste : « À suivre » (les missions rangées par ce qu'elles attendent), toutes les missions par volume, le
+  // suivi des développeurs en colonnes, ou les classements à confirmer. `focus` : la tuile du suivi qui filtre.
+  const [view, setView] = useState("follow");
+  const [focus, setFocus] = useState("");
+  // Groupes de « À suivre » ouverts ou repliés à la main ; sans choix, « validé » et « pas commencé » sont repliés.
+  const [folds, setFolds] = useState({});
   const [closed, setClosed] = useState(() => new Set());
   const seq = useRef(0);
 
@@ -138,11 +145,23 @@ export default function CeoAutomationView() {
   }, [authChecked, load]);
 
   const P = useMemo(() => palette(C, darkMode), [C, darkMode]);
+  // Le suivi de chaque ligne (à qui de jouer, dernière parole, geste, groupe, date cible), calculé une fois par relevé.
+  const follows = useMemo(() => new Map((data?.rows || []).map((row) => [row.id, rowFollow(row, data.steps)])), [data]);
+  const totals = useMemo(() => followTotals(data?.rows, follows), [data, follows]);
+  const people = useMemo(() => planPeople(data?.rows), [data]);
+  const me = useMemo(() => { const user = apiClient.getUser(); return (user?.full_name || user?.email || "").trim(); }, []);
+  const filters = useMemo(() => ({ query, classification, pole, focus }), [query, classification, pole, focus]);
+  const groups = useMemo(() => {
+    const closedKeys = new Set(Object.entries(folds).filter(([, open]) => !open).map(([key]) => key));
+    const list = followGroups(data?.rows, follows, filters);
+    // Un choix fait à la main l'emporte sur le repli par défaut.
+    return list.map((group) => (group.key in folds ? { ...group, open: !closedKeys.has(group.key) } : group));
+  }, [data, follows, filters, folds]);
   const lines = useMemo(
-    () => visibleRows(data?.rows, { query, classification, pole, toConfirm: view === "confirm", awaiting: view === "lawyer" || view === "dev" ? view : "", closed }),
-    [data, query, classification, pole, view, closed],
+    () => visibleRows(data?.rows, { ...filters, follows, toConfirm: view === "confirm", closed }),
+    [data, filters, follows, view, closed],
   );
-  const filtering = Boolean(query.trim() || classification || pole || view);
+  const filtering = Boolean(query.trim() || classification || pole || focus);
   const openId = Number(params.get("process")) || null;
   const openProcess = useCallback((id) => {
     setParams((current) => {
@@ -152,17 +171,36 @@ export default function CeoAutomationView() {
     }, { replace: !id });
   }, [setParams]);
   const closeProcess = useCallback(() => openProcess(null), [openProcess]);
-  useEffect(() => { window.scrollTo({ top: 0 }); }, [openId]);
   const toggle = (id) => setClosed((current) => {
     const next = new Set(current);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const reset = () => { setQuery(""); setClassification(""); setPole(""); setView(""); };
+  const reset = () => { setQuery(""); setClassification(""); setPole(""); setFocus(""); };
   // Un geste du suivi fait depuis la liste (on y travaille, point d'avancement, version livrée…) : Opti'Lex l'inscrit, la liste se relit.
   const act = useCallback(async (id, action, note) => {
     await apiClient.post(`${API}/${id}/action`, { action, note });
     await load();
+  }, [load]);
+  // Un geste ou un changement d'état fait sur une ligne du tableau : même enregistrement que depuis la fiche. La ligne
+  // s'éclaire un instant quand c'est fait : le logiciel répond.
+  const [flash, setFlash] = useState(null);
+  const apply = useCallback(async (row, gesture, text) => {
+    const call = gestureCall(row, gesture, text);
+    await apiClient.post(`${API}/${row.id}/${call.path}`, call.body);
+    await load();
+    setFlash(row.id);
+  }, [load]);
+  useEffect(() => {
+    if (flash == null) return undefined;
+    const timer = setTimeout(() => setFlash(null), 1600);
+    return () => clearTimeout(timer);
+  }, [flash]);
+  // Une réponse au cabinet écrite depuis la ligne : un commentaire partagé, enregistré dans Opti'Lex.
+  const reply = useCallback(async (row, text) => {
+    await apiClient.post(`${API}/${row.id}/comments`, { text });
+    await load();
+    setFlash(row.id);
   }, [load]);
 
   if (!authChecked) {
@@ -180,10 +218,51 @@ export default function CeoAutomationView() {
   }
 
   const periods = PERIODS.map((value) => ({ key: value ?? 0, label: value ? `${value} jours` : "Depuis le début" }));
+  const FOCUS_LABEL = { redo: "À reprendre", working: "En cours", lawyer: "Chez le juriste", late: "En retard" };
   const chips = [
+    focus && { key: "focus", label: FOCUS_LABEL[focus], clear: () => setFocus("") },
     classification && { key: "classification", label: data?.classifications?.find((item) => item.value === classification)?.shortLabel || classification, clear: () => setClassification("") },
     pole && { key: "pole", label: data?.poleGroups?.[pole] || pole, clear: () => setPole("") },
   ].filter(Boolean);
+  const pressFocus = (key) => { setFocus((current) => (current === key ? "" : key)); if (view === "devs" || view === "confirm") setView("follow"); };
+  const rankOf = (value) => data?.classifications?.find((item) => item.value === value);
+
+  // Une ligne de mission : la même dans « À suivre » et dans « Toutes ».
+  const renderRow = ({ row, follow, depth = 0, children = 0, open = false, dimmed = false, parent = "" }, index) => (
+    <tr key={row.id} data-open="true" tabIndex={0} aria-label={`Ouvrir la fiche de ${row.name}`} className={`${openId === row.id ? "is-current" : ""}${flash === row.id ? " is-flash" : ""}`}
+      style={{ "--i": Math.min(index, 14), opacity: dimmed ? 0.6 : 1 }} onClick={() => openProcess(row.id)}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProcess(row.id); } }}>
+      <td>
+        <div className="ab-name" data-depth={depth}>
+          {children > 0 ? (
+            <button type="button" className="ab-fold" aria-expanded={open} aria-label={open ? `Replier ${row.name}` : `Déplier ${row.name}`}
+              onClick={(e) => { e.stopPropagation(); toggle(row.id); }}><ChevronRight size={15} /></button>
+          ) : view === "follow" ? null : <span className="ab-rank fst-num">{depth ? "" : row.rank}</span>}
+          <div style={{ minWidth: 0 }}>
+            <div className="ab-title">{row.name}</div>
+            <div className="ab-sub" title={[`${number(row.total)} réalisées depuis le début, dont ${number(row.recent)} ces 90 derniers jours`, row.usage?.detail,
+              row.messaging?.total ? `${number(row.messaging.total)} demandées depuis la messagerie (${row.messaging.share} %)` : "", rankOf(row.classification)?.help].filter(Boolean).join(" · ")}>
+              {[
+                parent ? `Process ${parent}` : row.isParent ? `Process · ${countLabel(row.members, "mission", "missions")}` : null,
+                row.pole?.label,
+                // « À suivre » ne garde que le pôle : le classement et l'utilisation se lisent dans « Toutes » et au survol.
+                ...(view === "follow" ? [] : [rankOf(row.classification)?.shortLabel || "Non classée", row.usage ? `${row.usage.label} par le logiciel` : null]),
+              ].filter(Boolean).join(" · ")}
+              {!row.validated && row.toConfirm && (
+                <button type="button" className="ab-confirm" title="Classement proposé par le logiciel, que personne n’a encore revu : un clic le confirme."
+                  onClick={(e) => { e.stopPropagation(); apply(row, { step: row.step }, "").catch(() => load()); }}>À confirmer</button>
+              )}
+            </div>
+          </div>
+          <OpenCue />
+        </div>
+      </td>
+      <td><StateCell row={row} follow={follow} steps={data.steps} onApply={apply} P={P} quiet={view === "follow"} /></td>
+      <td><NewsCell row={row} follow={follow} onReply={reply} /></td>
+      <td><PlanCell row={row} follow={follow} people={people} me={me} onApply={apply} /></td>
+      <td><GestureCell row={row} follow={follow} onApply={apply} /></td>
+    </tr>
+  );
 
   return (
     <div
@@ -225,10 +304,8 @@ export default function CeoAutomationView() {
       </div>
 
       <div style={{ flex: 1, minWidth: 0, display: "flex", height: "100vh" }}>
-        {openId && data ? (
-          <ProcessPage key={openId} id={openId} period={period} frame={data} onClose={closeProcess} onOpen={openProcess} onChanged={load} P={P} />
-        ) : (
-          <Page title="Automatisation des missions"
+        <MissionSheet id={data ? openId : null} period={period} frame={data} onClose={closeProcess} onOpen={openProcess} onChanged={load} P={P} people={people} me={me} />
+        <Page title="Automatisation des missions"
             sub="Où en est chaque mission d’Opti’Lex : ce que le logiciel fait déjà, ce qui attend une validation, ce qui reste à automatiser."
             actions={<Segmented options={periods} value={period ?? 0} onChange={(key) => setPeriod(key || null)} label="Période de l'utilisation du logiciel" />}>
             {((error && data) || (data?.stale && !error)) && (
@@ -244,27 +321,26 @@ export default function CeoAutomationView() {
             {data && (
               <>
                 <Stats>
+                  <Stat label="À reprendre" value={totals.redo} Icon={Wrench} tone={totals.redo ? "amber" : undefined} title="Le juriste a demandé une modification : aux développeurs de reprendre."
+                    note={totals.unanswered ? `${countLabel(totals.unanswered, "message du cabinet", "messages du cabinet")} sans réponse` : "modification demandée par le juriste"}
+                    onClick={() => pressFocus("redo")} pressed={focus === "redo"} />
+                  <Stat label="En cours" value={totals.working} Icon={Hammer} title="Les missions sur lesquelles un développeur a dit qu’il travaille."
+                    note="chez les développeurs" onClick={() => pressFocus("working")} pressed={focus === "working"} />
+                  <Stat label="Chez le juriste" value={totals.lawyer} Icon={FlaskConical} title="Une version est livrée : le juriste doit la tester."
+                    note={totals.lawyerLate ? `dont ${totals.lawyerLate} depuis plus de 7 jours` : "version à tester"} onClick={() => pressFocus("lawyer")} pressed={focus === "lawyer"} />
+                  <Stat label="En retard" value={totals.late} Icon={AlarmClock} tone={totals.late ? "red" : undefined} title="La date cible est passée alors que les développeurs sont encore attendus."
+                    note="date cible dépassée" onClick={() => pressFocus("late")} pressed={focus === "late"} />
                   <Stat label="Part automatisée" text={`${data.totals.automatedShare} %`} Icon={Gauge} tone="green"
-                    note="des missions classées passent par un process automatisé" />
-                  {data.classifications.map((item) => {
-                    const tile = data.tiles?.[item.value] || { count: 0, volume: 0 };
-                    const active = classification === item.value;
-                    return (
-                      <Stat key={item.value} label={item.shortLabel} value={tile.count} Icon={TILE_ICONS[item.value] || CircleDashed} title={item.help || undefined}
-                        note={countLabel(tile.volume, "mission", "missions")} onClick={() => setClassification(active ? "" : item.value)} pressed={active} />
-                    );
-                  })}
+                    note={`${countLabel(data.tiles?.automated?.count ?? 0, "mission automatisée", "missions automatisées")} sur ${number(data.totals.lines)}`} />
                 </Stats>
 
                 <Reveal>
-                  <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}
-                    hint="Un clic sur une ligne ouvre le suivi de la mission : cahier des charges, avancement, échanges.">
+                  <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}>
                     <div className="fst-tools">
                       <div className="fst-tabs" role="group" aria-label="Ce qui attend quelqu’un">
-                        {[["", "Toutes", data.totals.lines, "Toutes les missions"],
+                        {[["follow", "À suivre", totals.redo + totals.working + totals.lawyer, "Les missions rangées par ce qu’elles attendent : à reprendre, en cours, chez le juriste"],
+                          ["all", "Toutes", data.totals.lines, "Toutes les missions, des plus réalisées aux moins réalisées"],
                           ["devs", "Suivi des développeurs", data.totals.working ?? 0, "Ce sur quoi les développeurs travaillent, ce qui attend le juriste, ce qu’on leur a demandé de reprendre"],
-                          ["lawyer", "À tester par le juriste", data.totals.awaitingLawyer ?? 0, "Une version est livrée : le juriste doit la tester"],
-                          ["dev", "Modification demandée", data.totals.awaitingDev ?? 0, "Le juriste a demandé une modification : aux développeurs de reprendre"],
                           ["confirm", "À confirmer", data.totals.toConfirm, "Classement proposé par le logiciel, que personne n’a encore revu"]].map(([value, label, count, title]) => (
                           <button key={label} type="button" className="fst-tab" aria-pressed={view === value} title={title} onClick={() => setView(value)}>
                             {view === value && <Motion.span layoutId="ab-confirm-tab" className="fst-tab-bg" transition={SPRING} />}
@@ -275,6 +351,10 @@ export default function CeoAutomationView() {
                       <select className="fst-select" value={pole} onChange={(e) => setPole(e.target.value)} aria-label="Pôle">
                         <option value="">Tous les pôles</option>
                         {Object.entries(data.poleGroups || {}).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                      </select>
+                      <select className="fst-select" value={classification} onChange={(e) => setClassification(e.target.value)} aria-label="Classement">
+                        <option value="">Tous les classements</option>
+                        {data.classifications.map((item) => <option key={item.value} value={item.value}>{item.shortLabel} · {data.tiles?.[item.value]?.count ?? 0}</option>)}
                       </select>
                       <AnimatePresence initial={false}>
                         {chips.map((chip) => (
@@ -290,77 +370,45 @@ export default function CeoAutomationView() {
                       </label>
                     </div>
 
-                    {view === "devs" ? <DevBoard rows={data.rows} onOpen={openProcess} onAct={act} /> : lines.length === 0 ? <Empty boxed>Aucune mission ne correspond à ces filtres.{filtering && <> <button type="button" className="ab-textlink" onClick={reset}>Tout afficher</button></>}</Empty> : (
-                      <TableBox minWidth={1020}>
+                    {view === "devs" ? <DevBoard rows={data.rows} onOpen={openProcess} onAct={act} /> : (view === "follow" ? groups.length === 0 : lines.length === 0) ? (
+                      <Empty boxed>{filtering ? "Aucune mission ne correspond à ces filtres." : view === "confirm" ? "Tous les classements ont été revus." : "Aucune mission à suivre."}{filtering && <> <button type="button" className="ab-textlink" onClick={reset}>Tout afficher</button></>}</Empty>
+                    ) : (
+                      <TableBox minWidth={1040}>
                         <thead>
                           <tr>
                             <Th Icon={ListChecks}>Mission</Th>
-                            <Th Icon={CheckCheck}><Hint text={COLUMN_HINTS.done}>Réalisées</Hint></Th>
-                            <Th Icon={Gauge}><Hint text={COLUMN_HINTS.usage}>Utilisation du logiciel</Hint></Th>
-                            <Th Icon={MessageCircle}><Hint text={COLUMN_HINTS.messaging}>Messagerie</Hint></Th>
-                            <Th Icon={Tags}><Hint text={COLUMN_HINTS.classification}>Classement</Hint></Th>
-                            <Th Icon={Milestone}><Hint text={COLUMN_HINTS.progress} align="end">Avancement</Hint></Th>
+                            <Th Icon={Milestone}><Hint text={COLUMN_HINTS.state}>Où ça en est</Hint></Th>
+                            <Th Icon={MessageSquareQuote}><Hint text={COLUMN_HINTS.news}>Dernière nouvelle</Hint></Th>
+                            <Th Icon={UserRound}><Hint text={COLUMN_HINTS.plan}>Responsable</Hint></Th>
+                            <Th Icon={MousePointerClick}><Hint text={COLUMN_HINTS.gesture} align="end">Geste</Hint></Th>
                           </tr>
                         </thead>
-                        <tbody key={`${period}-${classification}-${pole}-${view}-${query}`}>
-                          {lines.map(({ row, depth, children, open, dimmed }, index) => (
-                            <tr key={row.id} data-open="true" tabIndex={0} aria-label={`Ouvrir le suivi de ${row.name}`} style={{ "--i": index, opacity: dimmed ? 0.6 : 1 }}
-                              onClick={() => openProcess(row.id)}
-                              onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openProcess(row.id); } }}>
-                              <td>
-                                <div className="ab-name" data-depth={depth}>
-                                  {children > 0 ? (
-                                    <button type="button" className="ab-fold" aria-expanded={open} aria-label={open ? `Replier ${row.name}` : `Déplier ${row.name}`}
-                                      onClick={(e) => { e.stopPropagation(); toggle(row.id); }}><ChevronRight size={15} /></button>
-                                  ) : <span className="ab-rank fst-num">{depth ? "" : row.rank}</span>}
-                                  <div style={{ minWidth: 0 }}>
-                                    <div className="ab-title">{row.name}</div>
-                                    <div className="ab-sub">
-                                      {[
-                                        row.isParent ? `Process · ${countLabel(row.members, "mission", "missions")}` : null,
-                                        row.pole?.label,
-                                        row.comments ? countLabel(row.comments, "note", "notes") : null,
-                                        row.files ? countLabel(row.files, "document", "documents") : null,
-                                      ].filter(Boolean).join(" · ")}
-                                    </div>
-                                  </div>
-                                  <OpenCue />
-                                </div>
-                              </td>
-                              <td>
-                                <div className="fst-num" style={{ fontWeight: 500 }} title={`${number(row.total)} réalisées depuis le début, dont ${number(row.recent)} ces 90 derniers jours`}>{number(row.total)} <span className="fst-cell-muted" style={{ fontWeight: 400, fontSize: 12 }}>· {number(row.recent)} sur 90 j</span></div>
-                                <div style={{ marginTop: 6, maxWidth: 150 }}><Bar value={row.bar} color={P.faint} P={P} /></div>
-                              </td>
-                              <td style={{ minWidth: 190 }}><Usage usage={row.usage} P={P} /></td>
-                              <td className="fst-num">
-                                {row.messaging?.total ? <span title={`${number(row.messaging.total)} demandées depuis la messagerie, soit ${row.messaging.share} % de ces missions`}>{number(row.messaging.total)} <span className="fst-cell-muted" style={{ fontSize: 12 }}>· {row.messaging.share} %</span></span> : <span className="fst-cell-muted" title="Aucune demande depuis la messagerie">–</span>}
-                              </td>
-                              <td>
-                                <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                                  <Tag tone={TONE_OF[row.classification]} title={data.classifications.find((item) => item.value === row.classification)?.help}>
-                                    {data.classifications.find((item) => item.value === row.classification)?.shortLabel || "Non classée"}
-                                  </Tag>
-                                  {row.validated && <Tag tone="green">Validé</Tag>}
-                                  {!row.validated && row.toConfirm && <Tag tone="peach">À confirmer</Tag>}
-                                </div>
-                              </td>
-                              <td style={{ minWidth: 190 }}>
-                                <Steps value={row.step} steps={data.steps} P={P} />
-                                {row.awaiting?.who === "lawyer" && <div style={{ marginTop: 6 }}><Tag tone="yellow" title={row.awaiting.text || undefined}>À tester par le juriste</Tag></div>}
-                                {row.awaiting?.who === "dev" && <div style={{ marginTop: 6 }}><Tag tone="peach" title={row.awaiting.text || undefined}>Modification demandée</Tag></div>}
-                                {row.working && <div style={{ marginTop: 6 }}><Tag tone="blue" title={row.working.text || undefined}>En cours chez les développeurs</Tag></div>}
+                        {view === "follow" ? groups.map((group) => (
+                          <tbody key={`${group.key}-${period}-${classification}-${pole}-${focus}-${query}`} className="ab-group-body">
+                            <tr className="ab-group" data-tone={group.tone}>
+                              <td colSpan={5}>
+                                <button type="button" className="ab-group-btn" aria-expanded={group.open} title={group.hint}
+                                  onClick={() => setFolds((current) => ({ ...current, [group.key]: !group.open }))}>
+                                  <ChevronRight size={15} className="ab-group-chev" />
+                                  <span className="ab-group-title">{group.title}</span>
+                                  <span className="ab-group-count fst-num">{number(group.items.length)}</span>
+                                </button>
                               </td>
                             </tr>
-                          ))}
-                        </tbody>
+                            {group.open && group.items.map((item, index) => renderRow(item, index))}
+                          </tbody>
+                        )) : (
+                          <tbody key={`${period}-${classification}-${pole}-${view}-${focus}-${query}`}>
+                            {lines.map((line, index) => renderRow({ ...line, follow: follows.get(line.row.id) || rowFollow(line.row, data.steps) }, index))}
+                          </tbody>
+                        )}
                       </TableBox>
                     )}
                   </Card>
                 </Reveal>
               </>
             )}
-          </Page>
-        )}
+        </Page>
       </div>
     </div>
   );

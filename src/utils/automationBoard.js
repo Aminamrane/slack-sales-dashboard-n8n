@@ -19,15 +19,17 @@ export function fold(text) {
 // Lignes à afficher : un process et ses missions restent ensemble. Un process qui correspond montre toutes ses
 // missions ; une mission qui correspond garde son process au-dessus d'elle, pour qu'on sache d'où elle vient.
 // `awaiting` : ne garder que les lignes où quelqu'un est attendu, "lawyer" (version à tester) ou "dev" (modification demandée).
-export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, awaiting = "", closed = new Set() } = {}) {
+// `focus` (tuiles du suivi) demande `follows`, le suivi calculé de chaque ligne (`rowFollow`).
+export function visibleRows(rows, { query = "", classification = "", pole = "", toConfirm = false, awaiting = "", focus = "", follows = null, closed = new Set() } = {}) {
   const list = Array.isArray(rows) ? rows : [];
   const needle = fold(query);
-  const filtering = Boolean(needle || classification || pole || toConfirm || awaiting);
-  const match = (row) => (!needle || fold(row.name).includes(needle))
+  const filtering = Boolean(needle || classification || pole || toConfirm || awaiting || focus);
+  const match = (row) => (!needle || fold(row.name).includes(needle) || fold(row.owner?.name).includes(needle))
     && (!classification || row.classification === classification)
     && (!pole || row.pole?.group === pole)
     && (!toConfirm || row.toConfirm === true)
-    && (!awaiting || row.awaiting?.who === awaiting);
+    && (!awaiting || row.awaiting?.who === awaiting)
+    && (!focus || (focus === "late" ? Boolean(follows?.get(row.id)?.due?.late) : follows?.get(row.id)?.group === focus));
   const children = new Map();
   list.forEach((row) => {
     if (row.parentId != null) children.set(row.parentId, [...(children.get(row.parentId) || []), row]);
@@ -395,4 +397,138 @@ export function stateChoices(row, steps, turn) {
       current: step === 4 && who !== "lawyer" && who !== "dev" },
   ];
   return list.filter((item) => item.label);
+}
+
+// ── Le suivi depuis la liste (dev 17/11/2026 : « on est obligé de rentrer dans la fiche pour continuer le suivi, on ne
+// peut pas faire le suivi vis-à-vis du tableau ») ───────────────────────────────────────────────────────────────────
+// Tout ce qu'une ligne du tableau doit dire et permettre sans ouvrir la mission : à qui c'est de jouer (`turn`), la
+// dernière parole connue (`news` : développeurs ou juriste, la plus récente), depuis combien de jours quelqu'un est
+// attendu (`waitDays`), et le geste le plus probable (`main`), qui s'enregistre depuis la ligne. Une version validée
+// n'a pas de geste principal : ses gestes restent dans la bulle.
+const ROW_LABEL = { approve: "Valider", deliver: "Version livrée", start: "On y travaille" };
+export function rowFollow(row, steps, now = Date.now()) {
+  const turn = turnOf(row, steps, Boolean(row?.validated));
+  // Opti'Lex donne la dernière parole de la mission, commentaires compris (`lastWord`) ; à défaut, on la lit dans
+  // l'attente et le travail en cours. `side` : "cabinet" quand elle vient du juriste, "owner" des développeurs.
+  const word = row?.lastWord ? { who: row.lastWord.who, at: factDate(row.lastWord.at), what: row.lastWord.what, text: row.lastWord.text || "", tone: row.lastWord.tone, side: row.lastWord.side } : null;
+  const said = word ? null : voices(row, [], []);
+  const news = word || [said.devs && { ...said.devs, side: "owner" }, said.lawyer && { ...said.lawyer, side: "cabinet" }].filter(Boolean).sort((a, b) => (b.at || 0) - (a.at || 0))[0] || null;
+  const since = row?.awaiting ? factDate(row.awaiting.since) : null;
+  const waitDays = since ? Math.max(0, Math.floor((new Date(now).setHours(0, 0, 0, 0) - new Date(since).setHours(0, 0, 0, 0)) / 86400000)) : null;
+  const pick = (action) => turn.actions.find((item) => item.action === action) || null;
+  // Tant que les développeurs n'ont pas dit qu'ils y travaillent, c'est le premier geste ; ensuite, livrer la version.
+  const gesture = turn.who === "lawyer" ? pick("approve")
+    : turn.who === "done" ? null
+    : turn.who === "idle" ? pick("deliver")
+    : turn.working ? pick("deliver") : pick("start");
+  const main = gesture ? { ...gesture, short: turn.who === "dev" && gesture.action === "deliver" ? "Version corrigée" : turn.who === "idle" ? "Nouvelle version" : ROW_LABEL[gesture.action] || gesture.label } : null;
+  // Le cabinet a écrit ou demandé quelque chose en dernier : personne ne lui a encore répondu.
+  const unanswered = news?.side === "cabinet" && (news.tone === "comment" || news.tone === "change");
+  return { turn, news, waitDays, main, unanswered, group: groupOf(row, turn), due: dueOf(row, now) };
+}
+
+// ── La vue « À suivre » (dev 17/11/2026 : « le meilleur suivi qu'on puisse avoir ») ───────────────────────────────
+// Les missions rangées par ce qu'elles attendent, pas par volume : ce qui est à reprendre, ce qui est en cours, ce
+// qui attend le juriste, ce qu'il faut faire avancer ; ce qui est validé ou pas commencé se replie en bas.
+function groupOf(row, turn) {
+  if (row?.validated) return "done";
+  if (turn.who === "dev") return turn.working ? "working" : "redo";
+  if (turn.who === "lawyer") return "lawyer";
+  if (turn.working) return "working";
+  if (turn.who === "done") return "done";
+  return (Number(row?.step) || 0) > 0 || row?.owner || row?.due ? "next" : "idle";
+}
+
+// La date cible d'une ligne : son libellé court, en retard quand Opti'Lex le dit, proche à trois jours ou moins.
+function dueOf(row, now) {
+  const date = row?.due?.date ? new Date(`${row.due.date}T12:00:00`) : null;
+  if (!date || !Number.isFinite(date.getTime())) return null;
+  const days = Math.round((new Date(date).setHours(0, 0, 0, 0) - new Date(now).setHours(0, 0, 0, 0)) / 86400000);
+  const label = date.toLocaleDateString("fr-FR", { day: "numeric", month: "short", ...(date.getFullYear() !== new Date(now).getFullYear() ? { year: "numeric" } : {}) });
+  return { date: row.due.date, label, days, late: Boolean(row.due.late), soon: !row.due.late && days >= 0 && days <= 3,
+    hint: row.due.late ? `Date cible dépassée de ${countLabel(-days, "jour", "jours")}` : days === 0 ? "Date cible : aujourd’hui" : days > 0 ? `Date cible dans ${countLabel(days, "jour", "jours")}` : "Date cible passée" };
+}
+
+// `side` : "owner" met en tête ce que les développeurs ont à faire, "cabinet" ce que le juriste doit tester.
+const GROUPS = {
+  redo: { title: "À reprendre", hint: "Le juriste a demandé une modification : aux développeurs de reprendre.", tone: "peach" },
+  working: { title: "En cours chez les développeurs", hint: "Un développeur a dit qu’il y travaille.", tone: "blue" },
+  lawyer: { title: "Chez le juriste", hint: "Une version est livrée : le juriste doit la tester.", tone: "yellow" },
+  next: { title: "À faire avancer", hint: "Lancées ou prévues, sans personne dessus pour l’instant.", tone: undefined },
+  done: { title: "Version validée", hint: "Le juriste a validé la version : plus personne n’est attendu.", tone: "green", folded: true },
+  idle: { title: "Pas commencé", hint: "Rien n’est lancé sur ces missions.", tone: undefined, folded: true },
+};
+const GROUP_ORDER = { owner: ["redo", "working", "lawyer", "next", "done", "idle"], cabinet: ["lawyer", "redo", "working", "next", "done", "idle"] };
+
+// Les lignes d'une vue, filtrées. `focus` : "redo", "working", "lawyer" ou "late" (les tuiles du haut).
+function matcher({ query = "", classification = "", pole = "", toConfirm = false, focus = "" } = {}) {
+  const needle = fold(query);
+  return (row, follow) => (!needle || fold(row.name).includes(needle) || fold(row.owner?.name).includes(needle))
+    && (!classification || row.classification === classification)
+    && (!pole || row.pole?.group === pole)
+    && (!toConfirm || row.toConfirm === true)
+    && (!focus || (focus === "late" ? Boolean(follow.due?.late) : follow.group === focus));
+}
+
+export function followGroups(rows, follows, filters = {}, { side = "owner", closed = null } = {}) {
+  const list = Array.isArray(rows) ? rows : [];
+  const match = matcher(filters);
+  const filtering = Boolean(fold(filters.query) || filters.classification || filters.pole || filters.focus);
+  const names = new Map(list.map((row) => [row.id, row.name]));
+  const buckets = Object.fromEntries(Object.keys(GROUPS).map((key) => [key, []]));
+  list.forEach((row) => {
+    // Un process qui ne fait que regrouper des missions n'a pas de suivi propre : ses missions parlent pour lui.
+    if (row.isParent && list.some((other) => other.parentId === row.id)) return;
+    const follow = follows.get(row.id);
+    if (!follow || !match(row, follow)) return;
+    buckets[follow.group].push({ row, follow, parent: row.parentId != null ? names.get(row.parentId) || "" : "" });
+  });
+  // Dans un groupe : le retard d'abord, puis ce à quoi le cabinet attend une réponse, puis l'attente la plus longue.
+  const weight = ({ follow }) => (follow.due?.late ? 4 : 0) + (follow.unanswered ? 2 : 0) + (follow.due?.soon ? 1 : 0);
+  return GROUP_ORDER[side].map((key) => {
+    const items = buckets[key].sort((a, b) => weight(b) - weight(a) || (b.follow.waitDays ?? -1) - (a.follow.waitDays ?? -1) || (a.row.rank ?? 1e6) - (b.row.rank ?? 1e6));
+    const folded = closed?.has(key) ?? Boolean(GROUPS[key].folded && !filtering);
+    return { key, ...GROUPS[key], items, open: !folded };
+  }).filter((group) => group.items.length > 0);
+}
+
+// Les compteurs du suivi, pour les tuiles du haut : ce qui attend qui, et ce qui dépasse sa date.
+export function followTotals(rows, follows) {
+  const totals = { redo: 0, working: 0, lawyer: 0, late: 0, lawyerLate: 0, unanswered: 0 };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const follow = follows.get(row.id);
+    if (!follow || (row.isParent && rows.some((other) => other.parentId === row.id))) return;
+    if (follow.group in totals) totals[follow.group] += 1;
+    if (follow.due?.late) totals.late += 1;
+    if (follow.group === "lawyer" && (follow.waitDays ?? 0) >= 7) totals.lawyerLate += 1;
+    if (follow.unanswered) totals.unanswered += 1;
+  });
+  return totals;
+}
+
+// Les noms déjà vus sur le board, pour proposer un responsable sans le retaper : responsables actuels d'abord.
+export function planPeople(rows) {
+  const seen = new Map();
+  const add = (name, score) => { const key = String(name || "").trim(); if (key) seen.set(key, (seen.get(key) || 0) + score); };
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    add(row.owner?.name, 3);
+    add(row.working?.by, 2);
+    if (row.lastWord?.side === "owner") add(row.lastWord.who, 1);
+    if (row.awaiting?.who === "lawyer") add(row.awaiting.by, 1);
+  });
+  return [...seen.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], "fr")).map(([name]) => name).slice(0, 6);
+}
+
+// « depuis 8 j » : l'attente d'une ligne, en court. Rien le jour même.
+export function waitLabel(days) {
+  if (days == null || days < 1) return "";
+  return days === 1 ? "depuis hier" : `depuis ${days} j`;
+}
+
+// Ce qu'un geste ou un choix d'état envoie à Opti'Lex : une action du suivi, ou une étape (le classement suit).
+export function gestureCall(row, gesture, text) {
+  const note = String(text || "").trim().slice(0, 2000) || null;
+  return gesture.action
+    ? { path: "action", body: { action: gesture.action, note } }
+    : { path: "classification", body: { classification: row.classification, step: gesture.step, comment: note } };
 }
