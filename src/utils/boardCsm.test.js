@@ -38,20 +38,18 @@ test('tags and initials', () => {
   assert.equal(initials(''), '?');
 });
 
-test('group selection exists only on « Sans CSM », for people who may assign', () => {
-  assert.equal(pickModeAvailable([NO_CSM], true), true);
-  assert.equal(pickModeAvailable(['a', NO_CSM], true), true);
-  assert.equal(pickModeAvailable(['a'], true), false);
-  assert.equal(pickModeAvailable([], true), false);
-  assert.equal(pickModeAvailable([NO_CSM], false), false);
+test('group selection exists under every filter, for people who may assign', () => {
+  assert.equal(pickModeAvailable(true), true);
+  assert.equal(pickModeAvailable(false), false);
+  assert.equal(pickModeAvailable(undefined), false);
 });
 
-test('a client can be picked when established and without a known CSM', () => {
-  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: null }, index), true);
-  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: 'inconnu' }, index), true);
-  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: 'a' }, index), false);
-  assert.equal(isPickable({ numero_client: null, csm_user_id: null }, index), false);
-  assert.equal(isPickable(null, index), false);
+test('a client can be picked when established, with or without a CSM', () => {
+  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: null }), true);
+  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: 'inconnu' }), true);
+  assert.equal(isPickable({ numero_client: 'N1', csm_user_id: 'a' }), true);
+  assert.equal(isPickable({ numero_client: null, csm_user_id: null }), false);
+  assert.equal(isPickable(null), false);
 });
 
 test('long press fires after the delay, not before, and not after moving or releasing', () => {

@@ -54,17 +54,17 @@ export function initials(name) {
 }
 
 // ── Attribution groupée (dev 16/11/2026) ─────────────────────────────────────────────────────────────────────
-// Depuis l'étiquette « Sans CSM » : appui long sur un client = mode sélection, puis un CSM pour tous les clients
-// choisis. Rien de nouveau côté serveur : chaque client part par le même PATCH /optilex/board-tracking que la fiche.
+// Depuis n'importe quel filtre : appui long sur un client = mode sélection, puis un CSM pour tous les clients
+// choisis (qu'ils en aient déjà un ou non). Rien de nouveau côté serveur : chaque client part par le même PATCH /optilex/board-tracking que la fiche.
 
-// Le mode sélection n'existe que sur « Sans CSM », pour qui a le droit d'attribuer.
-export function pickModeAvailable(selectedCsm, canAssign) {
-  return !!canAssign && Array.isArray(selectedCsm) && selectedCsm.includes(NO_CSM);
+// Le mode sélection existe sous tous les filtres, pour qui a le droit d'attribuer.
+export function pickModeAvailable(canAssign) {
+  return !!canAssign;
 }
 
-// Un client se sélectionne s'il a un numéro (contrat établi) et pas de CSM connu (même règle que matchesCsm).
-export function isPickable(row, index) {
-  return !!(row && row.numero_client && !(row.csm_user_id && index[row.csm_user_id]));
+// Un client se sélectionne s'il a un numéro (contrat établi), avec ou sans CSM.
+export function isPickable(row) {
+  return !!(row && row.numero_client);
 }
 
 // Appui long : se déclenche après `delay` ms sans bouger de plus de `slop` pixels. Un défilement au doigt ou un

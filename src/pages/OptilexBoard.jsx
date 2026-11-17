@@ -1762,10 +1762,10 @@ export default function OptilexBoard({ embed = false }) {
   }, [moreRows, settledKey, view.key, view.limit]);
   const shownRows = moreRows ? filtered.slice(0, view.limit) : filtered;
 
-  // Attribution groupée de CSM (dev 16/11/2026), depuis l'étiquette « Sans CSM » : appui long sur un client = mode
+  // Attribution groupée de CSM (dev 16/11/2026), sous n'importe quel filtre : appui long sur un client = mode
   // sélection (ligne bleue) ; un clic coche ou décoche ; le panneau des CSM entre à droite de l'étiquette ; « Attribuer »
   // enregistre chaque client comme la fiche (PATCH board-tracking, csm_user_id). Rien de nouveau côté serveur.
-  const pickAvailable = pickModeAvailable(csmSel, canAssignCsm && !readOnly);
+  const pickAvailable = pickModeAvailable(canAssignCsm && !readOnly);
   const pickChoices = useMemo(() => assignableCsms(csmList), [csmList]);
   const [picked, setPicked] = useState([]);          // numéros de client sélectionnés
   const [pickCsm, setPickCsm] = useState(null);      // CSM choisi
@@ -1784,7 +1784,7 @@ export default function OptilexBoard({ embed = false }) {
     if (pickPhaseRef.current !== "idle") return;
     setPicked([]); setPickCsm(null); setPickFailed([]);
   }, []);
-  // Sortie du mode : plus de sélection, plus d'étiquette « Sans CSM », client masqué par la recherche ou CSM devenu indisponible.
+  // Sortie du mode : plus de sélection, droit d'attribuer retiré, client masqué par la recherche ou CSM devenu indisponible.
   useEffect(() => { if (!pickAvailable) cancelPick(); }, [pickAvailable, cancelPick]);
   useEffect(() => {
     if (pickPhaseRef.current !== "idle") return;
@@ -1829,11 +1829,12 @@ export default function OptilexBoard({ embed = false }) {
     if (!failed.length) setPickCsm(null);
   };
   const pickOf = (r) => {
-    if (!pickAvailable || !isPickable(r, csmById)) return "";
+    if (!pickAvailable || !isPickable(r)) return "";
     const n = r.numero_client;
     if (!pickedSet.has(n)) return "can";
     if (pickPhase === "saving") return "saving";
-    if (pickOk.includes(n)) return pickPhase === "leaving" ? "leaving" : "done";
+    // La ligne ne s'efface que si, une fois attribuée, elle sort de la vue (ex. « Sans CSM ») ; sinon elle reste.
+    if (pickOk.includes(n)) return pickPhase === "leaving" && !matchesCsm({ ...r, csm_user_id: pickCsm }, csmSel, csmById) ? "leaving" : "done";
     return pickFailed.includes(n) ? "failed" : "on";
   };
 

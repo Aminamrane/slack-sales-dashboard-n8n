@@ -1,4 +1,4 @@
-// Attribution groupée de CSM (dev 16/11/2026), depuis l'étiquette « Sans CSM » du board : appui long sur un client =
+// Attribution groupée de CSM (dev 16/11/2026), depuis n'importe quel filtre du board : appui long sur un client =
 // mode sélection (ligne bleue), puis ce panneau entre à droite de l'étiquette : les CSM, un seul choisi (les autres se
 // rangent en pastilles), puis « Attribuer à N clients ». La liste des CSM et le droit d'attribuer viennent du serveur
 // (même source que la fiche) ; l'enregistrement est celui de la fiche (PATCH /optilex/board-tracking, un client à la fois).
