@@ -63,6 +63,7 @@ import {
   PauseIcon, LiquidationIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
+import { loadExchanges } from './exportExchanges.js';
 import { parisToday } from '../../utils/parisDates.js';
 import {
   initialPeriodState, choosePeriodState, followCurrentMonth, withPeriodParam, parisCurrentPeriod,
@@ -969,16 +970,35 @@ export default function TrackingSheetFinance() {
     toastTimerRef.current = setTimeout(() => setToast(null), 3500);
   }, []);
 
-  const exportToExcel = useCallback(() => {
-    if (!exportedRows.length) return;
+  // L'export ajoute l'état, les tags et les trois derniers échanges de chaque client. Les échanges ne sont pas
+  // dans les lignes : on les lit client par client (comme la fiche), avec un retour d'avancement ; un second
+  // clic pendant la lecture est ignoré.
+  const exportingRef = useRef(false);
+  const exportToExcel = useCallback(async () => {
+    if (!exportedRows.length || exportingRef.current) return;
+    exportingRef.current = true;
     try {
-      const n = exportFinanceXlsx({ rows: exportedRows, scope, period });
-      showToast(`${n} client${n > 1 ? 's' : ''} exporté${n > 1 ? 's' : ''}`, 'success');
+      const total = exportedRows.length;
+      showToast(`Lecture des échanges de ${total} client${total > 1 ? 's' : ''}…`, 'info');
+      const exchanges = await loadExchanges(exportedRows, {
+        get: (url) => apiClient.get(url),
+        onProgress: (done, all) => { if (done < all && done % 10 === 0) showToast(`Lecture des échanges… ${done}/${all}`, 'info'); },
+      });
+      const meteoOf = (r) => {
+        const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+        const score = br?.meteo_score ?? null;
+        return score != null ? { label: METEO_BANDS[meteoBandOf(score)]?.label, score } : null;
+      };
+      const n = exportFinanceXlsx({ rows: exportedRows, scope, period, etatOf: boardEtatOf, meteoOf, exchanges });
+      const unread = [...exchanges.values()].filter((x) => x.failed).length;
+      showToast(`${n} client${n > 1 ? 's' : ''} exporté${n > 1 ? 's' : ''}${unread ? ` · échanges non lus pour ${unread}` : ''}`, unread ? 'info' : 'success');
     } catch (e) {
       console.error('[export xlsx]', e);
       showToast("L'export a échoué", 'error');
+    } finally {
+      exportingRef.current = false;
     }
-  }, [exportedRows, scope, period, showToast]);
+  }, [exportedRows, scope, period, showToast, boardEtatOf, boardMap]);
   useEffect(() => () => { if (toastTimerRef.current) clearTimeout(toastTimerRef.current); }, []);
 
   // ── Filtres personnels (« Mes filtres ») ────────────────────────────
