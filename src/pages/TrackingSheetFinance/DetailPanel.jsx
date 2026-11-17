@@ -53,7 +53,7 @@ import {
   X, Maximize2, Minimize2,
   Activity, UserRound, ReceiptText, IdCard, MessagesSquare, Paperclip,
   Calendar, History, Lock, Landmark, FileSignature,
-  Pencil, Download,
+  Pencil, Download, Plus, Check, Phone,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
   SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
 } from 'lucide-react';
@@ -92,6 +92,7 @@ import {
   isExitCandidate,
   deferralsByMonth,
   reportsByMonth,
+  hasEverPaid,
 } from './constants.js';
 import { statementRows, statementOptions, statementRecipient, statementAllocationRows, loadStatementData } from './pdf/statementRows.js';
 import { describeAction } from './actionLabel.js';
@@ -109,7 +110,9 @@ import StateReview from './components/StateReview.jsx';
 import { reviewedInstallment } from './installmentFollowup.js';
 import InstallmentFollowup from './components/InstallmentFollowup.jsx';
 // Documents, e-mails et appels : le dossier du board, le même des deux côtés.
-import ClientFiles from './components/ClientFiles.jsx';
+import { ClientCalls, ClientDocuments } from './components/ClientFiles.jsx';
+import { useClientFiles } from '../../components/BoardClientFiles.jsx';
+import useUnreadClientMentions from './useUnreadClientMentions.js';
 import DoNotCallControl from './components/DoNotCallControl.jsx';
 import PromiseDialog from './components/PromiseDialog.jsx';
 import BillingStopDialog from './components/BillingStopDialog.jsx';
@@ -119,7 +122,7 @@ import PortalDropdown from './components/PortalDropdown.jsx';
 import OnboardingFacturation, { OnboardingRescheduleButton } from './components/OnboardingFacturation.jsx';
 import SignedContracts from './components/SignedContracts.jsx';
 // Tous les échanges du client au même endroit : espace commun du board, météos et notes internes finance.
-import ExchangeThread, { LastExchange } from './components/ExchangeThread.jsx';
+import ExchangeThread from './components/ExchangeThread.jsx';
 import { LatestSalesComment } from '../../components/clientComments/CommentAudience.jsx';
 import {
   NumeroIcon, CompanyIcon, ClientIcon, PeopleIcon, SignatureIcon, PersonIcon,
@@ -173,7 +176,8 @@ export default function DetailPanel({
   const [error, setError] = useState(null);
   const [fullscreen, setFullscreen] = useState(false);
   // Rubrique ouverte, gardée d'un client à l'autre : on relit souvent la même rubrique sur plusieurs fiches.
-  const [tab, setTab] = useState('payments');
+  // Détails s'ouvre d'abord (dev 17/11/2026), Paiements vient ensuite.
+  const [tab, setTab] = useState('details');
   useEffect(() => { if (openOnTab?.tab) setTab(openOnTab.tab); }, [openOnTab]);
   // Résumé du fil d'échanges (nombre, derniers messages), remonté par ExchangeThread : pastille de l'onglet et
   // rappel dans « Paiements ». `null` tant que le fil charge.
@@ -188,12 +192,6 @@ export default function DetailPanel({
   // hérité du board, fin de contrat, journal des changements de la fiche.
   const [profile, setProfile] = useState(null);
   const [stateReview, setStateReview] = useState(null);
-  // Édition en place des informations contractuelles (crayon de section).
-  const [contractEditing, setContractEditing] = useState(false);
-  // Le mode modification est propre à UNE fiche : changer de client ou fermer
-  // le panneau le referme. Sinon on arrivait chez un autre client en pleine
-  // édition sans l'avoir ouverte (retour dev 2026-09-19).
-  useEffect(() => { setContractEditing(false); }, [clientId, open]);
   // Historique des actions client (vue synthétique, demande Ismahane) —
   // endpoint en cours de déploiement côté backend : toute erreur (404…)
   // masque simplement la section, jamais de crash.
@@ -750,16 +748,27 @@ export default function DetailPanel({
   // sans l'ouvrir ; le point signale une revue d'état en attente ou une erreur de chargement.
   const lateCount = useMemo(() => installments.filter((inst) => inst.status === 'late').length, [installments]);
   const companyCount = String(profile?.client_id) === String(clientId) ? (profile?.companies?.length || 0) : 0;
+  // Échanges : le compteur passe au rouge tant que la personne a une notification non lue sur ce client (mention du
+  // board ou d'une note interne) ; ouvrir l'onglet les lit, comme un clic sur la notification (dev 17/11/2026).
+  const unreadMentions = useUnreadClientMentions({ clientId, numero: numeroClient, enabled: open && !!clientId,
+    reading: open && tab === 'exchanges' });
+  const exchangeCount = exchangeSummary?.count || 0;
+  // Le dossier du client, lu une fois pour les rubriques Documents et Appels.
+  const clientFiles = useClientFiles(numeroClient, { clientId, viewers: true });
   const tabs = [
+    { key: 'details', label: 'Détails' },
     { key: 'payments', label: 'Paiements', count: lateCount, tone: 'red',
       dot: stateReview?.status === 'pending' || !!error,
       title: lateCount ? `${lateCount} échéance${lateCount > 1 ? 's' : ''} en retard` : undefined },
-    { key: 'details', label: 'Détails' },
     { key: 'billing', label: 'Contrats', count: companyCount,
       title: companyCount ? `${companyCount} société${companyCount > 1 ? 's' : ''} de facturation` : undefined },
-    { key: 'exchanges', label: 'Échanges', count: exchangeSummary?.count || 0,
-      title: exchangeSummary?.count ? `${exchangeSummary.count} échange${exchangeSummary.count > 1 ? 's' : ''}` : undefined },
+    { key: 'exchanges', label: 'Échanges', count: exchangeCount || unreadMentions, tone: unreadMentions ? 'red' : undefined,
+      title: [
+        exchangeCount ? `${exchangeCount} échange${exchangeCount > 1 ? 's' : ''}` : null,
+        unreadMentions ? `${unreadMentions} notification${unreadMentions > 1 ? 's' : ''} non lue${unreadMentions > 1 ? 's' : ''}` : null,
+      ].filter(Boolean).join(' · ') || undefined },
     { key: 'files', label: 'Documents' },
+    { key: 'calls', label: 'Appels' },
     { key: 'history', label: 'Historique' },
   ];
   const changeTab = useCallback((key) => {
@@ -994,9 +1003,6 @@ export default function DetailPanel({
                     }
                   </Section>
                 </div>
-                <div className="fd-stack">
-                  <LastExchange summary={exchangeSummary} onOpen={() => changeTab('exchanges')} />
-                </div>
               </TabPanel>
 
               {/* 2 · Détails : identité, contacts et contrat, puis les rendez-vous et interlocuteurs */}
@@ -1007,19 +1013,6 @@ export default function DetailPanel({
                   Icon={IdCard}
                   title="Identité, contacts et contrat"
                   delay={0.04}
-                  action={(canEdit || readOnly) ? (
-                    <button
-                      type="button"
-                      onClick={() => setContractEditing((v) => !v)}
-                      title={contractEditing ? 'Terminer l’édition' : 'Modifier la fiche'}
-                      className="fd-link-btn"
-                      data-on={contractEditing ? 'true' : undefined}
-                      {...ro}
-                    >
-                      <Pencil size={12} />
-                      {contractEditing ? 'Terminer' : 'Modifier'}
-                    </button>
-                  ) : null}
                 >
                   <ContractInfoList
                     client={client}
@@ -1031,7 +1024,6 @@ export default function DetailPanel({
                     canEdit={canEdit}
                     canEditMoney={canEditMoney}
                     readOnly={readOnly}
-                    editing={contractEditing}
                     clientId={clientId}
                     onProfileChanged={refreshProfileAndRows}
                     onContractChanged={reloadAfterExit}
@@ -1054,7 +1046,8 @@ export default function DetailPanel({
                       {/* Validation FACTURATION du RDV d'onboarding + recalage (finance).
                           Statut propre à la finance, indépendant de celui de Vincent ;
                           le recalage, lui, déplace le RDV partagé (agendas liés). */}
-                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} readOnly={readOnly} />
+                      <OnboardingFacturation numeroClient={numeroClient} boardRow={boardRow} readOnly={readOnly}
+                        alreadyPaid={!!focusedRow && hasEverPaid(focusedRow)} />
                     </>
                   ) : <p className="fd-empty">Aucun rendez-vous renseigné pour ce dossier.</p>}
                 </Section>
@@ -1067,10 +1060,15 @@ export default function DetailPanel({
                   <Section variant="block" Icon={FileSignature} title="Contrats signés" hint="Un clic ouvre le contrat signé sur Yousign" delay={0.04}>
                     <SignedContracts clientId={clientId} />
                   </Section>
-                  <Section variant="block" Icon={Landmark} title="Sociétés de facturation" delay={0.08}>
-                    <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} readOnly={readOnly} reloadKey={profile?.companies?.length || 0} />
-                  </Section>
-                  <DetailDisclosure key={`billing-${clientId}`} title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
+                  {/* Sociétés de facturation : seulement quand le dossier a d'autres sociétés que la principale ; sinon
+                      chaque contrat n'a qu'un choix et le bloc ne dit rien (dev 17/11/2026). La ventilation des
+                      règlements, elle, est ouverte d'emblée. */}
+                  {companyCount > 0 && (
+                    <Section variant="block" Icon={Landmark} title="Sociétés de facturation" delay={0.08}>
+                      <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} readOnly={readOnly} reloadKey={profile?.companies?.length || 0} />
+                    </Section>
+                  )}
+                  <DetailDisclosure key={`billing-${clientId}`} defaultOpen title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
 
                   <Section title="Structures & ventilation" delay={0.12}>
                     <StructureSplits
@@ -1098,16 +1096,23 @@ export default function DetailPanel({
                 </Section>
               </TabPanel>
 
-              {/* 5 · Documents, emails et appels */}
+              {/* 5 · Documents : la fiche d'intégration, puis le dossier (documents et e-mails) */}
               <TabPanel id="files" active={tab}>
-                <Section key={`files-${clientId}`} variant="block" Icon={Paperclip} title="Documents, e-mails et appels"
-                  hint="Le dossier du client, le même que dans le board : ce qui est joint ici s’y retrouve" delay={0.04}>
-                  <ClientFiles key={`dossier-${clientId}`} clientId={clientId} numero={client?.numero_client}
-                    active={tab === 'files'} canViewCalls={canViewCalls} />
+                <Section key={`files-${clientId}`} variant="block" Icon={Paperclip} title="Documents"
+                  hint="La fiche d’intégration du client, puis son dossier, le même que dans le board" delay={0.04}>
+                  <ClientDocuments key={`dossier-${clientId}`} files={clientFiles} numero={numeroClient} />
                 </Section>
               </TabPanel>
 
-              {/* 6 · Historique des actions */}
+              {/* 6 · Appels */}
+              <TabPanel id="calls" active={tab}>
+                <Section key={`calls-${clientId}`} variant="block" Icon={Phone} title="Appels"
+                  hint="Les appels du client, du plus récent au plus ancien" delay={0.04}>
+                  <ClientCalls key={`calls-${clientId}`} files={clientFiles} clientId={clientId} active={tab === 'calls'} canViewCalls={canViewCalls} />
+                </Section>
+              </TabPanel>
+
+              {/* 7 · Historique des actions */}
               <TabPanel id="history" active={tab}>
                 <Section key={`audit-${clientId}`} variant="block" Icon={History} title="Historique des actions"
                   hint="Modifications de la fiche et opérations financières datées" delay={0.04}>
@@ -1742,7 +1747,7 @@ const IDENTITY_ROW_LABELS = new Set(['Client n°', 'Société', 'Nom du client',
 
 function ContractInfoList({
   client, profile, focusedRow, boardRow, canEdit, canEditMoney, onCopied, readOnly = false,
-  editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
+  clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
   formulaCheck = null, onContractSaved,
   wide = false,   // fiche en plein écran : la carte se répartit en colonnes (présentation seulement)
   salesNote = null, onOpenSalesNote, // dernier commentaire du sales (Échanges) et son ouverture, sous « Sales »
@@ -1752,6 +1757,11 @@ function ContractInfoList({
   // détectée → « Nom du client » = société, pas de ligne Société en doublon.
   const { societeName, representant: repFromSociete } = splitClientIdentity(client);
   const personne = client?.representative_name || repFromSociete;
+  // Édition champ par champ (dev 17/11/2026, « comme dans le board ») : un crayon (ou un « + ») à côté de chaque champ
+  // modifiable ouvre ce champ seulement ; plus de mode « Modifier » qui ouvrait toute la fiche, nom du client compris.
+  const [editKey, setEditKey] = useState(null);
+  const toggleEdit = useCallback((key) => setEditKey((current) => (current === key ? null : key)), []);
+  useEffect(() => { setEditKey(null); }, [clientId]);
   // numero_client contient déjà le préfixe « n° » en base (ex. « n°691 »).
   const numeroValue = client?.numero_client
     ? String(client.numero_client).replace(/^n°\s*/i, '')
@@ -1873,12 +1883,13 @@ function ContractInfoList({
             principalSiren={profile?.siren}
             principalSirenSource={profile?.siren_source}
             companies={profile?.companies || []}
-            editing={editing}
-            canEditSiren={Boolean(editing && canEditMoney && profile)}
+            editing={editKey === 'societe'}
+            canEditSiren={Boolean(editKey === 'societe' && canEditMoney && profile)}
             onChanged={() => { onProfileChanged?.(); onContractChanged?.(); }}
             onShowToast={onShowToast}
           />
         ),
+        edit: { key: 'societe', allowed: canEdit, label: 'Modifier les sociétés' },
       },
     {
       Icon: profile?.representatives?.length > 1 ? PeopleIcon : ClientIcon,
@@ -1901,12 +1912,13 @@ function ContractInfoList({
             items={profile?.partners || []}
             kind="associe"
             clientId={clientId}
-            editing={editing}
+            editing={editKey === 'associes'}
             onChanged={onProfileChanged}
             onShowToast={onShowToast}
           />
         </div>
       ),
+      edit: { key: 'associes', allowed: canEdit, add: true, label: 'Ajouter un associé' },
     },
     // Date de signature EFFECTIVE pour la finance : la date d'effet posée par
     // les sales sur le contrat prime (dev 2026-09-18) ; on le dit quand c'est
@@ -1949,7 +1961,7 @@ function ContractInfoList({
       // la saisir (retour dev 2026-09-19) : elle est écrite sur la date de la
       // Finance, plus sur la date manuelle du board, qui appartient au CSM.
       copyValue: formatDateLongFR(profile?.rdv_onboarding),
-      node: (editing && canEdit && profile && !profile.rdv_onboarding) ? (
+      node: (editKey === 'onboarding' && canEdit && profile && !profile.rdv_onboarding) ? (
         <EditableDate
           value={null}
           placeholder="Saisir la date"
@@ -1980,6 +1992,8 @@ function ContractInfoList({
           {!platformDiffers && rescheduleButton}
         </span>
       ),
+      // Saisie seulement quand la date manque ; une date posée vient de la vente.
+      edit: profile && !profile.rdv_onboarding ? { key: 'onboarding', allowed: canEdit, add: true, label: 'Saisir le RDV d’onboarding' } : null,
     },
     // Onboarding de la plateforme : le rendez-vous que tient le CSM. Montré
     // seulement quand il diffère du rendez-vous retenu par la Finance (client
@@ -2007,7 +2021,7 @@ function ContractInfoList({
       Icon: ClockIcon,
       label: 'Date de paiement',
       copyValue: profile?.payment_day_effective ? `le ${profile.payment_day_effective} du mois` : '',
-      node: (editing && canEditMoney) ? (
+      node: (editKey === 'payday' && canEditMoney) ? (
         <select
           aria-label="Jour de paiement attendu"
           disabled={paymentDaySaving}
@@ -2051,6 +2065,7 @@ function ContractInfoList({
           )}
         </span>
       ),
+      edit: { key: 'payday', allowed: canEditMoney, label: 'Modifier le jour de paiement' },
     },
     // Formule = tranche seule, datée : POST /client/{id}/contract (la
     // direction applique, l'équipe propose).
@@ -2203,6 +2218,10 @@ function ContractInfoList({
             {(r.value || r.copyValue) && (
               <CopyButton value={r.copyValue || r.value} onCopied={onCopied} size={12} />
             )}
+            {r.edit && (r.edit.allowed || readOnly) && (
+              <FieldEditButton active={editKey === r.edit.key} add={r.edit.add} label={r.edit.label} readOnly={readOnly}
+                onToggle={() => toggleEdit(r.edit.key)} />
+            )}
           </span>
         </motion.div>
         ))}
@@ -2211,49 +2230,58 @@ function ContractInfoList({
 
       {/* Emails et téléphones, en bas de la fiche (demande dev 2026-08-27) :
           copiables en un clic à tout moment, typés (pro, perso, comptable…)
-          et enrichissables — le bouton d'ajout n'apparaît qu'en mode
-          édition. Composant partagé avec le board, donc une seule vérité. */}
+          et enrichissables. Chaque liste a son crayon (dev 17/11/2026) : il
+          ouvre l'ajout et les réglages de cette liste seulement. Composant
+          partagé avec le board, donc une seule vérité. */}
       {clientId && (
         <div className="fd-group">
         <div className="fd-group-title">Coordonnées</div>
         <div style={{
           padding: '0 10px 4px',
         }}>
-          <ContactList
-            clientId={clientId}
-            kind="email"
-            contacts={profile?.contacts}
-            inheritedValue={client?.email}
-            canEdit={canEdit && editing}
-            onChanged={onProfileChanged}
-            onShowToast={onShowToast}
-            onCopied={onCopied}
-          />
-          <ContactList
-            clientId={clientId}
-            kind="phone"
-            contacts={profile?.contacts}
-            inheritedValue={client?.phone}
-            canEdit={canEdit && editing}
-            onChanged={onProfileChanged}
-            onShowToast={onShowToast}
-            onCopied={onCopied}
-          />
-          {/* Numéros WhatsApp (dev 17/11/2026) : pour les relances de paiement et campagnes à venir. */}
-          <ContactList
-            clientId={clientId}
-            kind="whatsapp"
-            contacts={profile?.contacts}
-            phoneFallback={client?.phone}
-            canEdit={canEdit && editing}
-            onChanged={onProfileChanged}
-            onShowToast={onShowToast}
-            onCopied={onCopied}
-          />
+          {CONTACT_FIELDS.map(({ kind, label, inherited, fallback }) => (
+            <div key={kind} className="fd-contact-field">
+              <ContactList
+                clientId={clientId}
+                kind={kind}
+                contacts={profile?.contacts}
+                inheritedValue={inherited ? client?.[inherited] : undefined}
+                phoneFallback={fallback ? client?.[fallback] : undefined}
+                canEdit={canEdit && editKey === kind}
+                onChanged={onProfileChanged}
+                onShowToast={onShowToast}
+                onCopied={onCopied}
+              />
+              {(canEdit || readOnly) && (
+                <FieldEditButton active={editKey === kind} label={label} readOnly={readOnly} onToggle={() => toggleEdit(kind)} />
+              )}
+            </div>
+          ))}
         </div>
         </div>
       )}
     </div>
+  );
+}
+
+// Listes de coordonnées de la fiche, chacune avec son crayon ; `inherited` : valeur de la fiche CRM montrée tant que la
+// liste est vide.
+const CONTACT_FIELDS = [
+  { kind: 'email', label: 'Modifier les e-mails', inherited: 'email' },
+  { kind: 'phone', label: 'Modifier les téléphones', inherited: 'phone' },
+  // Numéros WhatsApp (dev 17/11/2026) : pour les relances de paiement et campagnes à venir ; le raccourci « même
+  // numéro » reprend le téléphone de la fiche.
+  { kind: 'whatsapp', label: 'Modifier les numéros WhatsApp', fallback: 'phone' },
+];
+
+// Crayon d'un champ de la fiche (« + » quand on ajoute) ; une coche le referme. Rôles en lecture seule : visible, désactivé.
+function FieldEditButton({ active, add = false, label, readOnly = false, onToggle }) {
+  return (
+    <button type="button" className="fd-field-edit" data-on={active ? 'true' : undefined} aria-pressed={active}
+      onClick={onToggle} title={active ? 'Terminer' : label} aria-label={active ? `Terminer : ${label.toLowerCase()}` : label}
+      {...(readOnly ? READ_ONLY_PROPS : {})}>
+      {active ? <Check size={13} strokeWidth={2.2} /> : add ? <Plus size={13} strokeWidth={2} /> : <Pencil size={12} strokeWidth={1.9} />}
+    </button>
   );
 }
 
@@ -2568,15 +2596,7 @@ function ActionsTimeline({ audit, operations, changes, etatHistory, hideTitle = 
 // (OptilexBoard.jsx → ClientAgendaModal — non réutilisable telle quelle :
 // c'est une modale portalisée plein écran). Mêmes données : RDV standards de
 // la row board + RDV juristes et juriste de référence de client-agenda.
-// Styles repris du board (carte juriste verte, rows label|date|badge).
-// Retouches dev 2026-08-21 : icône balance (Scale) dans la carte juriste,
-// email du juriste cliquable (mailto + copy), icône calendrier teintée
-// passé/à venir sur chaque ligne RDV.
-const AGENDA_GREEN = '#0b7a4b';
-const AGENDA_NAVY = '#2b2927';
-const AGENDA_MUTED = '#9d9890';
-const AGENDA_BORDER = '#e8e4de';
-const AGENDA_AMBER = '#c2500e';
+// Présentée en lignes de propriétés comme le reste de la fiche (dev 17/11/2026).
 
 function RdvJuristeSection({ boardRow, agenda, onCopied }) {
   // Consolidation identique à ClientAgendaModal (board) : 4 RDV standards de
@@ -2650,132 +2670,72 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
   const hiddenRdv = items.length - visibleItems.length;
   const canToggleRdv = pastItems.length > RECENT_PAST;
 
+  // Présentation (dev 17/11/2026, « le même style que le board ») : des lignes de propriétés comme le reste de la
+  // fiche (icône, libellé, valeur), plus de cartes encadrées. Mêmes données, même ordre, même « voir plus ».
+  const status = (it) => {
+    if (it.cancelled) return 'annulé';
+    if (it.kind === 'standard') return it.done ? 'effectué' : isUpcoming(it) ? 'à venir' : 'non coché';
+    return isUpcoming(it) ? 'à venir' : null;
+  };
   return (
-    <div>
-      {/* Juriste de référence — carte du board, badge balance (Scale) +
-          email cliquable avec copy au hover */}
-      <div style={{
-        padding: '11px 14px', borderRadius: 10,
-        border: `1px solid ${ref ? AGENDA_GREEN + '55' : AGENDA_BORDER}`,
-        background: ref ? '#f0f7f3' : '#fafbfc',
-        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12,
-      }}>
-        <span style={{
-          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-          background: ref ? AGENDA_GREEN : '#e5e8ee', color: '#fff',
-        }}>
-          <Scale size={16} strokeWidth={2} />
-        </span>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 10.5, color: AGENDA_MUTED, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-            Juriste de référence
-          </div>
-          <div style={{ fontSize: 13.5, fontWeight: 600, color: ref ? AGENDA_NAVY : AGENDA_MUTED }}>
-            {ref ? `${ref.name}${ref.team ? ' · ' + ref.team : ''}` : "Aucun RDV juriste pour l'instant"}
-          </div>
-          {refEmail && (
-            <span className="tsf-copy-wrap" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              marginTop: 2, minWidth: 0, maxWidth: '100%',
-            }}>
-              <a
-                href={`mailto:${refEmail}`}
-                style={{
-                  fontSize: 11.5, color: AGENDA_GREEN, textDecoration: 'none',
-                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                }}
-                onMouseEnter={(e) => { e.currentTarget.style.textDecoration = 'underline'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.textDecoration = 'none'; }}
-              >
-                {refEmail}
-              </a>
-              <CopyButton value={refEmail} onCopied={onCopied} size={11} />
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Liste des RDV — icône calendrier teintée (ambre = à venir,
-          gris = passé/effectué), puis titre + date · heure · juriste/pôle */}
-      {visibleItems.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {visibleItems.map((it, i) => {
-            const upcoming = isUpcoming(it);
-            return (
-              <motion.div
-                key={it.key}
-                initial={{ opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
-                  padding: '9px 12px', borderRadius: 10,
-                  border: `1px solid ${AGENDA_BORDER}`, background: '#fff',
-                  opacity: it.cancelled ? 0.5 : 1,
-                }}
-              >
-                <span style={{
-                  width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  background: upcoming ? '#fde9da' : '#f1eee9',
-                  color: upcoming ? AGENDA_AMBER : '#6f6a63',
-                }}>
-                  {upcoming
-                    ? <CalendarClock size={14} strokeWidth={2} />
-                    : <CalendarCheck2 size={14} strokeWidth={2} />}
-                </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 13, fontWeight: 500, color: AGENDA_NAVY,
-                    textDecoration: it.cancelled ? 'line-through' : 'none',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {it.label}
-                  </div>
-                  <div style={{
-                    fontSize: 11.5, color: AGENDA_MUTED,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {whenLabel(it.when)}
-                    {' · '}
-                    {it.kind === 'jurist' ? (it.juriste || 'Juriste') + (it.cancelled ? ' · annulé' : '') : it.type}
-                  </div>
-                </div>
-                {it.kind === 'standard' && (
-                  <span style={{
-                    flexShrink: 0, fontSize: 11, fontWeight: 600,
-                    padding: '3px 9px', borderRadius: 20,
-                    color: it.done ? AGENDA_GREEN : AGENDA_MUTED,
-                    background: it.done ? '#e7f3ec' : '#f1eee9',
-                  }}>
-                    {it.done ? 'Effectué' : 'À venir'}
+    <div className="fd-identity-card">
+      <div className="fd-group">
+        <div className="fd-group-title">Interlocuteur</div>
+        <div className="fd-prop tsf-copy-wrap">
+          <span className="fd-prop-k"><Scale className="fd-prop-ic" size={15} strokeWidth={1.7} /><span>Juriste de référence</span></span>
+          <span className="fd-prop-v">
+            {ref ? (
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 500, color: N.text }}>{ref.name}{ref.team ? ` · ${ref.team}` : ''}</span>
+                {refEmail && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, maxWidth: '100%' }}>
+                    <a href={`mailto:${refEmail}`} style={{ fontSize: 12, color: N.textMuted, textDecoration: 'none',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{refEmail}</a>
+                    <CopyButton value={refEmail} onCopied={onCopied} size={11} />
                   </span>
                 )}
+              </span>
+            ) : <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Aucun rendez-vous juriste pour l’instant</span>}
+          </span>
+        </div>
+      </div>
+      {visibleItems.length > 0 && (
+        <div className="fd-group">
+          <div className="fd-group-title">Rendez-vous</div>
+          {visibleItems.map((it, i) => {
+            const upcoming = isUpcoming(it);
+            const tag = status(it);
+            return (
+              <motion.div key={it.key} className="fd-prop"
+                initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.22, delay: i * 0.03, ease: [0.4, 0, 0.2, 1] }}>
+                <span className="fd-prop-k" title={it.label}>
+                  {upcoming
+                    ? <CalendarClock className="fd-prop-ic" size={15} strokeWidth={1.7} />
+                    : <CalendarCheck2 className="fd-prop-ic" size={15} strokeWidth={1.7} />}
+                  <span style={{ textDecoration: it.cancelled ? 'line-through' : 'none' }}>{it.label}</span>
+                </span>
+                <span className="fd-prop-v">
+                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 0 }}>
+                    <span style={{ fontSize: 13.5, fontWeight: 500, color: it.cancelled ? N.textMuted : N.text }}>{whenLabel(it.when)}</span>
+                    <span style={{ fontSize: 11, color: N.textFaint }}>
+                      {[it.kind === 'jurist' ? (it.juriste || 'Juriste') : it.type, tag].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                </span>
               </motion.div>
             );
           })}
+          {canToggleRdv && (
+            <button type="button" className="fd-link-btn" style={{ marginTop: 4 }} onClick={() => setShowAllRdv((v) => !v)}>
+              {showAllRdv ? 'Réduire' : `Voir les ${hiddenRdv} rendez-vous plus ancien${hiddenRdv > 1 ? 's' : ''}`}
+            </button>
+          )}
         </div>
-      )}
-      {canToggleRdv && (
-        <button
-          type="button"
-          onClick={() => setShowAllRdv((v) => !v)}
-          style={{
-            marginTop: 8, border: 'none', background: 'transparent',
-            cursor: 'pointer', padding: '2px 0', fontFamily: 'inherit',
-            fontSize: 12, fontWeight: 500, color: AGENDA_MUTED,
-          }}
-        >
-          {showAllRdv
-            ? 'Réduire'
-            : `Voir les ${hiddenRdv} rendez-vous plus ancien${hiddenRdv > 1 ? 's' : ''}`}
-        </button>
       )}
     </div>
   );
 }
-
 
 
 // ── Meta row (pills) ────────────────────────────────────────────────────────
