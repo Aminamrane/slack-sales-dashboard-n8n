@@ -797,3 +797,71 @@
     display: none;
   }
 }
+
+/* Plus de bouton « Modifier » qui ouvre toute la fiche : chaque champ modifiable
+   porte au bout de sa ligne un crayon (ou un « + » pour ajouter), discret, qui
+   paraît au survol. Ouvert, il devient une coche anthracite qui referme le champ.
+   Les crayons s'alignent sur une même colonne, à droite. */
+.fd-field-edit {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #a8a39b;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s ease, background 0.15s ease, color 0.15s ease, transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fd-prop:hover .fd-field-edit,
+.fd-contact-field:hover .fd-field-edit,
+.fd-field-edit:focus-visible,
+.fd-field-edit[data-on="true"] {
+  opacity: 1;
+}
+.fd-field-edit:hover {
+  background: #efece7;
+  color: #1c1b19;
+}
+.fd-field-edit:active {
+  transform: scale(0.92);
+}
+.fd-field-edit[data-on="true"] {
+  background: #2b2927;
+  color: #fff;
+}
+.fd-field-edit:focus-visible {
+  outline: 2px solid #1c1b19;
+  outline-offset: 2px;
+}
+.fd-field-edit svg {
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.fd-field-edit:not([data-on="true"]):hover svg {
+  transform: rotate(-12deg);
+}
+/* Écran tactile : pas de survol, le crayon reste visible. */
+@media (hover: none) {
+  .fd-field-edit { opacity: 1; }
+}
+/* Une liste de coordonnées et son crayon, à droite de son titre. */
+.fd-contact-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 6px;
+  align-items: start;
+}
+.fd-contact-field > .fd-field-edit {
+  margin-top: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fd-field-edit, .fd-field-edit svg { transition: none; }
+  .fd-field-edit:active, .fd-field-edit:not([data-on="true"]):hover svg { transform: none; }
+}

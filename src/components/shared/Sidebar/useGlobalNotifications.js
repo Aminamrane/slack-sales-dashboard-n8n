@@ -62,6 +62,21 @@ export default function useGlobalNotifications() {
     return () => window.removeEventListener("global_notification", onPush);
   }, []);
 
+  // Lues ailleurs dans la page (les Échanges d'une fiche Finance, dev 17/11/2026) : déjà envoyées au serveur, la cloche
+  // les marque lues tout de suite au lieu d'attendre le prochain passage.
+  useEffect(() => {
+    const onRead = (e) => {
+      const ids = e.detail?.ids || [];
+      if (!ids.length) return;
+      seq.current += 1;
+      const fresh = itemsRef.current.filter((n) => ids.includes(n.id) && !n.read).length;
+      setUnread((u) => Math.max(0, u - fresh));
+      setItems((prev) => prev.map((n) => (ids.includes(n.id) ? { ...n, read: true } : n)));
+    };
+    window.addEventListener("global_notifications_read", onRead);
+    return () => window.removeEventListener("global_notifications_read", onRead);
+  }, []);
+
   const changeView = useCallback((next) => { setView(next); setLimit(PAGE); setLoading(true); }, []);
   const showMore = useCallback(() => { setLimit((l) => l + PAGE); setLoading(true); }, []);
 

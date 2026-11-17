@@ -763,7 +763,15 @@ function FolderFront({ tone, uid, leaves, out, signed }) {
 function ContractViewer({ it, url, error, onClose }) {
   const tone = FOLDER_TONES[it.key] || FOLDER_TONES.owner;
   // Le lecteur PDF (lourd à démarrer) n'est monté qu'une fois la feuille posée : l'envol reste fluide.
+  // « Posée » = fin de l'envol, OU au plus tard peu après sa durée (dev 17/11/2026, « parfois le contrat ne s'ouvre
+  // pas »). Quand le PDF arrive PENDANT l'envol (réponse rapide, premier clic sans survol), le re-rendu des dossiers
+  // fige l'envol à mi-course et sa fin n'est jamais signalée : le PDF, pourtant téléchargé (« Télécharger » actif),
+  // restait caché derrière la feuille dessinée.
   const [landed, setLanded] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setLanded(true), SHEET_SPRING.duration * 1000 + 250);
+    return () => clearTimeout(timer);
+  }, []);
   const close = useRef(onClose);
   close.current = onClose;
   useEffect(() => {
