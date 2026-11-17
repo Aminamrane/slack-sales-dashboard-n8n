@@ -19,7 +19,7 @@ import BoardOnboardingDateCorrection from "./BoardOnboardingDateCorrection";
 import { onboardingDateOf, parisWallTime } from "../utils/boardIntegration";
 import { displayEtat } from "../utils/boardClientState";
 import { Barcode, ConfettiBurst, OnboardedPass } from "./OnboardingPass.jsx";
-import { Art, FolderCard, ListRow, Panel, Stat, Tag } from "./DashParts.jsx";
+import { Art, FolderCard, ListRow, ListRowIcon, Panel, Stat, Tag } from "./DashParts.jsx";
 import "./OnboardingFlowModal.css";
 
 const NAVY = "#1c1b19";
@@ -371,9 +371,10 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
   );
 }
 
-// No show du rendez-vous prévu (dev 17/11/2026) : noté au nom du Client Success, il reste dans l'historique de la fiche
-// et dans les chiffres même quand l'onboarding est réalisé plus tard. Possible une fois le rendez-vous passé.
-function NoShowChoice({ num, day, onChanged }) {
+// No show du rendez-vous prévu (Vincent, 17/11/2026) : une ligne du même dessin que « Rendez-vous d'onboarding », le
+// geste à droite. Noté au nom du Client Success, il reste dans l'historique de la fiche et dans les chiffres même quand
+// l'onboarding est réalisé plus tard. Possible une fois le rendez-vous passé.
+function NoShowRow({ num, day, onChanged }) {
   const [state, setState] = useState({ loading: true, saved: null, saving: false, error: "" });
   useEffect(() => {
     let alive = true;
@@ -395,15 +396,26 @@ function NoShowChoice({ num, day, onChanged }) {
   };
   const { saved } = state;
   return (
-    <div className="ofd-choice ofd-noshow">
-      <span className="ofd-choice-art"><Art name="noshow" /></span>
-      <strong>{saved ? `No show du ${fmtDate(day)} noté${saved.qualified_by_name ? ` par ${saved.qualified_by_name}` : ""}` : "Le client ne s'est pas présenté (no show)"}</strong>
-      <small>{saved ? "Il reste dans l'historique de la fiche. Recalez le rendez-vous ci-dessous."
-        : passed ? `Rendez-vous du ${fmtDate(day)}. Le no show reste dans l'historique de la fiche, même si l'onboarding est réalisé plus tard.`
-          : `Possible une fois le rendez-vous du ${fmtDate(day)} passé.`}</small>
-      {!saved && <Button small disabled={!passed || state.loading || state.saving} onClick={save}>{state.saving ? "Enregistrement…" : "Noter le no show"}</Button>}
-      {state.error && <small role="alert" style={{ color: RED }}>{state.error}</small>}
-    </div>
+    <>
+      <div className="ofd-li is-noshow">
+        <ListRowIcon name="ghost" />
+        <span className="ofd-li-k">Le client n'est pas venu le {fmtDayMonth(day)}</span>
+        <span className="ofd-li-v">
+          <AnimatePresence mode="wait" initial={false}>
+            <Motion.span key={saved ? "saved" : "ask"} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2, ease: EASE }}>
+              {saved ? <>
+                <span className="ofd-li-tag">No show noté</span>
+                {saved.qualified_by_name && <span className="ofd-li-by">par {saved.qualified_by_name}</span>}
+              </> : passed ? (
+                <Button small disabled={state.loading || state.saving} onClick={save}>{state.saving ? "Enregistrement…" : "Noter le no show"}</Button>
+              ) : <span className="ofd-li-wait">après le rendez-vous</span>}
+            </Motion.span>
+          </AnimatePresence>
+        </span>
+      </div>
+      {state.error && <div role="alert" className="ofd-li-error">{state.error}</div>}
+    </>
   );
 }
 
@@ -425,7 +437,7 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
         <FinishCard brief={brief} row={row} num={num} rated={rated} busy={busy} onDone={onDone} weatherDue={weatherDue} />
       )}
       <Panel title="Pas encore réalisé ?" className="ofd-later">
-        {!alreadyDone && /^\d{4}-\d{2}-\d{2}$/.test(day) && <NoShowChoice num={num} day={day} onChanged={onChanged} />}
+        {!alreadyDone && /^\d{4}-\d{2}-\d{2}$/.test(day) && <NoShowRow num={num} day={day} onChanged={onChanged} />}
         <p className="ofd-note">Ces deux issues laissent la fiche « à recaler » jusqu'à la nouvelle date.</p>
         <div className="ofd-choices">
           <button type="button" className="ofd-choice" disabled={!!busy} onClick={onRescheduleWithDate}>
