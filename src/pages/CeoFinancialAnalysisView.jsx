@@ -22,7 +22,7 @@ import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import { AnimatePresence, motion as Motion } from "framer-motion";
-import { CalendarClock, Hourglass, Info, LayoutGrid, PenLine, Timer, Undo2, X } from "lucide-react";
+import { CalendarClock, Hourglass, Info, LayoutGrid, PenLine, Timer, Undo2, UserCheck, X } from "lucide-react";
 import { Empty, Page, Reveal } from "./TrackingSheetFinance/components/PageKit.jsx";
 import { Collapse, Fill, Num, ProgressRing } from "./TrackingSheetFinance/statistics/parts.jsx";
 import { financialAnalysis, lifetimeLabel } from "../utils/financialAnalysis.js";
@@ -45,7 +45,7 @@ const EASE = [0.22, 1, 0.36, 1];
 // Le parcours : des lignes de hauteur fixe, pour que les traits tombent juste d'une colonne à l'autre.
 const ROW = 72;
 const PAD = 12;
-const GAP = 64;
+const GAP = 52;
 const rowY = (index) => PAD + index * ROW + ROW / 2;
 
 // Bouton rond, comme sur la référence : une pastille blanche à trait fin.
@@ -70,8 +70,10 @@ function Step({ lead, title, sub, value, tone, hint }) {
   );
 }
 
-// Les traits entre deux colonnes du parcours : une courbe par lien, un point à chaque bout. Un lien sans arrivée
-// (`to` absent) s'arrête en chemin, en pointillé : ceux-là ne continuent pas.
+// Les traits entre deux colonnes du parcours : une courbe par lien, un point à chaque bout. Le parcours est une seule
+// chaîne (dev 17/11/2026 : « est-ce connecté à quoi ? ») : chaque colonne part de sa dernière ligne et arrive à la
+// première de la suivante. Un lien sans arrivée (`to` absent) s'arrête en chemin, en pointillé, sur une croix : ceux-là
+// sortent du parcours.
 function Links({ links, rows }) {
   const height = PAD * 2 + rows * ROW;
   return (
@@ -86,7 +88,11 @@ function Links({ links, rows }) {
             <Motion.path d={path} fill="none" initial={{ pathLength: 0, opacity: 0 }} animate={{ pathLength: 1, opacity: 1 }}
               transition={{ duration: 0.9, ease: EASE, delay: 0.25 + index * 0.08 }} />
             <circle cx={3} cy={y1} r={3} />
-            <circle cx={dead ? GAP * 0.5 : GAP - 3} cy={y2} r={3} />
+            {dead ? (
+              <g className="fa-links-out" transform={`translate(${GAP * 0.5} ${y1})`}>
+                <circle r={8} /><path d="M-3 -3 3 3 M3 -3 -3 3" />
+              </g>
+            ) : <circle cx={GAP - 3} cy={y2} r={3} />}
           </g>
         );
       })}
@@ -295,40 +301,44 @@ export default function CeoFinancialAnalysisView() {
 
                   <div className="fa-flow" key={sector ?? "all"}>
                     <div className="fa-col">
-                      <div className="fa-card">
-                        <Step lead={<PenLine size={16} strokeWidth={1.8} />} title="Clients signés" sub="depuis le début" value={<Num value={stats.signed} />}
-                          hint="Les clients dont la durée de vie est mesurée : signés, avec une date de signature exploitable." />
-                        <Step tone="out" lead={<Undo2 size={16} strokeWidth={1.8} />} title="Rétractés" sub="hors calcul" value={<Num value={stats.retracted} />}
-                          hint="Les rétractés n’entrent dans aucun calcul." />
+                      <div className="fa-card is-chain">
+                        <Step lead={<PenLine size={16} strokeWidth={1.8} />} title="Contrats signés" sub="depuis le début" value={<Num value={stats.signed + stats.retracted} />}
+                          hint="Tous les contrats signés dont la date de signature est connue." />
+                        <Step tone="out" lead={<Undo2 size={16} strokeWidth={1.8} />} title="Rétractés" sub="hors parcours"
+                          value={stats.retracted ? <>− <Num value={stats.retracted} /></> : "0"}
+                          hint="Les rétractés n’ont jamais vraiment commencé : ils sortent du parcours et n’entrent dans aucun calcul." />
+                        <Step tone="strong" lead={<UserCheck size={16} strokeWidth={1.8} />} title="Clients" sub="dans le parcours" value={<Num value={stats.signed} />}
+                          hint="Les clients dont la durée de vie est mesurée : c’est sur eux que portent tous les chiffres de la page." />
                       </div>
                       <p className="fa-caption">Signature</p>
                     </div>
-                    <Links rows={Math.max(2, firstYear.length)} links={[...firstYear.map((_, index) => ({ from: 0, to: index })), { from: 1 }]} />
+                    <Links rows={Math.max(3, firstYear.length)} links={[{ from: 1 }, ...(firstYear.length ? [{ from: 2, to: 0 }] : [])]} />
                     <div className="fa-col">
-                      <div className="fa-card">
+                      <div className="fa-card is-chain">
                         {firstYear.length === 0 && <Step lead={<Timer size={16} strokeWidth={1.8} />} title="Trop tôt pour le dire" sub="aucun client assez ancien" value="–" />}
                         {firstYear.map((step) => (
                           <Step key={step.months} lead={<ProgressRing value={step.rate} size={38} stroke={4} label={`${percent(step.rate)} encore là à ${stepLabel(step.months)}`} />}
                             title={`À ${stepLabel(step.months)}`} sub={`${number(step.kept)} sur ${number(step.eligible)}`} value={percent(step.rate)}
-                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme.`} />
+                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme ; ${number(step.eligible - step.kept)} étaient partis.`} />
                         ))}
                       </div>
                       <p className="fa-caption">Première année</p>
                     </div>
-                    <Links rows={Math.max(firstYear.length, later.length + 1)} links={firstYear.length ? [...later.map((_, index) => ({ from: firstYear.length - 1, to: index })), { from: firstYear.length - 1, to: later.length }] : []} />
+                    <Links rows={Math.max(3, firstYear.length, later.length + 1)} links={firstYear.length ? [{ from: firstYear.length - 1, to: 0 }] : []} />
                     <div className="fa-col">
-                      <div className="fa-card">
+                      <div className="fa-card is-chain">
                         {later.map((step) => (
                           <Step key={step.months} lead={<ProgressRing value={step.rate} size={38} stroke={4} label={`${percent(step.rate)} encore là à ${stepLabel(step.months)}`} />}
                             title={`À ${stepLabel(step.months)}`} sub={`${number(step.kept)} sur ${number(step.eligible)}`} value={percent(step.rate)}
-                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme.`} />
+                            hint={`Parmi les ${number(step.eligible)} clients signés depuis au moins ${stepLabel(step.months)}, ${number(step.kept)} étaient encore là à ce terme ; ${number(step.eligible - step.kept)} étaient partis.`} />
                         ))}
-                        <Step tone="strong" lead={<Hourglass size={16} strokeWidth={1.8} />} title="Au-delà d’un an" sub={year.passed ? `en moyenne · ${number(year.passed)} clients` : "aucun client n’a un an"}
+                        <Step tone="strong" lead={<Hourglass size={16} strokeWidth={1.8} />} title="Ensuite" sub={year.passed ? "en moyenne" : "aucun client n’a un an"}
                           value={year.passed ? `+ ${lifetimeLabel(year.extraDays)}` : "–"}
                           hint="Ceux qui ont passé leur première année : le temps qu’ils sont restés en plus, en moyenne. Il avance chaque jour pour ceux qui sont encore là." />
                       </div>
                       <p className="fa-caption">Après un an</p>
                     </div>
+                    <Links rows={Math.max(3, later.length + 1)} links={[{ from: later.length, to: 0 }]} />
                     <div className="fa-col fa-col--tiles">
                       <div className="fa-tiles">
                         <div className="fa-tile is-main" title="De la signature à la date d’effet de la sortie ; pour un client encore là, jusqu’à aujourd’hui.">
