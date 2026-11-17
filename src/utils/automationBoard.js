@@ -371,3 +371,28 @@ export function voices(row, history, entries) {
   const latest = (list) => list.filter((item) => item.at).sort((a, b) => b.at - a.at)[0] || null;
   return { lawyer: latest(lawyer), devs: latest(devs) };
 }
+
+// Le menu d'état de la mission (dev 17/11/2026 : « quand on clique sur “à tester par le juriste”, on doit pouvoir
+// changer l'état et mettre l'état où ça en est », sans descendre aux commentaires). Un choix par état, dans l'ordre du
+// parcours ; chacun passe par le geste qui le dit le mieux, pour que le parcours garde le bon mot : « livrée » pour une
+// version à tester, « validée par le juriste » quand le juriste répond, l'étape seule sinon. La validation de la
+// direction (le cadenas) reste à la direction, dans Opti'Lex : elle figure au menu, sans s'y faire.
+export function stateChoices(row, steps, turn) {
+  const step = Number(row?.step) || 0;
+  const label = (value) => (Array.isArray(steps) ? steps : []).find((item) => item.value === value)?.label || "";
+  const who = turn?.who;
+  const answering = who === "lawyer" || step === 2;
+  const list = [
+    { key: "s0", icon: "start", label: label(0), hint: "Rien n’est encore lancé.", step: 0, current: step === 0 },
+    { key: "s1", icon: "spec", label: label(1), hint: "Le cabinet a dit ce que le logiciel doit faire.", step: 1, current: step === 1 },
+    { key: "deliver", icon: "test", label: step >= 3 ? "Nouvelle version, à tester par le juriste" : "V1 livrée, à tester par le juriste",
+      hint: "Le juriste est attendu pour la tester.", action: "deliver", current: who === "lawyer" || (step === 2 && who === "idle") },
+    ...(step >= 2 ? [{ key: "request_change", icon: "change", label: "Modification demandée aux développeurs",
+      hint: "Écrivez ce qu’il faut modifier : c’est ce qu’ils liront.", action: "request_change", needsNote: true, current: who === "dev" }] : []),
+    { key: "approve", icon: "approve", label: label(3) || "V1 testée et approuvée", hint: "Le juriste l’a testée, elle convient.",
+      ...(answering ? { action: "approve" } : { step: 3 }), current: step === 3 && who !== "lawyer" && who !== "dev" },
+    { key: "s4", icon: "best", label: label(4) || "Version maximale optimisée", hint: "La version finale, sans erreur.", step: 4,
+      current: step === 4 && who !== "lawyer" && who !== "dev" },
+  ];
+  return list.filter((item) => item.label);
+}

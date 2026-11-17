@@ -275,9 +275,10 @@ html.dark-mode .ab-root .ab-hint-tip { background: #ededed; color: #1c1b19; }
 @media (prefers-reduced-motion: reduce) { .ab-hint-tip { transition: none; } }
 
 /* ── Fiche d'une mission (16/11/2026) : l'en-tête, les deux voix, la suite. ─────────────────────────────────────── */
-.ab-hero { position: relative; margin-bottom: 14px; padding: 26px 28px 24px; border-radius: 26px; background: var(--card); border: 1px solid #ece9e4; overflow: hidden;
+/* Le halo est un fond, plus un ::before rogné : la carte ne rogne plus rien, le menu d’état peut en déborder (17/11/2026). */
+.ab-hero { position: relative; margin-bottom: 14px; padding: 26px 28px 24px; border-radius: 26px; border: 1px solid #ece9e4;
+  background: radial-gradient(circle 210px at calc(100% - 120px) 30px, rgba(43, 41, 39, .045), transparent), var(--card);
   box-shadow: 0 1px 2px rgba(50, 40, 30, .03), 0 24px 48px -36px rgba(50, 40, 30, .28); }
-.ab-hero::before { content: ""; position: absolute; inset: -40% -10% auto auto; width: 420px; height: 420px; border-radius: 50%; background: radial-gradient(closest-side, rgba(43, 41, 39, .045), transparent); pointer-events: none; }
 .ab-hero-top { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px 40px; align-items: start; }
 .ab-hero-kicker { display: inline-block; font-size: 11px; font-weight: 500; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
 .ab-hero-now h3 { margin: 6px 0 0; font-size: 30px; font-weight: 500; line-height: 1.15; letter-spacing: -.03em; color: var(--ink); }
@@ -344,3 +345,43 @@ html.dark-mode .ab-root .ab-voice blockquote, html.dark-mode .ab-root .ab-voice-
 @media (max-width: 1100px) { .ab-hero-top { grid-template-columns: 1fr; } .ab-hero-kpis > div:first-child { border-left: 0; padding-left: 0; } }
 @media (max-width: 760px) { .ab-voices { grid-template-columns: 1fr; } .ab-hero-kpis { grid-template-columns: 1fr 1fr; } .ab-hero-step { font-size: 11px; } }
 @media (prefers-reduced-motion: reduce) { .ab-hero-pulse { animation: none; opacity: 0; } }
+
+/* Menu d'état (17/11/2026) : l'étiquette se clique et déplie les états du parcours. */
+.ab-state { position: relative; display: inline-flex; }
+.ab-state-tag { gap: 6px; }
+.ab-state-tag.is-button { cursor: pointer; font: inherit; font-size: inherit; transition: box-shadow .2s var(--ease), transform .2s var(--ease); }
+.ab-state-tag.is-button:hover { box-shadow: 0 0 0 3px color-mix(in srgb, var(--t-bd) 70%, transparent); }
+.ab-state-tag.is-button:active { transform: scale(.97); }
+.ab-state-tag.is-button:focus-visible { outline: 2px solid var(--charcoal, #2b2927); outline-offset: 2px; }
+.ab-state-chev { opacity: .65; transition: transform .2s var(--ease); }
+.ab-state-tag[aria-expanded="true"] .ab-state-chev { transform: rotate(180deg); }
+.ab-state-pop { position: absolute; top: calc(100% + 8px); left: 0; z-index: 40; width: 340px; max-width: calc(100vw - 32px); padding: 12px; border-radius: 16px;
+  background: #fff; border: 1px solid #e8e4dd; box-shadow: 0 18px 40px -12px rgba(28, 27, 25, .22), 0 2px 6px rgba(28, 27, 25, .06); transform-origin: top left; }
+.ab-state-head { margin: 2px 4px 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: #9d9890; font-weight: 600; }
+.ab-state-note { width: 100%; box-sizing: border-box; resize: vertical; min-height: 44px; margin-bottom: 8px; padding: 8px 10px; border-radius: 10px; border: 1px solid #e8e4dd;
+  background: #faf9f7; font: inherit; font-size: 13px; color: inherit; }
+.ab-state-note:focus { outline: none; border-color: #c9c3b9; background: #fff; }
+.ab-state-pop ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ab-state-opt { width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px; border: 0; border-radius: 11px; background: transparent; text-align: left;
+  font: inherit; color: inherit; cursor: pointer; text-decoration: none; transition: background .15s var(--ease); }
+.ab-state-opt:hover:not(:disabled) { background: #f4f2ef; }
+.ab-state-opt:disabled { cursor: default; }
+.ab-state-opt.is-current { background: #f4f2ef; }
+.ab-state-opt:disabled:not(.is-current) { opacity: .5; }
+.ab-state-ico { flex: 0 0 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; background: #f1eee9; color: #4a4540; }
+.ab-state-ico.is-test { background: #fbf3d1; color: #8a6d00; }
+.ab-state-ico.is-change { background: #fde9d9; color: #b4580f; }
+.ab-state-ico.is-approve, .ab-state-ico.is-best { background: #e2f6ea; color: #0b7a4b; }
+.ab-state-ico.is-lock { background: #2b2927; color: #fff; }
+.ab-state-txt { min-width: 0; display: grid; gap: 1px; margin-right: auto; }
+.ab-state-txt b { font-size: 13.5px; font-weight: 500; }
+.ab-state-txt small { font-size: 12px; color: #8c877f; }
+.ab-state-tick { color: #0b7a4b; flex: none; }
+.ab-state-opt.is-lock { margin-top: 4px; border-top: 1px solid #efece7; border-radius: 0 0 11px 11px; padding-top: 10px; }
+.ab-state-error { margin: 8px 4px 2px; font-size: 12.5px; color: #c5221f; }
+html.dark-mode .ab-state-pop { background: #1c1c1c; border-color: #2e2e2e; box-shadow: 0 18px 40px -12px rgba(0, 0, 0, .6); }
+html.dark-mode .ab-state-note { background: #232323; border-color: #333; }
+html.dark-mode .ab-state-opt:hover:not(:disabled), html.dark-mode .ab-state-opt.is-current { background: #262626; }
+html.dark-mode .ab-state-ico { background: #2a2a2a; color: #d4d4d4; }
+html.dark-mode .ab-state-ico.is-lock { background: #ededed; color: #141414; }
+html.dark-mode .ab-state-opt.is-lock { border-top-color: #2e2e2e; }

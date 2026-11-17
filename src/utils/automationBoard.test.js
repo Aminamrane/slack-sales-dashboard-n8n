@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classificationOf, countLabel, factDate, filterHistory, fold, periodLabel, sizeLabel, stepOf, visibleRows, voices, whenLabel } from './automationBoard.js';
+import { classificationOf, countLabel, factDate, filterHistory, fold, periodLabel, sizeLabel, stateChoices, stepOf, visibleRows, voices, whenLabel } from './automationBoard.js';
 
 const ROWS = [
   { id: 1, name: 'Process REM', parentId: null, classification: 'pending_validation', pole: { group: 'both' }, toConfirm: false },
@@ -279,4 +279,31 @@ test("les deux voix d'une mission : la dernière parole du juriste et celle des 
   assert.equal(voices({}, [], []).lawyer, null);
   assert.equal(factDate("12/11/2026 à 14:04").getHours(), 14);
   assert.equal(whenLabel(new Date("2026-11-14T10:12:00"), new Date("2026-11-16T09:00:00").getTime()), "il y a 2 jours");
+});
+
+const STATE_STEPS = ["Non commencé", "Cahier des charges envoyé", "V1 réalisée, non testée", "V1 testée et approuvée", "Version maximale optimisée"].map((label, value) => ({ value, label }));
+const stateKeys = (list) => list.map((item) => item.key);
+const stateNow = (list) => list.filter((item) => item.current).map((item) => item.key);
+
+test("stateChoices : à tester par le juriste, approuver passe par son geste et la livraison est l'état actuel", () => {
+  const list = stateChoices({ step: 2 }, STATE_STEPS, { who: "lawyer" });
+  assert.deepEqual(stateKeys(list), ["s0", "s1", "deliver", "request_change", "approve", "s4"]);
+  assert.deepEqual(stateNow(list), ["deliver"]);
+  assert.equal(list.find((item) => item.key === "approve").action, "approve");
+  assert.equal(list.find((item) => item.key === "approve").label, "V1 testée et approuvée");
+  assert.equal(list.find((item) => item.key === "s4").step, 4);
+  assert.equal(list.find((item) => item.key === "request_change").needsNote, true);
+});
+
+test("stateChoices : avant toute version, pas de modification à demander et approuver règle l'étape", () => {
+  const list = stateChoices({ step: 1 }, STATE_STEPS, { who: "build" });
+  assert.ok(!stateKeys(list).includes("request_change"));
+  assert.deepEqual(stateNow(list), ["s1"]);
+  assert.equal(list.find((item) => item.key === "approve").step, 3);
+});
+
+test("stateChoices : l'étape 4 est l'état actuel ; une demande en cours prime", () => {
+  assert.deepEqual(stateNow(stateChoices({ step: 4 }, STATE_STEPS, { who: "done" })), ["s4"]);
+  assert.deepEqual(stateNow(stateChoices({ step: 3 }, STATE_STEPS, { who: "dev" })), ["request_change"]);
+  assert.equal(stateChoices({ step: 3 }, STATE_STEPS, { who: "done" }).find((item) => item.key === "deliver").label, "Nouvelle version, à tester par le juriste");
 });
