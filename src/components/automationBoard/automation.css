@@ -570,3 +570,51 @@ html.dark-mode .ab-sheet .fd-tab.is-active .fd-tab-n { background: #ededed; colo
 html.dark-mode .ab-sheet .fd-block-hint { color: #8a8a8a; }
 html.dark-mode .ab-sheet .fd-icon-btn, html.dark-mode .ab-sheet-close { background: #1f1f1f; border-color: #333; color: #c9c9c9; }
 html.dark-mode .ab-sheet-wait i { background: linear-gradient(90deg, #1f1f1f 25%, #2a2a2a 37%, #1f1f1f 63%); background-size: 400% 100%; }
+
+/* ── Plus épuré (17/11/2026, « plus épuré c'est nickel ») : une information par cellule, moins de traits. ──────────── */
+/* Plus de filets verticaux ni de bande grise : les colonnes se lisent par l'alignement, les groupes par leur titre. */
+.ab-root .fst-table th + th, .ab-root .fst-table td + td { border-left: 0; }
+.ab-root .fst-table td { padding-top: 14px; padding-bottom: 14px; }
+.ab-root .fst-table tr.ab-group td { background: transparent; border-bottom: 0; padding-top: 10px; }
+.ab-root .fst-table tbody.ab-group-body:not(:first-of-type) tr.ab-group td { border-top: 1px solid var(--line-soft); }
+.ab-root .ab-group-btn { padding: 12px 10px 4px; gap: 8px; }
+.ab-group-title { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-2); }
+.ab-group-count { min-width: 0; height: auto; padding: 0; background: none !important; font-size: 12px; color: var(--muted); }
+.ab-group[data-tone="peach"] .ab-group-title { color: #c2500e; }
+.ab-group[data-tone="blue"] .ab-group-title { color: #1b6fd0; }
+.ab-group[data-tone="yellow"] .ab-group-title { color: #7a5a05; }
+.ab-group[data-tone="green"] .ab-group-title { color: #0b7a4b; }
+/* La dernière nouvelle tient sur deux lignes : qui, puis ses mots, coupés. */
+.ab-cell-quote { -webkit-line-clamp: 1; }
+.ab-side { border: 0; padding: 0; font-size: 11.5px; font-weight: 400; color: var(--muted); }
+.ab-side::before { content: "· "; }
+/* Responsable et date sur une ligne ; sans responsable, un picto discret qui se révèle au survol de la ligne. */
+.ab-cell-plan { display: flex; align-items: center; gap: 8px; min-width: 150px; }
+.ab-root .ab-plan.is-empty:not(.is-wide) { width: 28px; padding: 0; justify-content: center; border-color: transparent; opacity: .45; }
+.ab-root .fst-table tbody tr:hover .ab-plan.is-empty, .ab-root .ab-plan.is-empty:focus-visible, .ab-root .ab-plan.is-empty[aria-expanded="true"] { opacity: 1; border-color: var(--faint); }
+.ab-due { height: auto; padding: 0; border: 0; background: none; color: var(--muted); font-weight: 400; }
+.ab-due svg { display: none; }
+.ab-due[data-state="soon"] { background: none; color: #c2500e; }
+.ab-due[data-state="late"] { padding: 2px 7px; border: 1px solid #f8cccc; background: #fde6e6; }
+.ab-due[data-state="late"] svg { display: inline; }
+/* Le geste : une pastille sans ombre ; elle prend du relief au survol de sa ligne. */
+.ab-root .ab-act { box-shadow: none; }
+.ab-root .fst-table tbody tr:hover .ab-act:not(.is-more) { border-color: #d6d1c9; box-shadow: var(--shadow-1); }
+.ab-cell-steps > div:first-child { flex-basis: 96px; }
+html.dark-mode .ab-due { background: none; border: 0; }
+html.dark-mode .ab-due[data-state="late"] { border: 1px solid rgba(239, 68, 68, .3); }
+html.dark-mode .ab-root .fst-table tr.ab-group td { background: transparent; }
+/* La fiche : l'étape et sa frise seules en tête, sans cadre ; les chiffres sont dans leur rubrique. */
+.ab-sheet .ab-hero { padding: 6px 0 0; border: 0; border-radius: 0; background: none; margin-bottom: 20px; }
+.ab-sheet .ab-hero-kpis { display: none; }
+.ab-sheet:not(.is-full) .ab-hero-track { margin-top: 20px; }
+.ab-sheet .ab-next .ab-turn { border: 0; border-radius: 18px; background: var(--hover); padding: 18px 20px 20px; }
+.ab-sheet .ab-next .ab-turn-ico { background: var(--card); }
+.ab-sheet .ab-next .ab-turn-quote { background: var(--card); }
+.ab-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; margin: 0; }
+.ab-kpis > div { display: grid; align-content: start; gap: 2px; padding: 2px 16px; border-left: 1px solid var(--line-soft); }
+.ab-kpis > div:first-child { border-left: 0; padding-left: 0; }
+.ab-kpis dd { margin: 0; font-size: 24px; font-weight: 500; line-height: 1.1; letter-spacing: -.03em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ab-kpis dt { font-size: 12.5px; color: var(--ink-2); }
+.ab-kpis > div > span { font-size: 11.5px; color: var(--muted); }
+html.dark-mode .ab-sheet .ab-next .ab-turn { background: #1f1f1f; }

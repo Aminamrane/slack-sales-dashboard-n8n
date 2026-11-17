@@ -245,9 +245,8 @@ export default function CeoAutomationView() {
               {[
                 parent ? `Process ${parent}` : row.isParent ? `Process · ${countLabel(row.members, "mission", "missions")}` : null,
                 row.pole?.label,
-                // « À valider par le juriste » ne dit rien de plus quand l'état de la ligne le dit déjà.
-                row.classification === "pending_validation" && ["lawyer", "redo", "working"].includes(follow.group) ? null : rankOf(row.classification)?.shortLabel || "Non classée",
-                row.usage ? `${row.usage.label} par le logiciel` : null,
+                // « À suivre » ne garde que le pôle : le classement et l'utilisation se lisent dans « Toutes » et au survol.
+                ...(view === "follow" ? [] : [rankOf(row.classification)?.shortLabel || "Non classée", row.usage ? `${row.usage.label} par le logiciel` : null]),
               ].filter(Boolean).join(" · ")}
               {!row.validated && row.toConfirm && (
                 <button type="button" className="ab-confirm" title="Classement proposé par le logiciel, que personne n’a encore revu : un clic le confirme."
@@ -258,7 +257,7 @@ export default function CeoAutomationView() {
           <OpenCue />
         </div>
       </td>
-      <td><StateCell row={row} follow={follow} steps={data.steps} onApply={apply} P={P} /></td>
+      <td><StateCell row={row} follow={follow} steps={data.steps} onApply={apply} P={P} quiet={view === "follow"} /></td>
       <td><NewsCell row={row} follow={follow} onReply={reply} /></td>
       <td><PlanCell row={row} follow={follow} people={people} me={me} onApply={apply} /></td>
       <td><GestureCell row={row} follow={follow} onApply={apply} /></td>
@@ -336,8 +335,7 @@ export default function CeoAutomationView() {
                 </Stats>
 
                 <Reveal>
-                  <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}
-                    hint="Le suivi se fait ici : l’état, la réponse au cabinet, le responsable et le geste se règlent sur la ligne. Un clic sur la ligne ouvre la fiche à droite.">
+                  <Card title="Les missions" Icon={ListChecks} state={{ data, loading, error: "" }}>
                     <div className="fst-tools">
                       <div className="fst-tabs" role="group" aria-label="Ce qui attend quelqu’un">
                         {[["follow", "À suivre", totals.redo + totals.working + totals.lawyer, "Les missions rangées par ce qu’elles attendent : à reprendre, en cours, chez le juriste"],
@@ -394,7 +392,6 @@ export default function CeoAutomationView() {
                                   <ChevronRight size={15} className="ab-group-chev" />
                                   <span className="ab-group-title">{group.title}</span>
                                   <span className="ab-group-count fst-num">{number(group.items.length)}</span>
-                                  <span className="ab-group-hint">{group.hint}</span>
                                 </button>
                               </td>
                             </tr>

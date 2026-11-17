@@ -20,7 +20,8 @@ const NOTE_MAX = 2000;
 const LATE_DAYS = 7;
 const ICON = { approve: Check, deliver: Send, start: Hammer };
 
-export function StateCell({ row, follow, steps, onApply, P }) {
+// `quiet` : dans « À suivre », le groupe dit déjà que les développeurs y travaillent ; l'étiquette « En cours » se tait.
+export function StateCell({ row, follow, steps, onApply, P, quiet = false }) {
   const [state, setState] = useState({ busy: "", error: "" });
   const { turn, waitDays } = follow;
   const choices = useMemo(() => stateChoices(row, steps, turn), [row, steps, turn]);
@@ -46,7 +47,7 @@ export function StateCell({ row, follow, steps, onApply, P }) {
           <StateMenu choices={choices} onChoose={choose} busy={state.busy} error={state.error} validated={row.validated} url={row.url} tone={turn.tone}
             label={`Changer l’état de ${row.name}`}>{label}</StateMenu>
         )}
-        {turn.working && <Tag tone="blue" title={turn.working.text || "Les développeurs y travaillent"}>En cours</Tag>}
+        {turn.working && !(quiet && follow.group === "working") && <Tag tone="blue" title={turn.working.text || "Les développeurs y travaillent"}>En cours</Tag>}
       </div>
       <div className="ab-cell-steps">
         <Steps value={row.step} steps={steps} P={P} showLabel={false} />
@@ -153,10 +154,10 @@ export function PlanCell({ row, follow, people, me, onApply, wide = false }) {
   const others = people.filter((person) => person !== me && person !== owner);
   return (
     <div className="ab-cell-plan">
-      <button ref={button} type="button" className={`ab-plan${owner ? "" : " is-empty"}${wide ? " is-wide" : ""}`} aria-haspopup="dialog" aria-expanded={open}
+      <button ref={button} type="button" className={`ab-plan${owner ? "" : " is-empty"}${wide ? " is-wide" : ""}`} aria-haspopup="dialog" aria-expanded={open} aria-label={owner ? undefined : `Choisir un responsable pour ${row.name}`}
         title={owner ? `Portée par ${owner}${row.owner?.since ? `, depuis le ${String(row.owner.since).slice(0, 10)}` : ""}. Cliquez pour changer.` : "Personne ne porte cette mission. Cliquez pour la prendre ou la confier."}
         onClick={(e) => { e.stopPropagation(); setState({ busy: "", error: "" }); setOpen((value) => !value); }}>
-        {owner ? <><Face name={owner} size={20} /><span className="ab-plan-name">{owner}</span></> : <><UserPlus size={14} strokeWidth={1.9} /><span>Responsable</span></>}
+        {owner ? <><Face name={owner} size={20} /><span className="ab-plan-name">{owner}</span></> : <><UserPlus size={14} strokeWidth={1.9} />{wide && <span>Responsable</span>}</>}
       </button>
       {due && <span className="ab-due" data-state={due.late ? "late" : due.soon ? "soon" : undefined} title={due.hint}><CalendarClock size={12} strokeWidth={2} />{due.label}</span>}
       <Bubble open={open} anchor={button} onClose={close} label={`Responsable et date cible de ${row.name}`} className="ab-act-pop">

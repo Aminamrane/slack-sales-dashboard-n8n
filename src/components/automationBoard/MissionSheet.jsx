@@ -18,7 +18,7 @@ import "../../pages/TrackingSheetFinance/components/DetailLayout.css";
 import { ExternalIcon, Face, Usage } from "./parts";
 import { Composer, Feedback, Files } from "./Followup.jsx";
 import Journey from "./Journey.jsx";
-import { Hero, Voices } from "./MissionHero.jsx";
+import { Hero, Kpis, Voices } from "./MissionHero.jsx";
 import StateMenu from "./StateMenu.jsx";
 import { PlanCell } from "./RowFollow.jsx";
 import { FILE_ACCEPT, followupApi, partnerFile, pickFiles } from "./followupApi.js";
@@ -444,6 +444,7 @@ function SheetBody({ id, period, frame, onClose, onOpen, onChanged, P, full, onF
           </div>
 
           <div role="tabpanel" id="ab-panel-figures" aria-labelledby="ab-tab-figures" hidden={tab !== "figures"} className="fd-tabpanel ab-panel">
+            <Kpis row={row} />
             <Sec title="Classement" Icon={Tags} hint={`${classification?.help || "Ce que la mission est aujourd’hui pour le cabinet."} Il suit l’étape tout seul ; le changer ici fait suivre l’étape.`}>
               {locked ? (
                 <p className="ab-note" style={{ marginTop: 0 }}>{classification?.label}. Validé par la direction : le classement ne change plus.</p>
