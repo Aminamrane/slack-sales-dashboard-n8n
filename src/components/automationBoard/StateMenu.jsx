@@ -4,10 +4,11 @@
 // le geste qui le dit le mieux (`stateChoices`). Le mot écrit en tête part avec ; il est obligatoire pour demander une
 // modification. Le cadenas, « validé par la direction », se pose dans Opti'Lex par la direction : il figure en bas,
 // sans s'y faire, avec le lien.
-import { useEffect, useRef, useState } from "react";
-import { AnimatePresence, motion as Motion, useReducedMotion } from "framer-motion";
+import { useCallback, useRef, useState } from "react";
+import { motion as Motion, useReducedMotion } from "framer-motion";
 import { Check, ChevronDown, CircleDashed, FileText, FlaskConical, Lock, Sparkles, ThumbsUp, Wrench } from "lucide-react";
 import { ExternalIcon } from "./parts";
+import Bubble from "./Bubble.jsx";
 
 const ICONS = { start: CircleDashed, spec: FileText, test: FlaskConical, change: Wrench, approve: ThumbsUp, best: Sparkles };
 const EASE = [0.22, 1, 0.36, 1];
@@ -16,17 +17,10 @@ export default function StateMenu({ tone, children, choices, onChoose, busy, err
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [missing, setMissing] = useState("");
-  const box = useRef(null);
+  const button = useRef(null);
   const reduce = useReducedMotion();
 
-  useEffect(() => {
-    if (!open) return undefined;
-    const away = (e) => { if (box.current && !box.current.contains(e.target)) setOpen(false); };
-    const key = (e) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
-    document.addEventListener("mousedown", away);
-    document.addEventListener("keydown", key, true);
-    return () => { document.removeEventListener("mousedown", away); document.removeEventListener("keydown", key, true); };
-  }, [open]);
+  const close = useCallback(() => setOpen(false), []);
 
   const choose = async (choice) => {
     const text = note.trim();
@@ -42,17 +36,13 @@ export default function StateMenu({ tone, children, choices, onChoose, busy, err
   }
 
   return (
-    <span className="ab-state" ref={box}>
-      <button type="button" className="fst-tag ab-state-tag is-button" data-tone={tone} aria-haspopup="menu" aria-expanded={open}
-        title={label} onClick={() => setOpen((value) => !value)}>
+    <span className="ab-state">
+      <button ref={button} type="button" className="fst-tag ab-state-tag is-button" data-tone={tone} aria-haspopup="dialog" aria-expanded={open}
+        title={label} onClick={(e) => { e.stopPropagation(); setOpen((value) => !value); }}>
         {children}
         <ChevronDown size={13} strokeWidth={2.2} className="ab-state-chev" aria-hidden="true" />
       </button>
-      <AnimatePresence>
-        {open && (
-          <Motion.div className="ab-state-pop" role="menu" aria-label={label}
-            initial={reduce ? false : { opacity: 0, y: -6, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98 }}
-            transition={{ duration: 0.18, ease: EASE }}>
+      <Bubble open={open} anchor={button} onClose={close} label={label} className="ab-state-pop">
             <p className="ab-state-head">Où en est la mission ?</p>
             <textarea className="ab-state-note" rows={2} maxLength={2000} value={note} aria-label="Un mot qui part avec le choix"
               placeholder="Un mot (facultatif, sauf pour demander une modification)…" onChange={(e) => { setNote(e.target.value); setMissing(""); }} />
@@ -86,9 +76,7 @@ export default function StateMenu({ tone, children, choices, onChoose, busy, err
               </li>
             </ul>
             {(missing || error) && <p className="ab-state-error" role="alert">{missing || error}</p>}
-          </Motion.div>
-        )}
-      </AnimatePresence>
+      </Bubble>
     </span>
   );
 }
