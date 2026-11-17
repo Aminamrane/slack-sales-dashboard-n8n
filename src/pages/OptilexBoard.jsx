@@ -1682,7 +1682,7 @@ export default function OptilexBoard({ embed = false }) {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
     }
-    // Passage « En cours de résiliation » (dev 17/11/2026) : le mail de résiliation du client d'abord, obligatoire.
+    // Passage « En cours de résiliation » (dev 17/11/2026) : le mail de résiliation du client est demandé d'abord (facultatif).
     if (payload.etat === RESILIATION && !payload.attachment_ids) {
       payload = await confirmBoardResiliation(numero, payload);
       if (!payload) return { cancelled: true };

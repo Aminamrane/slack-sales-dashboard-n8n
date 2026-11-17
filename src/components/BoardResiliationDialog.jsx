@@ -3,9 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { Paperclip, X } from 'lucide-react';
 import { MESSAGE_FILE_ACCEPT, MESSAGE_FILE_MAX, uploadMessageFile } from './BoardClientFiles.jsx';
 
-// Passage « En cours de résiliation » (dev 17/11/2026) : avant d'enregistrer, le mail de résiliation du client
-// (obligatoire) et l'appel (facultatif). Mêmes formats et limite que les pièces des messages du board ; déposés par la
-// route des pièces jointes du fil, puis portés par le message « Passage en cours de résiliation ». Même patron que la
+// Passage « En cours de résiliation » (dev 17/11/2026) : avant d'enregistrer, le mail de résiliation du client et
+// l'appel sont demandés, tous deux facultatifs. Mêmes formats et limite que les pièces des messages du board ; déposés
+// par la route des pièces jointes du fil, puis portés par le message « Passage en cours de résiliation ». Même patron que la
 // décision financière d'une sortie (BoardFinanceExitDialog).
 const field = { display: 'flex', alignItems: 'center', gap: 10, width: '100%', boxSizing: 'border-box', padding: '10px 12px', border: '1px solid #e3ded6', borderRadius: 8, font: 'inherit', cursor: 'pointer', background: '#fff' };
 const button = { padding: '9px 16px', border: '1px solid #e3ded6', borderRadius: 10, font: 'inherit', fontSize: 13, fontWeight: 500, cursor: 'pointer', background: '#fff', color: '#2b2927' };
@@ -38,7 +38,7 @@ export function BoardResiliationDialog({ numero, payload, onResolve }) {
   }, []);
   const pick = (set) => (file) => { setError(file && file.size > MESSAGE_FILE_MAX ? `${file.name} dépasse 20 Mo.` : ''); set(file && file.size <= MESSAGE_FILE_MAX ? file : null); };
   const confirm = async () => {
-    if (!mail || saving) return;
+    if (saving) return;
     setSaving(true); setError('');
     try {
       const ids = [];
@@ -66,12 +66,12 @@ export function BoardResiliationDialog({ numero, payload, onResolve }) {
           <div style={{ color: '#8b867e', marginTop: 4, fontSize: 13 }}>Les pièces sont jointes au fil du client, le Client Success est prévenu.</div></div>
         <button style={{ ...button, padding: 6, border: 0 }} aria-label="Fermer" disabled={saving} onClick={() => onResolve(null)}><X size={20}/></button>
       </div>
-      <FilePick label="Joindre le mail de résiliation du client" hint="obligatoire" file={mail} onPick={pick(setMail)} disabled={saving} />
+      <FilePick label="Joindre le mail de résiliation du client" hint="facultatif" file={mail} onPick={pick(setMail)} disabled={saving} />
       <FilePick label="Joindre l’appel" hint="facultatif" file={call} onPick={pick(setCall)} disabled={saving} />
       {error && <p role="alert" style={{ color: '#c5221f', fontSize: 12.5, margin: '12px 0 0' }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
         <button style={button} disabled={saving} onClick={() => onResolve(null)}>Annuler</button>
-        <button disabled={!mail || saving} style={{ ...button, background: '#2b2927', borderColor: '#2b2927', color: '#fff', opacity: mail && !saving ? 1 : 0.45, cursor: mail && !saving ? 'pointer' : 'default' }} onClick={confirm}>
+        <button disabled={saving} style={{ ...button, background: '#2b2927', borderColor: '#2b2927', color: '#fff', opacity: saving ? 0.45 : 1, cursor: saving ? 'default' : 'pointer' }} onClick={confirm}>
           {saving ? 'Envoi des pièces…' : 'Passer en cours de résiliation'}
         </button>
       </div>

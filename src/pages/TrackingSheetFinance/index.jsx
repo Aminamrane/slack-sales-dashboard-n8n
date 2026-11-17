@@ -1146,8 +1146,8 @@ export default function TrackingSheetFinance() {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
     }
-    // Passage « En cours de résiliation » (dev 17/11/2026) : comme sur le board, le mail de résiliation du client
-    // d'abord, obligatoire (le serveur refuse sans pièce jointe).
+    // Passage « En cours de résiliation » (dev 17/11/2026) : comme sur le board, le mail de résiliation du client est
+    // demandé d'abord (facultatif).
     if (payload.etat === 'En cours de résiliation' && !payload.attachment_ids) {
       payload = await confirmBoardResiliation(numero, payload);
       if (!payload) return { cancelled: true };
