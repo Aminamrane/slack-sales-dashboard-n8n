@@ -483,7 +483,8 @@ export const creanceAgeMonths = (r, scope, period = null) => {
 };
 
 export const matchesPriorDebt = (r, scope, age = 'all', period = null) => {
-  if (scopedOpeningDebt(r, scope) <= 0 && scopedOverdueCum(r, scope) <= 0) return false;
+  // Seules les créances encore dues : une créance régularisée sort de la vue (dev 17/11/2026).
+  if (scopedOverdueCum(r, scope) <= 0) return false;
   if (age === 'all') return true;
   const months = creanceAgeMonths(r, scope, period);
   return months === null ? age === 'recent' : age === 'old' ? months >= 2 : months < 2;

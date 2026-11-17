@@ -394,7 +394,7 @@ test('la vision Globale est ouverte à toute la page, équipe finance comprise (
 import { matchesPriorDebt, scopedOpeningDebt } from './constants.js';
 import { orderedReceipts } from './receipts.js';
 
-test('créance réglée : attendu, population et ancienneté conservés dans les trois visions', () => {
+test('créance réglée : sortie de la vue Créances antérieures, attendu conservé, dans les trois visions', () => {
   for (const scope of ['owner', 'optilex', 'global']) {
     const before = { opening_owner_since: '2026-07-01', opening_optilex_since: '2026-07-01',
       balance_owner: { opening_debt: 100, prior_remaining: 100, recovered_prior: 0 },
@@ -403,9 +403,14 @@ test('créance réglée : attendu, population et ancienneté conservés dans les
       balance_owner: { opening_debt: 100, prior_remaining: 0, recovered_prior: 100 },
       balance_optilex: { opening_debt: 50, prior_remaining: 0, recovered_prior: 50 } };
     assert.equal(scopedOpeningDebt(before, scope), scopedOpeningDebt(after, scope));
-    assert.equal(matchesPriorDebt(after, scope, 'all', '2026-09'), true);
-    assert.equal(matchesPriorDebt(after, scope, 'old', '2026-09'), true);
+    assert.equal(matchesPriorDebt(before, scope, 'all', '2026-09'), true);
+    assert.equal(matchesPriorDebt(before, scope, 'old', '2026-09'), true);
+    assert.equal(matchesPriorDebt(after, scope, 'all', '2026-09'), false);
+    assert.equal(matchesPriorDebt(after, scope, 'old', '2026-09'), false);
     assert.equal(matchesPriorDebt(after, scope, 'recent', '2026-09'), false);
+    const partial = { ...before, balance_owner: { opening_debt: 100, prior_remaining: 40, recovered_prior: 60 },
+      balance_optilex: { opening_debt: 50, prior_remaining: 10, recovered_prior: 40 } };
+    assert.equal(matchesPriorDebt(partial, scope, 'all', '2026-09'), true);
     const initial = computeKpis([before], scope), settled = computeKpis([after], scope);
     assert.equal(initial.openingDebt, settled.openingDebt);
     assert.equal(settled.recoveredPrior, settled.openingDebt);

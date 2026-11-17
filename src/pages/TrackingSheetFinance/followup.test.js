@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reviewedInstallment } from './installmentFollowup.js';
-import { matchesLateOnboarding, matchesAnnualRenewal } from './followupFilters.js';
+import { matchesLateOnboarding, matchesAnnualRenewal, isRetractedEtat } from './followupFilters.js';
 import { installmentSubline } from './installmentLabel.js';
 
 test('a confirmed Owner installment does not settle OptiLex or modify receipts', () => {
@@ -34,4 +34,11 @@ test('renewal filter respects selected entity and server eligibility', () => {
   assert.equal(matchesAnnualRenewal({client_id:17}, 'optilex', map), true);
   assert.equal(matchesAnnualRenewal({client_id:17}, 'global', map), true);
   assert.equal(matchesAnnualRenewal({client_id:18}, 'global', map), false);
+});
+test('rétractés, actés ou en cours, reconnus ; les autres états non', () => {
+  assert.equal(isRetractedEtat('Rétractation'), true);
+  assert.equal(isRetractedEtat('En cours de rétractation'), true);
+  for (const etat of ['Signé', 'Résiliation', 'En cours de résiliation', 'Pause', null, undefined]) {
+    assert.equal(isRetractedEtat(etat), false);
+  }
 });

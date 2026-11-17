@@ -8,3 +8,9 @@ export function matchesAnnualRenewal(row, scope, renewals) {
   const entities = renewals.get(row.client_id) || [];
   return scope === 'global' ? entities.length > 0 : entities.includes(scope);
 }
+// Clients rétractés (actés ou en cours) : ils ne doivent rien et ne seront pas
+// onboardés, donc ni « Retard du mois » ni « Onboarding » (dev 17/11/2026).
+const RETRACTED_ETATS = new Set(['Rétractation', 'En cours de rétractation']);
+export function isRetractedEtat(displayedState) {
+  return RETRACTED_ETATS.has(displayedState);
+}
