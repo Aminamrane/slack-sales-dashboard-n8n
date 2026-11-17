@@ -20,6 +20,8 @@ const ART = {
   receipt: <><path d="M15 9h28a3 3 0 0 1 3 3v40l-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3-4.5 3-4.5-3V12a3 3 0 0 1 3-3Z" fill="#fff" stroke={STROKE} strokeWidth="2" strokeLinejoin="round" /><path d="M20 19h18M20 26h18M20 33h10" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /><circle cx="44" cy="42" r="9" fill="#fff" stroke="#a8a39b" strokeWidth="2" /><path className="ofd-art-hand" d="M44 37.5V42l3 2" stroke="#a8a39b" strokeWidth="2" fill="none" strokeLinecap="round" /></>,
   // Pièces qui tombent dans une tirelire-coffre : ce qui est payé.
   paid: <><rect x="11" y="24" width="40" height="26" rx="7" fill="#fff" stroke={STROKE} strokeWidth="2" /><path d="M24 24v-3a7 7 0 0 1 14 0v3" stroke={SOFT} strokeWidth="2" fill="none" /><path className="ofd-art-tick" d="m23 37 5 5 11-10" stroke="#a8a39b" strokeWidth="2.6" fill="none" strokeLinecap="round" strokeLinejoin="round" /></>,
+  // Fantôme au trait, celui du no show sur le board : le client ne s'est pas présenté.
+  noshow: <><path d="M18 49V27a13 13 0 0 1 26 0v22l-4.4-3.6-4.3 3.6-4.3-3.6-4.3 3.6-4.3-3.6Z" fill="#fff" stroke={STROKE} strokeWidth="2" strokeLinejoin="round" /><circle cx="26" cy="28" r="2.2" fill="#a8a39b" /><circle cx="36" cy="28" r="2.2" fill="#a8a39b" /><path d="M27.5 35.5h7" stroke={SOFT} strokeWidth="2.4" strokeLinecap="round" /></>,
 };
 export const Art = ({ name }) => <svg className="ofd-art" viewBox="0 0 62 62" aria-hidden="true">{ART[name]}</svg>;
 

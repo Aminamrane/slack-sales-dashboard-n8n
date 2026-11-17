@@ -4839,7 +4839,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {onboardingOpen && <OnboardingFlowModal row={row} num={num} patch={patch} onClose={() => setOnboardingOpen(false)}
             onRescheduleWithDate={() => setReschedOpen("onboarding")} onReschedule={(kind) => setReschedOpen(kind)}
             onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
-            blocked={!!reschedOpen || !!cancelOpen} refreshKey={apptVersion} onChanged={() => { reload(); reloadRatings?.(); }} />}
+            blocked={!!reschedOpen || !!cancelOpen} refreshKey={apptVersion} onChanged={() => { afterHistory(); reloadRatings?.(); }} />}
           {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
           {transferTo && <TransferOnboardingModal row={row} num={num} target={transferTo} current={onboardingHost?.host} slot={onboardingHost?.slot}
             onClose={() => setTransferTo(null)} onDone={() => { setTransferTo(null); setApptVersion((v) => v + 1); reload(); }} />}
