@@ -1,7 +1,6 @@
 import DetailDisclosure from './components/DetailDisclosure.jsx';
 import './components/DetailSummary.css';
 import './components/DetailLayout.css';
-import BillingCompanies from './components/BillingCompanies.jsx';
 import {formatDateLongFR} from './constants.js';
 import {installmentSubline} from './installmentLabel.js';
 // DetailPanel.jsx — Notion-style slide-in right panel for a client + period.
@@ -52,7 +51,7 @@ import { useCountUp } from '../../components/perfSales/motion.jsx';
 import {
   X, Maximize2, Minimize2,
   Activity, UserRound, ReceiptText, IdCard, MessagesSquare, Paperclip,
-  Calendar, History, Lock, Landmark, FileSignature,
+  Calendar, History, Lock, FileSignature,
   Pencil, Download, Plus, Check, Phone,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
   SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
@@ -744,10 +743,9 @@ export default function DetailPanel({
     onShowToast?.('Copié dans le presse-papiers', 'info');
   }, [onShowToast]);
 
-  // Rubriques de la fiche. Le nombre d'échéances en retard et celui des sociétés facturées se lisent sur l'onglet,
-  // sans l'ouvrir ; le point signale une revue d'état en attente ou une erreur de chargement.
+  // Rubriques de la fiche. Le nombre d'échéances en retard se lit sur l'onglet, sans l'ouvrir ; le point signale une
+  // revue d'état en attente ou une erreur de chargement.
   const lateCount = useMemo(() => installments.filter((inst) => inst.status === 'late').length, [installments]);
-  const companyCount = String(profile?.client_id) === String(clientId) ? (profile?.companies?.length || 0) : 0;
   // Échanges : le compteur passe au rouge tant que la personne a une notification non lue sur ce client (mention du
   // board ou d'une note interne) ; ouvrir l'onglet les lit, comme un clic sur la notification (dev 17/11/2026).
   const unreadMentions = useUnreadClientMentions({ clientId, numero: numeroClient, enabled: open && !!clientId,
@@ -760,14 +758,13 @@ export default function DetailPanel({
     { key: 'payments', label: 'Paiements', count: lateCount, tone: 'red',
       dot: stateReview?.status === 'pending' || !!error,
       title: lateCount ? `${lateCount} échéance${lateCount > 1 ? 's' : ''} en retard` : undefined },
-    { key: 'billing', label: 'Contrats', count: companyCount,
-      title: companyCount ? `${companyCount} société${companyCount > 1 ? 's' : ''} de facturation` : undefined },
+    // « Contrats » devient « Documents » (dev 17/11/2026) : les contrats, la fiche d'intégration et les documents.
+    { key: 'files', label: 'Documents' },
     { key: 'exchanges', label: 'Échanges', count: exchangeCount || unreadMentions, tone: unreadMentions ? 'red' : undefined,
       title: [
         exchangeCount ? `${exchangeCount} échange${exchangeCount > 1 ? 's' : ''}` : null,
         unreadMentions ? `${unreadMentions} notification${unreadMentions > 1 ? 's' : ''} non lue${unreadMentions > 1 ? 's' : ''}` : null,
       ].filter(Boolean).join(' · ') || undefined },
-    { key: 'files', label: 'Documents' },
     { key: 'calls', label: 'Appels' },
     { key: 'history', label: 'Historique' },
   ];
@@ -1054,22 +1051,19 @@ export default function DetailPanel({
                 </div>
               </TabPanel>
 
-              {/* 3 · Contrats et facturation */}
-              <TabPanel id="billing" active={tab}>
+              {/* 3 · Documents (dev 17/11/2026, l'ancien onglet « Contrats ») : les contrats signés, la fiche d'intégration,
+                  puis les documents du dossier s'il y en a. Le bloc « Sociétés de facturation » est retiré. La
+                  ventilation des règlements reste ici, ouverte d'emblée. */}
+              <TabPanel id="files" active={tab}>
                 <div className="fd-stack">
                   <Section variant="block" Icon={FileSignature} title="Contrats signés" hint="Un clic ouvre le contrat signé sur Yousign" delay={0.04}>
                     <SignedContracts clientId={clientId} />
                   </Section>
-                  {/* Sociétés de facturation : seulement quand le dossier a d'autres sociétés que la principale ; sinon
-                      chaque contrat n'a qu'un choix et le bloc ne dit rien (dev 17/11/2026). La ventilation des
-                      règlements, elle, est ouverte d'emblée. */}
-                  {companyCount > 0 && (
-                    <Section variant="block" Icon={Landmark} title="Sociétés de facturation" delay={0.08}>
-                      <BillingCompanies key={`billing-${clientId}`} clientId={clientId} canEdit={canEdit} readOnly={readOnly} reloadKey={profile?.companies?.length || 0} />
-                    </Section>
-                  )}
+                  <Section key={`files-${clientId}`} variant="block" Icon={Paperclip} title="Fiche d’intégration et documents"
+                    hint="La fiche d’intégration du client, puis son dossier, le même que dans le board" delay={0.08}>
+                    <ClientDocuments key={`dossier-${clientId}`} files={clientFiles} numero={numeroClient} />
+                  </Section>
                   <DetailDisclosure key={`billing-${clientId}`} defaultOpen title="Ventilation des règlements" description="Répartir les encaissements entre les sociétés, mois par mois">
-
                   <Section title="Structures & ventilation" delay={0.12}>
                     <StructureSplits
                       clientId={clientId}
@@ -1096,15 +1090,7 @@ export default function DetailPanel({
                 </Section>
               </TabPanel>
 
-              {/* 5 · Documents : la fiche d'intégration, puis le dossier (documents et e-mails) */}
-              <TabPanel id="files" active={tab}>
-                <Section key={`files-${clientId}`} variant="block" Icon={Paperclip} title="Documents"
-                  hint="La fiche d’intégration du client, puis son dossier, le même que dans le board" delay={0.04}>
-                  <ClientDocuments key={`dossier-${clientId}`} files={clientFiles} numero={numeroClient} />
-                </Section>
-              </TabPanel>
-
-              {/* 6 · Appels */}
+              {/* 5 · Appels */}
               <TabPanel id="calls" active={tab}>
                 <Section key={`calls-${clientId}`} variant="block" Icon={Phone} title="Appels"
                   hint="Les appels du client, du plus récent au plus ancien" delay={0.04}>
@@ -1112,7 +1098,7 @@ export default function DetailPanel({
                 </Section>
               </TabPanel>
 
-              {/* 7 · Historique des actions */}
+              {/* 6 · Historique des actions */}
               <TabPanel id="history" active={tab}>
                 <Section key={`audit-${clientId}`} variant="block" Icon={History} title="Historique des actions"
                   hint="Modifications de la fiche et opérations financières datées" delay={0.04}>
@@ -1896,15 +1882,15 @@ function ContractInfoList({
       label: profile?.representatives?.length > 1 ? 'Personnes du NDA' : 'Nom du client',
       copyValue: profile?.representatives?.length ? [...profile.representatives.map(ndaPersonLabel), distinctCrmName(profile)].filter(Boolean).join(" / ") : personne || societeName,
       node: (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start' }}>
           {profile?.representatives?.length ? profile.representatives.map((person, index) => (
-            <div key={index} style={{ textAlign: 'right', whiteSpace: 'normal', lineHeight: 1.5 }}>
+            <div key={index} style={{ textAlign: 'left', whiteSpace: 'normal', lineHeight: 1.5 }}>
               <span>{ndaPersonLabel(person)}</span>
               {person.role && <span style={{ display: 'block', fontSize: 11, color: N.textFaint }}>{person.role}</span>}
             </div>
           )) : <span>{profile?.crm_name || personne || societeName}</span>}
           {!!profile?.representatives?.length && distinctCrmName(profile) && (
-            <span style={{ fontSize: 11.5, color: N.textMuted, whiteSpace: 'normal', textAlign: 'right' }}>
+            <span style={{ fontSize: 11.5, color: N.textMuted, whiteSpace: 'normal', textAlign: 'left' }}>
               Fiche commerciale : {distinctCrmName(profile)}
             </span>
           )}
@@ -1979,7 +1965,7 @@ function ContractInfoList({
           width="auto"
         />
       ) : (
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span>{formatDateLongFR(profile?.rdv_onboarding) || <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}</span>
             {platformDiffers && profile?.rdv_onboarding && (
@@ -2004,7 +1990,7 @@ function ContractInfoList({
       label: 'Onboarding plateforme (CSM)',
       copyValue: formatDateLongFR(profile.platform_onboarding),
       node: (
-        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap', gap: 10 }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'flex-start', flexWrap: 'wrap', gap: 10 }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             <span>{formatDateLongFR(profile.platform_onboarding)}</span>
             <span title="Présentation de la plateforme par le CSM. La facturation suit le RDV d’onboarding ci-dessus."
@@ -2685,7 +2671,7 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
           <span className="fd-prop-k"><Scale className="fd-prop-ic" size={15} strokeWidth={1.7} /><span>Juriste de référence</span></span>
           <span className="fd-prop-v">
             {ref ? (
-              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, minWidth: 0 }}>
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2, minWidth: 0 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 500, color: N.text }}>{ref.name}{ref.team ? ` · ${ref.team}` : ''}</span>
                 {refEmail && (
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, minWidth: 0, maxWidth: '100%' }}>
@@ -2716,7 +2702,7 @@ function RdvJuristeSection({ boardRow, agenda, onCopied }) {
                   <span style={{ textDecoration: it.cancelled ? 'line-through' : 'none' }}>{it.label}</span>
                 </span>
                 <span className="fd-prop-v">
-                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1, minWidth: 0 }}>
+                  <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 13.5, fontWeight: 500, color: it.cancelled ? N.textMuted : N.text }}>{whenLabel(it.when)}</span>
                     <span style={{ fontSize: 11, color: N.textFaint }}>
                       {[it.kind === 'jurist' ? (it.juriste || 'Juriste') : it.type, tag].filter(Boolean).join(' · ')}
@@ -2984,7 +2970,7 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
   if (!items.length && !editing) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end', maxWidth: '100%' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-start', maxWidth: '100%' }}>
       {items.map((it) => (
         <span key={it.id} style={{
           display: 'inline-flex', alignItems: 'center', gap: 6,
@@ -3011,7 +2997,7 @@ function RelatedEntityList({ items, kind, clientId, editing, onChanged, onShowTo
         </span>
       ))}
       {editing && (
-        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end', flexWrap: 'wrap', maxWidth: '100%' }}>
+        <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-start', flexWrap: 'wrap', maxWidth: '100%' }}>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
@@ -3078,13 +3064,13 @@ function ModeWithTimeline({ timeline, canEdit, onCancel, children, labelOf = pay
   if (!dated.length && !notice) return children;
   const now = currentPeriod();
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 5 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 5 }}>
       {children}
       {notice && (
         <span style={{
           fontSize: 11.5, lineHeight: 1.4, color: '#a8480f', background: '#fffbeb',
           border: '1px solid #f0e09a', borderRadius: 8, padding: '4px 9px',
-          maxWidth: 300, textAlign: 'right',
+          maxWidth: 300, textAlign: 'left',
         }}>
           {notice}
         </span>
