@@ -4321,6 +4321,8 @@ function EtatHistory({ num, version }) {
                 <>
                   {pin(<GhostIcon size={12} />)}
                   <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{noShowLine(h)}</div>
+                  {/* Retrouvé par la statistique de la Finance : sa preuve (« Déplacé au … par … »), comme sur la page Finance. */}
+                  {h.proofs?.[0] && <div style={line}>{h.proofs[0]}</div>}
                   <div style={foot}>{timeAgo(h.created_at)}</div>
                 </>
               ) : (

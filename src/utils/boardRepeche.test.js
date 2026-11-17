@@ -13,6 +13,9 @@ test('le repêchage se lit « le JJ/MM par X · jusqu au JJ/MM », jour du repê
 test('le no show qualifié garde la date du rendez-vous et son auteur', () => {
   assert.equal(noShowLine({ rdv_date: '2026-11-03', qualified_by_name: 'Camille Test' }),
     "No show à l'onboarding du 03/11, qualifié par Camille Test");
+  // Retrouvés par la statistique de la Finance : sans auteur, « probable » quand le rendez-vous a bougé le jour même.
+  assert.equal(noShowLine({ rdv_date: '2026-11-02', qualified_by_name: '', level: 'certain' }), "No show à l'onboarding du 02/11");
+  assert.equal(noShowLine({ rdv_date: '2026-11-17', qualified_by_name: '', level: 'probable' }), "No show probable à l'onboarding du 17/11");
   assert.equal(slotLabel('2026-11-20T10:30:00'), '20/11 à 10h30');
   assert.equal(slotLabel(null), '');
 });

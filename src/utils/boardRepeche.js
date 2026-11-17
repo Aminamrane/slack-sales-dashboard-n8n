@@ -28,8 +28,9 @@ export function repecheLine(repeche) {
 }
 
 // Ligne d'historique : « No show à l'onboarding du JJ/MM, qualifié par X ».
+// « probable » : rendez-vous déplacé le jour même, retrouvé par la statistique de la Finance sans geste du CSM.
 export function noShowLine(noShow) {
-  return `No show à l'onboarding du ${dayMonth(noShow.rdv_date)}${noShow.qualified_by_name ? `, qualifié par ${noShow.qualified_by_name}` : ''}`;
+  return `No show${noShow.level === 'probable' ? ' probable' : ''} à l'onboarding du ${dayMonth(noShow.rdv_date)}${noShow.qualified_by_name ? `, qualifié par ${noShow.qualified_by_name}` : ''}`;
 }
 
 // Créneau posé chez le cabinet (heure-mur de Paris, sans fuseau) : « JJ/MM à HHhMM ».
