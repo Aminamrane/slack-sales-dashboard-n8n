@@ -28,8 +28,9 @@ export function repecheLine(repeche) {
 }
 
 // Ligne d'historique : « No show à l'onboarding du JJ/MM, qualifié par X ».
+// « probable » : rendez-vous déplacé le jour même, retrouvé par la statistique de la Finance sans geste du CSM.
 export function noShowLine(noShow) {
-  return `No show à l'onboarding du ${dayMonth(noShow.rdv_date)}${noShow.qualified_by_name ? `, qualifié par ${noShow.qualified_by_name}` : ''}`;
+  return `No show${noShow.level === 'probable' ? ' probable' : ''} à l'onboarding du ${dayMonth(noShow.rdv_date)}${noShow.qualified_by_name ? `, qualifié par ${noShow.qualified_by_name}` : ''}`;
 }
 
 // Créneau posé chez le cabinet (heure-mur de Paris, sans fuseau) : « JJ/MM à HHhMM ».
@@ -45,12 +46,13 @@ export function matchesMeteo(row, selected) {
     || (selected.includes(REPECHE_FILTER) && !!row.repeche);
 }
 
-// Historique de la fiche : changements d'état, fiches de conservation et no shows qualifiés, le plus récent en haut.
+// Historique de la fiche : changements d'état, fiches de conservation et no shows, dans l'ordre du temps, le plus
+// ancien en haut (dev 17/11/2026 : « l'historique est à l'envers »).
 export function historyItems(data) {
   const at = (v) => { const t = Date.parse(v || ''); return Number.isNaN(t) ? 0 : t; };
   return [
     ...(data?.history || []).map((h) => ({ ...h, kind: 'etat', key: `etat-${h.id}` })),
     ...(data?.conservations || []).map((c) => ({ ...c, kind: 'conservation', key: `conservation-${c.id}` })),
     ...(data?.no_shows || []).map((n) => ({ ...n, kind: 'no_show', key: `no_show-${n.id}` })),
-  ].sort((a, b) => at(b.created_at) - at(a.created_at));
+  ].sort((a, b) => at(a.created_at) - at(b.created_at));
 }

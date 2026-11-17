@@ -4272,8 +4272,8 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false, onCo
   );
 }
 
-// Timeline verticale de l'historique des états (audit fiscaliste). Le plus récent en haut. Avec (dev 17/11/2026) les
-// fiches de conservation et les onboardings qualifiés no show du client, sur le même fil.
+// Timeline verticale de l'historique des états (audit fiscaliste), dans l'ordre du temps : le plus ancien en haut
+// (dev 17/11/2026). Avec les fiches de conservation et les no shows d'onboarding du client, sur le même fil.
 function EtatHistory({ num, version }) {
   const [items, setItems] = useState([]);
   const [loaded, setLoaded] = useState(false);
@@ -4321,6 +4321,8 @@ function EtatHistory({ num, version }) {
                 <>
                   {pin(<GhostIcon size={12} />)}
                   <div style={{ fontSize: 13, fontWeight: 500, color: TEXT }}>{noShowLine(h)}</div>
+                  {/* Retrouvé par la statistique de la Finance : sa preuve (« Déplacé au … par … »), comme sur la page Finance. */}
+                  {h.proofs?.[0] && <div style={line}>{h.proofs[0]}</div>}
                   <div style={foot}>{timeAgo(h.created_at)}</div>
                 </>
               ) : (
