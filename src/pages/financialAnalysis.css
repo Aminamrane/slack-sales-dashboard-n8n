@@ -1,0 +1,163 @@
+/* « Analyse financière » (17/11/2026). Mise en page d'après la référence donnée par le dev (« Customer Journeys ») :
+   grands panneaux arrondis posés sur la toile, cartes blanches dedans, un parcours en colonnes reliées par des traits,
+   pastilles rondes, une tuile noire, des anneaux. Les couleurs sont les nôtres : toile grège, encre, anthracite, le
+   rouge chaud pour ce qui part. Préfixe `fa-`, portée `.fa-root` ; les variables viennent du kit (`.fst-root`). */
+
+.fa-asof { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 0 15px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  font-size: 13px; color: var(--ink-2); box-shadow: var(--shadow-1); }
+.fa-asof svg { color: var(--muted); }
+
+/* ── Les panneaux : un verre clair sur la toile, très arrondi, les cartes blanches posées dedans. ── */
+.fa-panel { position: relative; padding: 26px 28px 28px; border-radius: 34px; background: rgba(255, 255, 255, .5); border: 1px solid rgba(255, 255, 255, .9);
+  box-shadow: 0 1px 2px rgba(50, 40, 30, .04), 0 30px 60px -44px rgba(50, 40, 30, .32); }
+.fa-panel-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; min-height: 44px; }
+.fa-panel-title { margin: 0; font-size: 17px; font-weight: 500; letter-spacing: -.015em; color: var(--ink); }
+.fa-panel-sub { margin: 3px 0 0; font-size: 12.5px; color: var(--muted); }
+.fa-panel-tools { display: flex; gap: 8px; }
+.fa-root .fa-round { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; border: 1px solid var(--line); background: rgba(255, 255, 255, .7); color: var(--ink-2);
+  transition: background .18s var(--ease), color .18s, transform .25s var(--spring), border-color .18s; }
+.fa-root .fa-round:hover { background: #fff; color: var(--ink); transform: translateY(-1px); }
+.fa-root .fa-round:active { transform: scale(.94); }
+.fa-root .fa-round[aria-pressed="true"] { background: var(--charcoal); border-color: var(--charcoal); color: #fff; }
+
+/* ── Les niches : une rangée de ronds qui dépasse du haut du panneau, le nombre de clients dessous. ── */
+.fa-journey { margin-top: 30px; }
+.fa-niches { position: absolute; top: -30px; left: 50%; transform: translateX(-50%); z-index: 2; display: flex; gap: 10px; max-width: calc(100% - 420px); padding: 9px 16px 8px;
+  border-radius: 30px; background: #f9f8f6; border: 1px solid rgba(255, 255, 255, .95); box-shadow: 0 1px 2px rgba(50, 40, 30, .05), 0 14px 30px -20px rgba(50, 40, 30, .3); overflow-x: auto; scrollbar-width: none; }
+.fa-niches::-webkit-scrollbar { display: none; }
+.fa-root .fa-niche { flex: none; display: grid; justify-items: center; gap: 0; padding: 0; }
+.fa-niche-face { width: 44px; height: 44px; display: grid; place-items: center; border-radius: 50%; background: #fff; border: 1px solid var(--line); font-size: 12.5px; font-weight: 500; letter-spacing: .02em; color: var(--ink-2);
+  transition: transform .3s var(--spring), border-color .2s, background .2s, color .2s; }
+.fa-niche-count { margin-top: -9px; min-width: 22px; height: 18px; padding: 0 5px; display: grid; place-items: center; border-radius: 999px; background: var(--track); border: 2px solid #f9f8f6;
+  font-size: 10.5px; font-weight: 500; color: var(--ink-2); transition: background .2s, color .2s; }
+.fa-niche:hover .fa-niche-face { transform: translateY(-2px); border-color: #d6d1c9; }
+.fa-niche:active .fa-niche-face { transform: scale(.94); }
+.fa-niche[aria-pressed="true"] .fa-niche-face { background: var(--charcoal); border-color: var(--charcoal); color: #fff; }
+.fa-niche[aria-pressed="true"] .fa-niche-count { background: var(--charcoal); color: #fff; }
+
+/* ── Le parcours : trois cartes de lignes, reliées par des traits, puis les tuiles. ── */
+.fa-flow { display: flex; align-items: flex-start; margin-top: 22px; }
+.fa-col { flex: 1 1 0; min-width: 0; }
+.fa-col--tiles { flex: .95 1 0; }
+.fa-card { padding: 12px 8px; border-radius: 28px; background: var(--card); border: 1px solid rgba(255, 255, 255, .9); box-shadow: 0 1px 2px rgba(50, 40, 30, .04), 0 16px 32px -26px rgba(50, 40, 30, .26); }
+.fa-row { display: flex; align-items: center; gap: 12px; height: 72px; padding: 0 12px; border-radius: 18px; transition: background .18s var(--ease); animation: faRow .5s var(--ease) both; }
+.fa-row:nth-child(2) { animation-delay: 70ms; }
+.fa-row:nth-child(3) { animation-delay: 140ms; }
+.fa-row:nth-child(4) { animation-delay: 210ms; }
+@keyframes faRow { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.fa-row:hover { background: var(--hover); }
+.fa-row-lead { position: relative; flex: none; width: 42px; height: 42px; display: grid; place-items: center; border-radius: 50%; background: var(--bg); color: var(--ink-2); }
+/* Dans une carte, les étapes se suivent : un trait relie chaque rond au suivant, de haut en bas. */
+.fa-card.is-chain .fa-row + .fa-row .fa-row-lead::before { content: ""; position: absolute; left: 50%; bottom: 100%; width: 1.4px; height: 30px; margin-left: -.7px; background: var(--rail); }
+.fa-card.is-chain .fa-row[data-tone="out"] .fa-row-lead::before { background: repeating-linear-gradient(to bottom, var(--red) 0 3px, transparent 3px 7px); opacity: .8; }
+.fa-row-lead .fst-ring { margin: 0; }
+.fa-row-text { min-width: 0; margin-right: auto; display: grid; gap: 2px; }
+.fa-row-text b { font-size: 13.5px; font-weight: 500; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-row-text small { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-row-value { flex: none; font-size: 16px; font-weight: 500; letter-spacing: -.02em; color: var(--ink); }
+.fa-row[data-tone="out"] .fa-row-lead { background: var(--red-bg); color: var(--red); }
+.fa-row[data-tone="out"] .fa-row-value { color: var(--red); white-space: nowrap; }
+.fa-row[data-tone="strong"] .fa-row-lead { background: var(--charcoal); color: #fff; }
+.fa-caption { margin: 14px 0 0; text-align: center; font-size: 13px; color: var(--ink-2); }
+.fa-links { flex: none; overflow: visible; }
+.fa-links path { stroke: var(--rail); stroke-width: 1.4; }
+.fa-links circle { fill: var(--card); stroke: var(--rail); stroke-width: 1.4; }
+.fa-links .is-dead path { stroke: var(--red); stroke-dasharray: 3 4; opacity: .8; }
+.fa-links .is-dead circle { stroke: var(--red); }
+.fa-links .fa-links-out circle { fill: var(--red-bg); stroke: none; }
+.fa-links .fa-links-out path { stroke: var(--red); stroke-width: 1.6; stroke-dasharray: none; stroke-linecap: round; opacity: 1; }
+
+/* Les tuiles : six carrés très arrondis, celui de la durée de vie en noir. */
+.fa-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 10px; border-radius: 30px; border: 1px solid rgba(255, 255, 255, .9); background: rgba(255, 255, 255, .35); }
+.fa-tile { min-height: 100px; padding: 14px 16px; display: grid; align-content: space-between; gap: 6px; border-radius: 24px; background: var(--card); box-shadow: 0 1px 2px rgba(50, 40, 30, .04);
+  transition: transform .25s var(--spring), box-shadow .2s; animation: faRow .5s var(--ease) both; }
+.fa-tile:nth-child(2) { animation-delay: 50ms; } .fa-tile:nth-child(3) { animation-delay: 100ms; } .fa-tile:nth-child(4) { animation-delay: 150ms; }
+.fa-tile:nth-child(5) { animation-delay: 200ms; } .fa-tile:nth-child(6) { animation-delay: 250ms; }
+.fa-tile:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -16px rgba(50, 40, 30, .35); }
+.fa-tile span { font-size: 12px; color: var(--ink-2); }
+.fa-tile b { font-size: 20px; font-weight: 500; letter-spacing: -.025em; line-height: 1.15; color: var(--ink); }
+.fa-tile b *, .fa-row-value * { font: inherit; letter-spacing: inherit; color: inherit; }
+.fa-tile small { font-size: 11.5px; color: var(--muted); }
+.fa-tile.is-main { background: var(--charcoal); }
+.fa-tile.is-main span, .fa-tile.is-main small { color: rgba(255, 255, 255, .62); }
+.fa-tile.is-main b { color: #fff; }
+
+/* La règle de calcul, dépliée par le bouton rond du panneau. */
+.fa-rules { margin: 22px 0 0; padding: 6px 20px; border-radius: 24px; background: var(--card); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 28px; }
+.fa-rules > div { display: grid; grid-template-columns: 136px minmax(0, 1fr); gap: 14px; padding: 13px 0; border-top: 1px solid var(--line-soft); }
+.fa-rules > div:nth-child(-n + 2) { border-top: 0; }
+.fa-rules dt { font-size: 13px; font-weight: 500; color: var(--ink); }
+.fa-rules dd { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+
+/* ── Le bas : les niches en tableau, les résiliations en anneaux. ── */
+.fa-bottom { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.fa-table { margin-top: 16px; display: grid; }
+.fa-tr { display: grid; grid-template-columns: minmax(0, 1.5fr) 76px minmax(0, 1.2fr) 70px 104px; align-items: center; gap: 14px; width: 100%; padding: 10px 12px; border-radius: 16px; text-align: left; font-size: 13.5px;
+  color: var(--ink); animation: faRow .45s var(--ease) both; animation-delay: calc(min(var(--i, 0), 14) * 22ms); }
+.fa-root button.fa-tr { transition: background .18s var(--ease), transform .18s var(--ease); }
+.fa-root button.fa-tr:hover { background: rgba(255, 255, 255, .8); }
+.fa-root button.fa-tr:active { transform: scale(.995); }
+.fa-root button.fa-tr[aria-pressed="true"] { background: #fff; box-shadow: 0 1px 2px rgba(50, 40, 30, .05), 0 12px 24px -20px rgba(50, 40, 30, .3); }
+.fa-th { padding-top: 0; padding-bottom: 8px; border-radius: 0; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); animation: none; }
+.fa-tr > span:nth-child(2), .fa-tr > span:nth-child(4), .fa-tr > span:nth-child(5) { text-align: right; }
+.fa-sector { display: flex; align-items: center; gap: 11px; min-width: 0; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fa-sector i { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; background: #fff; border: 1px solid var(--line); font-style: normal; font-size: 10.5px; font-weight: 500; color: var(--ink-2); }
+.fa-tr[aria-pressed="true"] .fa-sector i { background: var(--charcoal); border-color: var(--charcoal); color: #fff; }
+.fa-share { display: grid; grid-template-columns: minmax(60px, 1fr) 50px; align-items: center; gap: 10px; }
+.fa-share em { font-style: normal; font-size: 12.5px; color: var(--ink-2); text-align: right; }
+.fa-tr mark { padding: 2px 8px; border-radius: 999px; background: var(--red-bg); color: var(--red); font-weight: 500; }
+.fa-tr > span:nth-child(4), .fa-tr > span:nth-child(5) { color: var(--ink-2); }
+
+.fa-rings { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+.fa-ring { position: relative; display: grid; justify-items: center; gap: 14px; padding: 22px 12px 20px; border-radius: 28px; background: var(--card); box-shadow: 0 1px 2px rgba(50, 40, 30, .04), 0 16px 32px -26px rgba(50, 40, 30, .26); }
+.fa-ring .fst-ring-center { display: grid; justify-items: center; gap: 2px; }
+.fa-ring b { font-size: 26px; font-weight: 500; letter-spacing: -.03em; color: var(--ink); }
+.fa-ring small { font-size: 12px; color: var(--muted); }
+.fa-ring p { margin: 0; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--ink-2); }
+.fa-bubble { position: absolute; top: 14px; left: 16px; min-width: 40px; height: 40px; padding: 0 10px; display: grid; place-items: center; border-radius: 999px; background: var(--bg); border: 1px solid rgba(255, 255, 255, .9);
+  font-size: 15px; font-weight: 500; color: var(--ink); box-shadow: 0 6px 14px -8px rgba(50, 40, 30, .3); }
+.fa-ring[data-tone="out"] .fa-bubble { background: var(--red-bg); color: var(--red); }
+
+@media (max-width: 1240px) {
+  .fa-flow { flex-wrap: wrap; row-gap: 20px; }
+  .fa-links { display: none; }
+  .fa-col { flex: 1 1 calc(33.333% - 12px); margin-right: 12px; }
+  .fa-col--tiles { flex: 1 1 100%; margin: 0; }
+  .fa-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fa-niches { max-width: calc(100% - 40px); }
+  .fa-journey .fa-panel-head { margin-top: 26px; }
+  .fa-bottom { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 760px) {
+  .fa-col { flex: 1 1 100%; margin-right: 0; }
+  .fa-tiles, .fa-rules, .fa-rings { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .fa-rules { grid-template-columns: minmax(0, 1fr); }
+  .fa-rules > div:nth-child(2) { border-top: 1px solid var(--line-soft); }
+  .fa-tr { grid-template-columns: minmax(0, 1.4fr) 60px 70px 90px; }
+  .fa-tr > span:nth-child(3) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fa-row, .fa-tile, .fa-tr { animation: none; }
+  .fa-root .fa-round, .fa-niche-face, .fa-tile, .fa-root button.fa-tr { transition: none; }
+}
+
+/* Mode sombre : noirs et gris neutres, jamais de bleu nuit. */
+html.dark-mode .fa-root .fa-panel { background: rgba(255, 255, 255, .03); border-color: #262626; box-shadow: none; }
+html.dark-mode .fa-root .fa-card, html.dark-mode .fa-root .fa-tile, html.dark-mode .fa-root .fa-ring, html.dark-mode .fa-root .fa-rules { background: #1f1f1f; border-color: #2e2e2e; box-shadow: none; }
+html.dark-mode .fa-root .fa-tiles { background: rgba(255, 255, 255, .02); border-color: #262626; }
+html.dark-mode .fa-root .fa-tile.is-main { background: #ededed; }
+html.dark-mode .fa-root .fa-tile.is-main b { color: #141414; }
+html.dark-mode .fa-root .fa-tile.is-main span, html.dark-mode .fa-root .fa-tile.is-main small { color: rgba(20, 20, 20, .6); }
+html.dark-mode .fa-root .fa-niches { background: #1c1c1c; border-color: #2e2e2e; box-shadow: none; }
+html.dark-mode .fa-root .fa-niche-face, html.dark-mode .fa-root .fa-sector i, html.dark-mode .fa-root .fa-round, html.dark-mode .fa-root .fa-asof { background: #262626; border-color: #333; color: #c9c9c9; }
+html.dark-mode .fa-root .fa-niche-count { background: #333; border-color: #1c1c1c; color: #c9c9c9; }
+html.dark-mode .fa-root .fa-niche[aria-pressed="true"] .fa-niche-face, html.dark-mode .fa-root .fa-niche[aria-pressed="true"] .fa-niche-count,
+html.dark-mode .fa-root .fa-round[aria-pressed="true"], html.dark-mode .fa-root .fa-tr[aria-pressed="true"] .fa-sector i, html.dark-mode .fa-root .fa-row[data-tone="strong"] .fa-row-lead { background: #ededed; border-color: #ededed; color: #141414; }
+html.dark-mode .fa-root .fa-row-lead, html.dark-mode .fa-root .fa-bubble { background: #262626; border-color: #333; }
+html.dark-mode .fa-root .fa-row:hover, html.dark-mode .fa-root button.fa-tr:hover, html.dark-mode .fa-root button.fa-tr[aria-pressed="true"] { background: #262626; box-shadow: none; }
+html.dark-mode .fa-root .fa-links path, html.dark-mode .fa-root .fa-links circle { stroke: #4a4a4a; }
+html.dark-mode .fa-root .fa-links circle { fill: #1f1f1f; }
+html.dark-mode .fa-root .fa-links .fa-links-out circle { fill: rgba(239, 68, 68, .16); stroke: none; }
+html.dark-mode .fa-root .fa-links .is-dead path { stroke: #f19999; }
+html.dark-mode .fa-root .fa-card.is-chain .fa-row + .fa-row .fa-row-lead::before { background: #4a4a4a; }
+html.dark-mode .fa-root .fa-row[data-tone="out"] .fa-row-lead, html.dark-mode .fa-root .fa-tr mark, html.dark-mode .fa-root .fa-ring[data-tone="out"] .fa-bubble { background: rgba(239, 68, 68, .14); color: #f19999; }

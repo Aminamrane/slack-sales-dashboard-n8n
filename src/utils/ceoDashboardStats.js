@@ -267,7 +267,6 @@ const lastDayBefore = (monthKeyStr) => {
 //    un client encore là (elle gagne un jour chaque jour) ; rétractés exclus, puisqu'ils n'ont jamais
 //    vraiment commencé. Une sortie sans date d'effet, ou datée avant la signature, n'est pas mesurée.
 export function computeRetention(established, asOf, monthKeyStr) {
-  const exited = (r) => EXITED_ETATS.includes(displayEtat(r));
   const exitDate = (r) => dateOnly(r.etat_date);
   const inCourseAt = isInCourseAt;
   const isResiliation = (r) => RESILIATION_ETATS.includes(displayEtat(r));
@@ -285,26 +284,9 @@ export function computeRetention(established, asOf, monthKeyStr) {
   const globalCount = established.filter((r) => isResiliation(r) && exitDate(r) && exitDate(r) <= asOf).length;
   const resiliationUndated = established.filter((r) => isResiliation(r) && !exitDate(r)).length;
 
-  const durations = [];
-  let open = 0;
-  let closed = 0;
-  let unmeasured = 0;
-  let incoherent = 0;
-  established.forEach((r) => {
-    if (displayEtat(r) === 'Rétractation') return;
-    const signed = dateOnly(r.owner_signed_at);
-    if (!signed) { unmeasured += 1; return; }
-    if (signed > asOf) return;   // pas encore client à cette date
-    let endDate = asOf;
-    if (exited(r)) {
-      const x = exitDate(r);
-      if (!x) { unmeasured += 1; return; }
-      if (x <= asOf) { endDate = x; closed += 1; } else open += 1;
-    } else open += 1;
-    const days = dayNumber(endDate) - dayNumber(signed);
-    if (days < 0) { incoherent += 1; return; }
-    durations.push(days);
-  });
+  // Une seule mesure de la durée de vie, partagée avec la page « Analyse financière ».
+  const { lives, open, closed, unmeasured, incoherent } = clientLifetimes(established, asOf);
+  const durations = lives.map((life) => life.days);
   durations.sort((a, b) => a - b);
   return {
     retentionAsOf: asOf,
@@ -318,6 +300,35 @@ export function computeRetention(established, asOf, monthKeyStr) {
       measured: durations.length, open, closed, unmeasured, incoherent,
     },
   };
+}
+
+// La durée de vie de chaque client à la date `asOf`, client par client (dev 17/11/2026, pour « Analyse financière ») :
+// de la signature Owner à la date d'effet de la sortie, ou à `asOf` pour un client encore là (`open`). Rétractés
+// exclus, puisqu'ils n'ont jamais vraiment commencé ; un client sans date de signature, ou sorti sans date d'effet,
+// n'est pas mesuré (`unmeasured`) ; une sortie datée avant la signature non plus (`incoherent`).
+export function clientLifetimes(established, asOf) {
+  const lives = [];
+  let open = 0;
+  let closed = 0;
+  let unmeasured = 0;
+  let incoherent = 0;
+  established.forEach((r) => {
+    if (displayEtat(r) === 'Rétractation') return;
+    const signed = dateOnly(r.owner_signed_at);
+    if (!signed) { unmeasured += 1; return; }
+    if (signed > asOf) return;   // pas encore client à cette date
+    let endDate = asOf;
+    let stillHere = true;
+    if (EXITED_ETATS.includes(displayEtat(r))) {
+      const x = dateOnly(r.etat_date);
+      if (!x) { unmeasured += 1; return; }
+      if (x <= asOf) { endDate = x; stillHere = false; closed += 1; } else open += 1;
+    } else open += 1;
+    const days = dayNumber(endDate) - dayNumber(signed);
+    if (days < 0) { incoherent += 1; return; }
+    lives.push({ row: r, days, open: stillHere, signed });
+  });
+  return { lives, open, closed, unmeasured, incoherent };
 }
 
 // Durée en jours lue en mois et jours (mois moyen de 30,44 jours) : 293 → { months: 9, days: 19 }.

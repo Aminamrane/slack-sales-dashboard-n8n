@@ -79,6 +79,10 @@ const SIDEBAR_TABS = [
   { key: 'meta_ads', label: 'Meta Ads', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3.6 10.2v3.6a1.6 1.6 0 001.6 1.6h2.2l6.4 3.6V5l-6.4 3.6H5.2a1.6 1.6 0 00-1.6 1.6z"/><path d="M17 9.4a3.4 3.4 0 010 5.2"/><path d="M19.4 7a6.6 6.6 0 010 10"/></svg>
   )},
+  // « Campagnes » sert aux sales (les publicités) : rangé avec l'acquisition, plus dans la Finance (demande du 26/10/2026).
+  { key: 'campaigns', label: 'Campagnes', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
+  )},
   { key: 'funnel_leads', label: 'Funnel Leads', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
   )},
@@ -101,13 +105,11 @@ const SIDEBAR_TABS = [
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01"/><path d="M10 8h.01"/><path d="M14 8h.01"/><path d="M18 8h.01"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M7 16h10"/></svg>
   )},
   { section: 'FINANCE' },
-  { key: 'dispatch', label: 'Finance', icon: (
+  // « Suivi des paiements » : l'ancien onglet « Finance », à côté de « Analyse financière » (demande du 26/10/2026).
+  { key: 'dispatch', label: 'Suivi des paiements', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
   )},
-  { key: 'campaigns', label: 'Campagnes', icon: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 11 18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>
-  )},
-  // Analyse financière : page vide pour l'instant (09/11). Icône : caisse enregistreuse.
+  // Analyse financière : durée de vie des clients, résiliations, niches (17/11). Icône : caisse enregistreuse.
   { key: 'financial_analysis', label: 'Analyse financière', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="6" y="3" width="12" height="6" rx="1"/><path d="M12 9v4"/><rect x="3" y="13" width="18" height="8" rx="2"/><path d="M7 17h.01"/><path d="M12 17h.01"/><path d="M17 17h.01"/></svg>
   )},
