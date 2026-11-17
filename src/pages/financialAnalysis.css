@@ -1,0 +1,26 @@
+/* « Analyse financière » : bâtie avec le kit de la page Finance (`fst-`). Cette feuille n'ajoute que ce que le kit ne
+   porte pas (les lignes de la rétention, la règle de calcul). Préfixe `fa-`, portée `.fa-root`. */
+.fa-asof { display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 13px; border-radius: 999px; border: 1px solid var(--line); background: var(--card);
+  font-size: 13px; color: var(--ink-2); }
+.fa-asof svg { color: var(--muted); }
+.fa-steps { display: grid; gap: 14px; }
+.fa-step { display: grid; grid-template-columns: 62px minmax(0, 1fr) 62px 96px; align-items: center; gap: 14px; font-size: 13.5px; }
+.fa-step-label { color: var(--ink-2); }
+.fa-step-rate { font-weight: 500; text-align: right; color: var(--ink); }
+.fa-step-base { font-size: 12px; color: var(--muted); text-align: right; white-space: nowrap; }
+.fa-note { margin: 20px 0 0; padding: 14px 16px; border-radius: 16px; background: var(--hover); font-size: 13.5px; line-height: 1.6; color: var(--ink-2); }
+.fa-note strong { font-weight: 500; color: var(--ink); }
+.fa-rules { margin: 0; display: grid; gap: 0; }
+.fa-rules > div { display: grid; grid-template-columns: 132px minmax(0, 1fr); gap: 14px; padding: 11px 0; border-top: 1px solid var(--line-soft); }
+.fa-rules > div:first-child { border-top: 0; padding-top: 0; }
+.fa-rules dt { font-size: 13px; font-weight: 500; color: var(--ink); }
+.fa-rules dd { margin: 0; font-size: 13px; line-height: 1.55; color: var(--ink-2); }
+.fa-root .fst-table th + th, .fa-root .fst-table td + td { border-left: 0; }
+.fa-sector { font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.fa-root .fst-table tr[data-muted] .fa-sector { font-weight: 400; color: var(--ink-2); }
+.fa-right { text-align: right; }
+.fa-share { display: grid; grid-template-columns: minmax(80px, 1fr) 52px; align-items: center; gap: 12px; font-size: 12.5px; color: var(--ink-2); }
+.fa-share span { text-align: right; }
+@media (max-width: 760px) { .fa-step { grid-template-columns: 54px minmax(0, 1fr) 54px; } .fa-step-base { display: none; } .fa-rules > div { grid-template-columns: minmax(0, 1fr); gap: 4px; } }
+html.dark-mode .fa-root .fa-asof { background: #1f1f1f; border-color: #2e2e2e; color: #c9c9c9; }
+html.dark-mode .fa-root .fa-note { background: #1f1f1f; }
