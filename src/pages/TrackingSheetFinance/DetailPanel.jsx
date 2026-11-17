@@ -120,6 +120,7 @@ import OnboardingFacturation, { OnboardingRescheduleButton } from './components/
 import SignedContracts from './components/SignedContracts.jsx';
 // Tous les échanges du client au même endroit : espace commun du board, météos et notes internes finance.
 import ExchangeThread, { LastExchange } from './components/ExchangeThread.jsx';
+import { LatestSalesComment } from '../../components/clientComments/CommentAudience.jsx';
 import {
   NumeroIcon, CompanyIcon, ClientIcon, PeopleIcon, SignatureIcon, PersonIcon,
   CalendarCheckIcon, ClockIcon, FormulaIcon, CycleIcon,
@@ -177,6 +178,8 @@ export default function DetailPanel({
   // Résumé du fil d'échanges (nombre, derniers messages), remonté par ExchangeThread : pastille de l'onglet et
   // rappel dans « Paiements ». `null` tant que le fil charge.
   const [exchangeSummary, setExchangeSummary] = useState(null);
+  // Message à ouvrir dans les Échanges (dernier commentaire du sales, sous « Sales », dev 17/11/2026) : { id, n }.
+  const [exchangeFocus, setExchangeFocus] = useState(null);
   const scrollRef = useRef(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsAnchor = useRef(null);
@@ -1037,6 +1040,8 @@ export default function DetailPanel({
                     onShowToast={onShowToast}
                     onCopied={onCopied}
                     wide={fullscreen}
+                    salesNote={exchangeSummary?.latestSales}
+                    onOpenSalesNote={(id) => { changeTab('exchanges'); setExchangeFocus((f) => ({ id, n: (f?.n || 0) + 1 })); }}
                   />
                 </Section>
                 <Section key={`appointments-${clientId}`} variant="block" Icon={CalendarClock} title="Rendez-vous et interlocuteurs"
@@ -1088,7 +1093,7 @@ export default function DetailPanel({
               <TabPanel id="exchanges" active={tab}>
                 <Section key={`shared-${clientId}`} variant="block" Icon={MessagesSquare} title="Échanges"
                   hint="Toute la communication du client au même endroit : Owner, le cabinet Opti’Lex et la finance" delay={0.04}>
-                  <ExchangeThread numero={client?.numero_client} onShowToast={onShowToast} onSummary={setExchangeSummary}
+                  <ExchangeThread numero={client?.numero_client} onShowToast={onShowToast} onSummary={setExchangeSummary} focus={exchangeFocus}
                     internal={clientId ? { clientId, canPin: ['admin', 'ceo', 'finance_director'].includes(role) } : null} />
                 </Section>
               </TabPanel>
@@ -1740,6 +1745,7 @@ function ContractInfoList({
   editing = false, clientId, onProfileChanged, onContractChanged, onShowToast, periods = [],
   formulaCheck = null, onContractSaved,
   wide = false,   // fiche en plein écran : la carte se répartit en colonnes (présentation seulement)
+  salesNote = null, onOpenSalesNote, // dernier commentaire du sales (Échanges) et son ouverture, sous « Sales »
 }) {
   // Séparation nom du client / société (2026-08-21) : « Nom du client » =
   // la/les personne(s), la société a sa propre ligne. Pas de personne
@@ -1919,7 +1925,16 @@ function ContractInfoList({
         </span>
       ) : undefined,
     },
-    { Icon: PersonIcon, label: 'Sales',                value: profile?.sales_name },
+    // Sous le sales, son dernier commentaire facturation (dev 17/11/2026) : extrait et date ; un clic ouvre les Échanges dessus.
+    { Icon: PersonIcon, label: 'Sales',                value: profile?.sales_name,
+      node: salesNote ? (
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, minWidth: 0 }}>
+          {profile?.sales_name
+            ? <span style={{ fontSize: 13.5, fontWeight: 500, color: N.text }}>{profile.sales_name}</span>
+            : <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}
+          <LatestSalesComment note={salesNote} onOpen={() => onOpenSalesNote?.(salesNote.id)} />
+        </span>
+      ) : undefined },
     // RDV d'onboarding : c'est lui qui déclenche la facturation — premier
     // mois facturé, départ de l'engagement 12 mois, et bascule en retard
     // (demande dev 2026-08-26). C'est le rendez-vous RETENU PAR LA FINANCE,

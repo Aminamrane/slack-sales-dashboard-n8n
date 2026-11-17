@@ -61,3 +61,15 @@ test('libellés de groupe et phrase de confirmation', () => {
     'Notification envoyée à Lisa Gentaire et Paul Faucomprez (CRM).');
   assert.match(notifiedSummary({ a: { name: 'Lisa Gentaire', app: { ok: false }, email: { ok: false } } }), /n'a pas pu partir/);
 });
+
+test('annuaire « Sales » : le sales du client passe devant, à pertinence égale ou non', () => {
+  const sales = [
+    { id: 'dir', name: 'Sabine Direction', email: 'direction@example.test', role: 'ceo' },
+    { id: 'own', name: 'Sales Exemple', email: 'sales@example.test', role: 'sales', client_sales: true },
+    { id: 'other', name: 'Autre Ventes', email: 'autre@example.test', role: 'head_of_sales' },
+  ];
+  assert.deepEqual(filterPeople(sales, '').map(p => p.id), ['own', 'other', 'dir']);
+  assert.deepEqual(filterPeople(sales, 'sa').map(p => p.id), ['own', 'dir']);
+  assert.equal(groupLabel('sales'), 'Sales');
+  assert.equal(groupLabel('head_of_sales_manager'), 'Sales');
+});
