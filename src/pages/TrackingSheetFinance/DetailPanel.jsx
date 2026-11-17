@@ -1928,7 +1928,7 @@ function ContractInfoList({
     // Sous le sales, son dernier commentaire facturation (dev 17/11/2026) : extrait et date ; un clic ouvre les Échanges dessus.
     { Icon: PersonIcon, label: 'Sales',                value: profile?.sales_name,
       node: salesNote ? (
-        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, minWidth: 0 }}>
+        <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6, minWidth: 0 }}>
           {profile?.sales_name
             ? <span style={{ fontSize: 13.5, fontWeight: 500, color: N.text }}>{profile.sales_name}</span>
             : <span style={{ color: '#c9c4bc', fontStyle: 'italic', fontSize: 12.5 }}>Vide</span>}
