@@ -9,10 +9,17 @@ import { contactEntries } from "../utils/boardContacts.js";
 import "./BoardContactLine.css";
 
 export const RankTag = ({ entry }) => <span className={`bcl-tag${entry.primary ? " is-primary" : ""}`}>{entry.rank}</span>;
+// Numéro WhatsApp (dev 17/11/2026) : pas de rang ni de primaire, son badge.
+export const WhatsAppTag = () => <span className="bcl-tag is-whatsapp" title="Numéro WhatsApp, pour la facturation">WhatsApp</span>;
+const WORDS = {
+  email: { all: "Tous les e-mails du client", dialog: "E-mails du client", title: "E-mails", add: "Ajouter un e-mail", type: "email" },
+  phone: { all: "Tous les numéros du client", dialog: "Téléphones du client", title: "Téléphones", add: "Ajouter un numéro", type: "tel" },
+  whatsapp: { all: "Tous les numéros WhatsApp du client", dialog: "Numéros WhatsApp du client", title: "WhatsApp", add: "Ajouter un numéro WhatsApp", type: "tel" },
+};
 const STAR = <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="m12 3.5 2.6 5.3 5.8.8-4.2 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.2-4.1 5.8-.8Z" /></svg>;
 
 // Bouton « + » de la ligne : la liste par rang, « Mettre en primaire », et l'ajout d'un contact (il prend le rang
-// suivant). Affichage immédiat, puis rechargement de la fiche.
+// suivant). Affichage immédiat, puis rechargement de la fiche. Les numéros WhatsApp n'ont ni rang ni primaire.
 export function ContactMore({ kind, numero, entries, displayed, editable, onChanged, onLocal }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
@@ -52,25 +59,27 @@ export function ContactMore({ kind, numero, entries, displayed, editable, onChan
     }
   };
   const others = entries.length - 1;
+  const words = WORDS[kind] || WORDS.phone;
+  const ranked = kind !== "whatsapp";
   return (
     <span ref={ref} className="bcl-anchor">
       <button type="button" className="bcl-more" aria-expanded={open} onClick={() => setOpen((o) => !o)}
-        title={kind === "email" ? "Tous les e-mails du client" : "Tous les numéros du client"}>
+        title={words.all}>
         {others > 0 ? `+${others}` : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14" /></svg>}
       </button>
       <AnimatePresence>
         {open && (
-          <motion.div role="dialog" aria-label={kind === "email" ? "E-mails du client" : "Téléphones du client"} className="bcl-pop"
+          <motion.div role="dialog" aria-label={words.dialog} className="bcl-pop"
             initial={{ opacity: 0, y: -6, scale: 0.97 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -4, scale: 0.98, transition: { duration: 0.12 } }}
             transition={{ type: "spring", stiffness: 520, damping: 34 }}>
-            <div className="bcl-pop-title">{kind === "email" ? "E-mails" : "Téléphones"}</div>
+            <div className="bcl-pop-title">{words.title}</div>
             <ul className="bcl-list">
               {entries.map((e) => (
                 <motion.li key={e.value} layout="position" transition={{ type: "spring", stiffness: 500, damping: 36 }}>
-                  <RankTag entry={e} />
+                  {ranked ? <RankTag entry={e} /> : <WhatsAppTag />}
                   <span className="bcl-val">{e.value}</span>
                   {displayed && e.value.toLowerCase() === String(displayed).toLowerCase() && <span className="bcl-first">affiché</span>}
-                  {editable && !e.primary && (
+                  {editable && ranked && !e.primary && (
                     <button type="button" className="bcl-star" disabled={busy} onClick={() => makePrimary(e)} title="Mettre en primaire" aria-label={`Mettre ${e.value} en primaire`}>{STAR}</button>
                   )}
                 </motion.li>
@@ -79,8 +88,8 @@ export function ContactMore({ kind, numero, entries, displayed, editable, onChan
             </ul>
             {editable && (
               <div className="bcl-add">
-                <input value={value} onChange={(e) => setValue(e.target.value)} type={kind === "email" ? "email" : "tel"}
-                  placeholder={kind === "email" ? "Ajouter un e-mail" : "Ajouter un numéro"}
+                <input value={value} onChange={(e) => setValue(e.target.value)} type={words.type}
+                  placeholder={words.add}
                   onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} />
                 <button type="button" className="bcl-go" disabled={!value.trim() || busy} onClick={add}>{busy ? "…" : "Ajouter"}</button>
               </div>

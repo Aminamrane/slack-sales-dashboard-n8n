@@ -2224,6 +2224,17 @@ function ContractInfoList({
             onShowToast={onShowToast}
             onCopied={onCopied}
           />
+          {/* Numéros WhatsApp (dev 17/11/2026) : pour les relances de paiement et campagnes à venir. */}
+          <ContactList
+            clientId={clientId}
+            kind="whatsapp"
+            contacts={profile?.contacts}
+            phoneFallback={client?.phone}
+            canEdit={canEdit && editing}
+            onChanged={onProfileChanged}
+            onShowToast={onShowToast}
+            onCopied={onCopied}
+          />
         </div>
         </div>
       )}

@@ -3,6 +3,7 @@ import { ContractFolders } from '../components/BoardClientFiles.jsx';
 import { createLiveListener } from "../utils/liveDictation.js";
 import { revealInRail } from "../utils/tabRail.js";
 import LeadContactRows, { ContactsToggle, PriorityTag } from '../components/leadContacts/LeadContacts.jsx';
+import WhatsAppField from '../components/leadContacts/WhatsAppField.jsx';
 import LeadTransfer from '../components/leadTransfer/LeadTransfer.jsx';
 import LeadCard from '../components/trackingSheet/LeadCard.jsx';
 import { useStableActions } from '../components/trackingSheet/useStableActions.js';
@@ -6144,6 +6145,8 @@ export default function TrackingSheet() {
                 )}
                 {/* Autres numéros du lead : cachés au repos, dépliés par le « +2 » du champ (le numéro du champ est le prioritaire) */}
                 <LeadContactRows leadId={lead.id} kind="phone" mainValue={lead.phone} onPromote={promoteLeadContact(lead.id)} C={C} darkMode={darkMode} readOnly={isAdminView} />
+                {/* Numéro WhatsApp du client, pour la facturation (dev 17/11/2026) : un champ à part, jamais prioritaire */}
+                <WhatsAppField leadId={lead.id} phone={lead.phone} C={C} darkMode={darkMode} readOnly={isAdminView} />
                 {/* Email */}
                 {editingField?.leadId === lead.id && editingField?.field === 'email' ? (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

@@ -741,3 +741,12 @@ test('échéancier : un mois payé d’avance ne prétend pas avoir été préle
   assert.match(oct, /Prélevée le 22 octobre 2026/);
   assert.match(oct, /\+231,00 € → nov\./);
 });
+
+test('la recherche trouve un client par son numéro WhatsApp, sous toutes ses formes', async () => {
+  const { matchesClientSearch, normalizeSearch } = await import('./constants.js');
+  const client = { numero_client: 'n°90', societe: 'Société Exemple', contact_phones: ['0600000001'], contact_whatsapp: ['+33 6 00 00 00 02'] };
+  for (const q of ['06 00 00 00 02', '+33 6 00 00 00 02', '0600000002']) {
+    assert.equal(matchesClientSearch({ client }, normalizeSearch(q)), true, q);
+  }
+  assert.equal(matchesClientSearch({ client: { societe: 'Autre', contact_whatsapp: [] } }, normalizeSearch('0600000002')), false);
+});

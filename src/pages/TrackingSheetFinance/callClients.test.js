@@ -136,3 +136,13 @@ test('numbersIn sépare les numéros d’un champ libre, sans casser un numéro 
   assert.deepEqual(numbersIn('12345 / abc / '), []);
   assert.deepEqual(numbersIn(null), []);
 });
+
+test('un numéro WhatsApp de la fiche ou du board désigne aussi son client', () => {
+  const index = buildCallClientIndex(
+    [row({ id: 'c9', numero_client: '90', societe: 'SOCIETE EXEMPLE', phone: '0600000001', contact_whatsapp: ['+33 6 00 00 00 02'] })],
+    [{ numero_client: '90', shared_contacts: { phones: [], whatsapp: [{ value: '06 00 00 00 03' }, { value: null }] } }],
+  );
+  for (const call of ['+33600000002', '0600000003']) {
+    assert.deepEqual(clientsForNumber(index, call), [{ key: 'c9', name: 'SOCIETE EXEMPLE', numero: '90' }], call);
+  }
+});

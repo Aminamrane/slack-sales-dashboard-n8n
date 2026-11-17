@@ -94,6 +94,7 @@ export const pendingFinanceRow = (br, period) => {
       identity_aliases: [],
       contact_emails: [],
       contact_phones: [],
+      contact_whatsapp: [],
     },
   };
 };
@@ -694,7 +695,8 @@ export const phoneForms = (s) => {
 // Champs : numéro client, société (contient aussi le représentant),
 // representative_name, alias d'identité (nom CRM, sociétés et associés
 // rattachés), email principal et contacts secondaires de la fiche
-// (contact_emails / contact_phones, tables partagées avec le board).
+// (contact_emails / contact_phones / contact_whatsapp, tables partagées avec
+// le board : un numéro WhatsApp retrouve son client, dev 17/11/2026).
 export const matchesClientSearch = (r, normalizedQuery) => {
   if (!normalizedQuery) return true;
   const c = r.client || {};
@@ -703,7 +705,7 @@ export const matchesClientSearch = (r, normalizedQuery) => {
   if (texts.some((v) => v && normalizeSearch(v).includes(normalizedQuery))) return true;
   const wanted = phoneForms(searchDigits(normalizedQuery));
   if (!wanted.length || wanted[0].length < 4) return false;
-  return [c.phone, ...(c.contact_phones || [])]
+  return [c.phone, ...(c.contact_phones || []), ...(c.contact_whatsapp || [])]
     .some((v) => phoneForms(v).some((form) => wanted.some((w) => form.includes(w))));
 };
 
@@ -826,6 +828,7 @@ export const PROFILE_CHANGE_LABELS = {
   siren:          'SIREN',
   contact_email:  'Email',
   contact_phone:  'Téléphone',
+  contact_whatsapp: 'WhatsApp',
   etat:           'État',
   nom:            'Nom client',
   sales:          'Sales',
