@@ -1,5 +1,6 @@
 // Zone de saisie des commentaires de l'espace commun avec mentions « @ » :
-// taper « @ » propose les personnes du board (Owner, Opti'Lex, finance), flèches + Entrée/Tab pour choisir,
+// taper « @ » propose les personnes données (le board : Owner, Opti'Lex, finance ; un message « Sales » : Owner et les
+// sales, le sales du client en tête), flèches + Entrée/Tab pour choisir,
 // Échap pour fermer. Le texte reste du texte : « @Nom Complet » est ce que le serveur reconnaît.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { filterPeople, groupLabel, insertMention, mentionQuery, splitMentions } from '../utils/mentions.js';
@@ -82,7 +83,10 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
               style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '8px 12px', border: 'none', background: index === active ? SOFT : 'transparent', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}>
               <Initials name={person.name} src={person.avatar_url} />
               <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.name}</span>
+                <span style={{ fontSize: 13, fontWeight: 500, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.name}
+                  {/* Annuaire « Sales » (dev 17/11/2026) : le sales à qui le lead du client est attribué, proposé en tête. */}
+                  {person.client_sales && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 6, background: '#e4f0fd', color: '#1b6fd0', fontSize: 10.5, fontWeight: 500 }}>Sales du client</span>}
+                </span>
                 <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupLabel(person.role)} · {person.email}</span>
               </span>
             </button>

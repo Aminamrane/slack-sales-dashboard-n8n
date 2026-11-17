@@ -24,6 +24,8 @@ import { assignableCsms, assignInBatches, createLongPress, csmIndex, csmMenuEntr
 import CsmBulkBar, { BULK_CSS } from "../components/BoardCsmBulk.jsx";
 import MentionTextarea, { MentionedText } from "../components/MentionTextarea";
 import { mentionedIds, notifiedSummary } from "../utils/mentions.js";
+import { VisibilityBadge, VisibilityToggle, useMentionDirectories } from "../components/clientComments/CommentAudience.jsx";
+import { canChooseVisibility, scopeOf, sendBlocker } from "../utils/commentVisibility.js";
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
 import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
 import { createLatestRequestTracker, displayEtat, EXITED_ETATS, isOutOfOnboarding, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
@@ -2316,6 +2318,10 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xc:hover .br-add,.ob-xc:focus-within .br-add,.ob-xc .br-add[aria-expanded="true"]{opacity:1}
         @media (hover:none){.ob-xc .br-add{opacity:1}}
         .ob-composer.is-drag{border-color:#d8d3cb;background:#faf9f7}
+        .ob-composer.is-internal{border-color:#f8d4ba;background:#fffaf5}
+        .ob-composer.is-sales{border-color:#c9e0fa;background:#f8fbff}
+        .ob-audience{display:flex;align-items:center;flex-wrap:wrap;gap:6px 10px;margin:8px 2px 0}
+        .ob-audience .ca-scope{margin:0;flex:1;min-width:180px}
         .ob-xc-reply{display:inline-flex;align-items:center;gap:6px;border:0;background:transparent;padding:2px 0;font:inherit;font-size:12.5px;font-weight:500;color:${MUTED};cursor:pointer;transition:color .15s}
         .ob-xc-reply svg{transition:transform .3s cubic-bezier(.34,1.56,.64,1)}
         .ob-xc-reply:hover{color:${NAVY}}
@@ -5206,7 +5212,7 @@ function RatingEditorForm({ rating, ed }) {
 function MessageEdit({ t }) {
   return (
     <div className="ob-msg-edit">
-      <MentionTextarea value={t.editDraft} onChange={t.setEditDraft} people={t.people} rows={2} autoFocus maxLength={4000} className="ob-composer-ta"
+      <MentionTextarea value={t.editDraft} onChange={t.setEditDraft} people={t.editPeople} rows={2} autoFocus maxLength={4000} className="ob-composer-ta"
         aria-label="Modifier le message"
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); t.saveEdit(); }
@@ -5271,19 +5277,20 @@ const whoReplied = (names) => {
   if (u.length <= 2) return u.join(" et ");
   return u.length === 3 ? `${u[0]}, ${u[1]} et ${u[2]}` : `${u.slice(0, 3).join(", ")} et d'autres`;
 };
-function MsgHead({ author, size = 30, small = false, time, extra, menu }) {
+function MsgHead({ author, size = 30, small = false, time, extra, tags, menu }) {
   return (
     <header className="ob-xc-head">
       <Avatar name={author} size={size} round />
       <span className={`ob-xc-author${small ? " is-small" : ""}`}>{author}</span>
       <i className="ob-dot" /><span className="ob-xc-time">{time}{extra}</span>
+      {tags}
       {menu}
     </header>
   );
 }
 // Réponse sous le message (dev 29/10/2026 : « les réponses vraiment en dessous du message ») : une ligne de saisie
 // dans la carte ; ⌘ Entrée envoie, Échap ferme. L'auteur du message est prévenu comme une mention.
-function InlineReply({ t, placeholder, onSend }) {
+function InlineReply({ t, placeholder, onSend, people = t.people }) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const send = async () => {
@@ -5299,7 +5306,7 @@ function InlineReply({ t, placeholder, onSend }) {
       transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}>
       <div className="ob-xi-box">
         <Avatar name={t.myName} size={22} round />
-        <MentionTextarea value={text} onChange={setText} people={t.people} rows={1} autoFocus className="ob-xi-ta" placeholder={placeholder}
+        <MentionTextarea value={text} onChange={setText} people={people} rows={1} autoFocus className="ob-xi-ta" placeholder={placeholder}
           aria-label="Votre réponse" maxLength={4000}
           onKeyDown={(e) => {
             if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); send(); }
@@ -5316,7 +5323,7 @@ function CommentItem({ c, replies, t, openSignal }) {
   return (
     <motion.article id={`msg-${c.id}`} layout="position" className={`ob-xc${String(t.focusId) === String(c.id) ? " is-target" : ""}`} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0 }} transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1], layout: { type: "spring", stiffness: 380, damping: 36 } }}>
-      <MsgHead author={author} time={msgTime(c.created_at)} extra={c.updated_at ? " · modifié" : ""}
+      <MsgHead author={author} time={msgTime(c.created_at)} extra={c.updated_at ? " · modifié" : ""} tags={<VisibilityBadge visibility={c.visibility} />}
         menu={t.canEdit(c) && t.editingId !== c.id && <ItemMenu label="Actions du message" items={editItems(c, t)} />} />
       <div className="ob-xc-in">
         {t.editingId === c.id ? <MessageEdit t={t} />
@@ -5329,7 +5336,7 @@ function CommentItem({ c, replies, t, openSignal }) {
         </footer>
         {replies.length > 0 && <ReplyThread replies={replies} t={t} openSignal={openSignal} />}
         <AnimatePresence initial={false}>
-          {t.replying === key && <InlineReply key="reply" t={t} placeholder={`Répondre à ${author.split(" ")[0]}…`} onSend={(body) => t.sendReply("comment", c, body)} />}
+          {t.replying === key && <InlineReply key="reply" t={t} people={t.peopleFor(c.visibility)} placeholder={`Répondre à ${author.split(" ")[0]}…`} onSend={(body) => t.sendReply("comment", c, body)} />}
         </AnimatePresence>
       </div>
     </motion.article>
@@ -5459,6 +5466,17 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   // personnes taguables, confirmation « prévenu(e) » après publication, ouverture directe sur le fil
   // depuis une notification ou un e-mail (?focus=comments).
   const [people, setPeople] = useState([]);
+  // Visibilité du message (dev 17/11/2026, « commentaires facturation ») : Owner choisit Interne, Board ou Sales ; le
+  // cabinet écrit au board, sans choix. Hors board, l'annuaire est celui de la visibilité (jamais le cabinet), et un
+  // message « Sales » attend la mention d'un sales. Une réponse suit la visibilité de son message.
+  const chooser = canChooseVisibility(me.role);
+  const [visibility, setVisibility] = useState("board");
+  useEffect(() => { setVisibility("board"); }, [numero]);
+  const directories = useMentionDirectories(numero, chooser && !readOnly);
+  const peopleFor = (v) => (v === "internal" || v === "sales" ? directories[v] : people);
+  const composerPeople = peopleFor(visibility);
+  const blocker = sendBlocker(visibility, draft, directories.sales);
+  const editPeople = peopleFor(comments.find((c) => c.id === editingId)?.visibility);
   const [notice, setNotice] = useState("");
   const [searchParams] = useSearchParams();
   const focusComments = searchParams.get("focus") === "comments";
@@ -5497,7 +5515,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
     if (!body || savingEdit) return;
     setSavingEdit(true);
     try {
-      const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body, mentions: mentionedIds(body, people) });
+      const updated = await apiClient.patch(`/api/v1/optilex/comments/${editingId}`, { body, mentions: mentionedIds(body, editPeople) });
       setComments((prev) => prev.map((c) => (c.id === updated.id ? { ...c, ...updated } : c)));
       setEditingId(null); setEditDraft("");
       setNotice(notifiedSummary(updated.notified));
@@ -5517,20 +5535,20 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
 
   const submit = async () => {
     const body = draft.trim();
-    if (readOnly || (!body && !files.length) || posting || loading) return;
+    if (readOnly || (!body && !files.length) || posting || loading || blocker) return;
     setPosting(true); setError("");
     try {
       // Les pièces partent d'abord (en attente côté serveur), puis le message les rattache.
       const uploaded = [];
       for (const f of files) uploaded.push(await uploadMessageFile(numero, f.file));
-      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: mentionedIds(body, people),
+      const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, visibility, mentions: mentionedIds(body, composerPeople),
         attachment_ids: uploaded.map((u) => u.id) });
       // Pièces du message : celles que renvoie le serveur, sinon celles qu'on vient de déposer (jamais une liste vide
       // qui effacerait les fichiers envoyés).
       setComments((prev) => [{ ...created, attachments: created.attachments?.length ? created.attachments : uploaded }, ...prev]);
       setDraft(""); setFiles((list) => { list.forEach((f) => f.thumb && URL.revokeObjectURL(f.thumb)); return []; });
       setNotice(notifiedSummary(created.notified));
-    } catch (e) { setError("Le message n’a pas pu être publié. Votre texte et vos fichiers sont conservés."); }
+    } catch (e) { setError(e?.status === 422 && typeof e?.data?.detail === "string" ? e.data.detail : "Le message n’a pas pu être publié. Votre texte et vos fichiers sont conservés."); }
     finally { setPosting(false); }
   };
   const addFiles = (list) => {
@@ -5594,8 +5612,9 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
     setError("");
     try {
       const mail = (parent.author_email || "").toLowerCase();
-      const author = people.find((p) => mail && (p.email || "").toLowerCase() === mail);
-      const ids = [...new Set([...mentionedIds(body, people), ...(author && mail !== (me.email || "").toLowerCase() ? [author.id] : [])])];
+      const directory = kind === "rating" ? people : peopleFor(parent.visibility);
+      const author = directory.find((p) => mail && (p.email || "").toLowerCase() === mail);
+      const ids = [...new Set([...mentionedIds(body, directory), ...(author && mail !== (me.email || "").toLowerCase() ? [author.id] : [])])];
       const link = kind === "rating" ? { rating_id: parent.id } : { parent_id: parent.id };
       const created = await apiClient.post("/api/v1/optilex/comments", { numero_client: numero, body, mentions: ids, ...link });
       setComments((prev) => [{ ...created, ...link, fresh: true }, ...prev]);
@@ -5618,7 +5637,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   const openSignalOf = (e) => (bump.key === `${e.kind}:${e.id}` ? bump.n : 0) || (e.kind === "rating" && String(focusRating) === String(e.id) ? 1 : 0)
     || (focusComment && repliesOf(e.kind, e.id).some((r) => String(r.id) === String(focusComment)) ? 1 : 0);
   const t = {
-    readOnly, focusId: focusComment, canEdit: (c) => !readOnly && canEdit(c), people, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
+    readOnly, focusId: focusComment, canEdit: (c) => !readOnly && canEdit(c), people, peopleFor, editPeople, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
     myName, replying, sendReply, startReply: (key) => { if (!readOnly) setReplying((k) => (k === key ? null : key)); }, cancelReply: () => setReplying(null),
     reactionsOf: (kind, id) => reactions[`${kind}:${id}`] || [],
     startEdit: (c) => { setEditingId(c.id); setEditDraft(c.body); setConfirmDeleteId(null); },
@@ -5647,15 +5666,17 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   return (
     <div ref={rootRef} id="ob-comments" style={{ scrollMarginTop: 16 }}>
       {/* Zone de saisie : toujours visible ; ouverte à tous les rôles du board, finance_team comprise (retour dev 25/09). */}
-      <div className={`ob-composer${dragFiles ? " is-drag" : ""}`}
+      <div className={`ob-composer${dragFiles ? " is-drag" : ""}${visibility !== "board" ? ` is-${visibility}` : ""}`}
         onDragEnter={(e) => { if (e.dataTransfer?.types?.includes("Files")) { e.preventDefault(); setDragFiles(true); } }}
         onDragOver={(e) => { if (e.dataTransfer?.types?.includes("Files")) e.preventDefault(); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragFiles(false); }}
         onDrop={(e) => { if (!e.dataTransfer?.files?.length) return; e.preventDefault(); setDragFiles(false); addFiles(e.dataTransfer.files); }}>
-        <MentionTextarea id={composerId} {...ro} value={draft} onChange={setDraft} people={people} rows={2} className="ob-composer-ta"
+        <MentionTextarea id={composerId} {...ro} value={draft} onChange={setDraft} people={composerPeople} rows={2} className="ob-composer-ta"
           aria-label="Message de l'espace commun"
           onKeyDown={(e) => { if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }} onPaste={pasteFiles}
-          placeholder="Écrire à Owner, Opti'Lex et la finance… (collez une image avec ⌘ V)" />
+          placeholder={visibility === "internal" ? "Message interne Owner, le cabinet ne le verra pas…"
+            : visibility === "sales" ? "Écrire au sales du client : tapez @ pour le mentionner…"
+            : "Écrire à Owner, Opti'Lex et la finance… (collez une image avec ⌘ V)"} />
         <ComposerFiles files={files} disabled={posting} onRemove={dropFile} />
         <div className="ob-composer-bar">
           <button type="button" className="ob-composer-tool" onClick={insertAt} {...ro} aria-label="Mentionner quelqu'un"
@@ -5666,9 +5687,19 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
           <input ref={fileInput} type="file" hidden multiple accept={MESSAGE_FILE_ACCEPT} onChange={(e) => { addFiles(e.target.files); e.target.value = ""; }} />
           {onAddWeather && <MeteoPicker triggerLabel="Ajouter une météo" onSave={onAddWeather} disabled={!numero} readOnly={readOnly} />}
           <span className="ob-composer-hint" aria-hidden="true">{isMac ? "⌘" : "Ctrl"} Entrée</span>
-          <button type="button" className="ob-composer-send" onClick={submit} disabled={(!draft.trim() && !files.length) || posting} {...ro}>{posting ? "Envoi…" : "Envoyer"}</button>
+          <button type="button" className="ob-composer-send" onClick={submit} disabled={(!draft.trim() && !files.length) || posting || !!blocker} {...ro}>{posting ? "Envoi…" : "Envoyer"}</button>
         </div>
       </div>
+      {/* À qui l'on écrit (dev 17/11/2026) : le choix sous la saisie, et la phrase qui dit qui lira ; en mode « Sales », ce
+          qui manque pour envoyer. Le cabinet n'a pas de choix : il écrit au board. */}
+      {chooser && (
+        <div className="ob-audience">
+          <VisibilityToggle id={composerId} value={visibility} onChange={setVisibility} extra={ro} />
+          <span className={`ca-scope is-${blocker && draft.trim() ? "blocked" : visibility}`} role={blocker && draft.trim() ? "status" : undefined}>
+            {blocker && draft.trim() ? blocker : scopeOf(visibility)}
+          </span>
+        </div>
+      )}
       <AnimatePresence>
         {notice && <motion.p key="notice" role="status" className="ob-thread-notice" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>{notice}</motion.p>}
       </AnimatePresence>

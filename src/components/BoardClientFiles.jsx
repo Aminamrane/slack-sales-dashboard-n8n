@@ -214,20 +214,22 @@ function MailPreview({ headers = {}, html }) {
 
 // Pièces jointes d'un message (réf. de commentaire) : un bloc gris « 2 fichiers », une puce par fichier. Un clic
 // ouvre l'aperçu (PDF, image, son, e-mail lu dans le CRM) ou télécharge le fichier.
-export function MessageFiles({ files }) {
+// `base` : la route des pièces, celle du board par défaut ; le fil du sales a la sienne (Tracking Sheet, dev 17/11/2026).
+export const BOARD_MESSAGE_FILES = "/api/v1/optilex/comments/attachments";
+export function MessageFiles({ files, base = BOARD_MESSAGE_FILES }) {
   const objectUrl = useObjectUrls();
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
   const [busyId, setBusyId] = useState(null);
   if (!files?.length) return null;
-  const url = async (f) => objectUrl(await (await binary(`/api/v1/optilex/comments/attachments/${f.id}/file`)).blob());
+  const url = async (f) => objectUrl(await (await binary(`${base}/${f.id}/file`)).blob());
   const download = async (f, u) => { const a = document.createElement("a"); a.href = u || await url(f); a.download = f.file_name; a.click(); };
   const open = async (f) => {
     if (busyId) return;
     setBusyId(f.id); setError("");
     try {
       const type = previewKind(f);
-      if (type === "email") { setPreview({ f, type, ...(await apiClient.get(`/api/v1/optilex/comments/attachments/${f.id}/email`)) }); return; }
+      if (type === "email") { setPreview({ f, type, ...(await apiClient.get(`${base}/${f.id}/email`)) }); return; }
       const u = await url(f);
       if (["pdf", "image", "audio"].includes(type)) setPreview({ f, type, url: u }); else await download(f, u);
     } catch (e) { setError(e.message || "Le fichier n’a pas pu être ouvert."); }
@@ -286,9 +288,9 @@ export function ComposerFiles({ files, onRemove, disabled }) {
 }
 export const MESSAGE_FILE_MAX = MAX_BYTES;
 export const MESSAGE_FILE_ACCEPT = `${DOC_ACCEPT},${EMAIL_ACCEPT}`;
-export async function uploadMessageFile(numero, file) {
+export async function uploadMessageFile(numero, file, base = BOARD_MESSAGE_FILES) {
   const form = new FormData(); form.append("numero_client", numero); form.append("file", file);
-  return (await binary("/api/v1/optilex/comments/attachments", { method: "POST", body: form })).json();
+  return (await binary(base, { method: "POST", body: form })).json();
 }
 
 // ── Fenêtre d'aperçu (PDF, image, e-mail, appel) ───────────────────────────────────────────────────────

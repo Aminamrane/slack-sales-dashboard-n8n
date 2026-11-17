@@ -38,6 +38,7 @@ import NotesDialog from '../components/salesJourney/NotesDialog';
 import { SaleIntake, SaleDocuments } from "../components/integrationPreview/SaleIntake";
 import PortalAccess from '../components/salesJourney/PortalAccess';
 import LeadDocuments from '../components/salesJourney/LeadDocuments';
+import SalesClientThread, { LeadCommentLink } from '../components/clientComments/SalesClientThread.jsx';
 import NdaProgress from '../components/salesJourney/NdaProgress';
 import SalesNotes, { SalesNotesView } from '../components/salesJourney/SalesNotes';
 import { qualificationPatch } from '../utils/r2Qualification';
@@ -7840,6 +7841,8 @@ export default function TrackingSheet() {
                   </div>
                 )}
               </div>}
+              {/* Commentaires facturation du client (dev 17/11/2026) : fil partagé avec la finance et les CSM, lead signé seulement. */}
+              {activeCat.key === 'signed' && <SalesClientThread key={`billing-${lead.id}`} leadId={lead.id} dark={darkMode} />}
               </div>{/* fin du volet Infos, 2e partie */}
 
             </div>{/* end detail padding */}
@@ -8026,6 +8029,10 @@ export default function TrackingSheet() {
           </div>
         </div>
       )}
+
+      {/* Lien direct d'un commentaire facturation (?lead=<id>&focus=comments&comment=<id>, dev 17/11/2026) : ouvre la fiche du lead. */}
+      <LeadCommentLink leads={leads} ready={!loading} dark={darkMode} onOpen={(lead) => { const tab = CATEGORIES.findIndex(c => c.key === lead.status);
+        setSidebarView('leads'); if (tab >= 0) handleTabChange(tab); setSelectedLead(lead.id); setPanelTab({ leadId: lead.id, tab: 'infos' }); }} />
 
       {/* ══════════════════════════════════════════════════════════════════════ */}
       {/* ── NDA GENERATION POPUP ─────────────────────────────────────────── */}

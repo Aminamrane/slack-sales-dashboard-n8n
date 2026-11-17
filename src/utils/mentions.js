@@ -20,7 +20,8 @@ export function filterPeople(people, query, limit = Infinity) {
     const score = !q ? 1 : name.startsWith(q) ? 3 : name.split(/\s+/).some(w => w.startsWith(q)) ? 2 : (name.includes(q) || email.startsWith(q)) ? 1 : 0;
     return { p, score };
   }).filter(s => s.score > 0);
-  scored.sort((a, b) => b.score - a.score || String(a.p.name).localeCompare(String(b.p.name), 'fr'));
+  // Le sales du client d'abord (annuaire « Sales », dev 17/11/2026), puis la pertinence, puis le nom.
+  scored.sort((a, b) => (!!b.p.client_sales - !!a.p.client_sales) || b.score - a.score || String(a.p.name).localeCompare(String(b.p.name), 'fr'));
   return scored.slice(0, limit).map(s => s.p);
 }
 
@@ -63,7 +64,8 @@ export function splitMentions(text, mentions) {
   return out;
 }
 
-export const groupLabel = role => role === 'optilex' ? "Opti'Lex" : ['finance_team', 'finance_director'].includes(role) ? 'Finance' : 'Owner';
+export const groupLabel = role => role === 'optilex' ? "Opti'Lex" : ['finance_team', 'finance_director'].includes(role) ? 'Finance'
+  : ['sales', 'head_of_sales', 'head_of_sales_manager'].includes(role) ? 'Sales' : 'Owner';
 
 // Phrase de confirmation après publication : qui a été prévenu et par quels canaux.
 export function notifiedSummary(notified) {

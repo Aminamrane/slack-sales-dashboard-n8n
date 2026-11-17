@@ -14,6 +14,10 @@
 // Dans un fil, on répond depuis le bas (« Répondre » sous la dernière réponse) ou depuis une réponse précise
 // (la flèche de sa ligne, qui prépare « @Auteur »).
 // La saisie dit toujours à qui l'on écrit. Rôles en lecture seule : tout se lit, rien ne s'écrit.
+// Commentaires facturation (dev 17/11/2026) : un message de l'espace commun peut être « Interne » (Owner seulement) ou
+// « Sales » (Owner et le sales du client) ; il porte son badge, et un message écrit par le sales se lit « Commentaire du
+// sales ». Une réponse prend la visibilité de son message : répondre au sales lui parvient dans sa Tracking Sheet.
+// `focus` ({ id, n }) ouvre le fil sur un message précis (le dernier commentaire du sales, sous « Sales » de la fiche).
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { ArrowUpRight, AtSign, ChevronDown, CornerUpLeft, Lock, MoreHorizontal, Paperclip, Pencil, Pin, PinOff, SendHorizontal, Smile, Trash2, Users } from 'lucide-react';
@@ -26,6 +30,9 @@ import { WeatherQualification } from '../../../components/WeatherCaseComposer.js
 import { weatherPresentation, weatherRatingLabel } from '../../../utils/weatherCase.js';
 import { mentionedIds, notifiedSummary } from '../../../utils/mentions.js';
 import { isReadOnlyViewer, READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
+import { SalesAuthorTag, VisibilityBadge, useMentionDirectories } from '../../../components/clientComments/CommentAudience.jsx';
+import { latestSalesComment } from '../../../utils/commentVisibility.js';
+import { asDate, fullDate, timeAgo } from '../../../utils/timeAgo.js';
 import './ExchangeThread.css';
 
 const STEP = 5;
@@ -34,27 +41,9 @@ const SPRING = { type: 'spring', stiffness: 520, damping: 40 };
 const EASE = [0.22, 1, 0.36, 1];
 const AVATARS = [['#e2f6ea', '#0b7a4b'], ['#fde9da', '#c2500e'], ['#e4f0fd', '#1b6fd0'], ['#eae9fb', '#4a3fc4'], ['#d9f3f7', '#0f7286'], ['#e5f5d3', '#3f6b12'], ['#fbf1c2', '#7a5a05']];
 
-// Les dates sans fuseau du serveur sont en UTC.
-const asDate = (iso) => {
-  if (!iso) return null;
-  const d = new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(String(iso)) ? iso : `${iso}Z`);
-  return Number.isNaN(d.getTime()) ? null : d;
-};
+// Dates du serveur (UTC sans fuseau) et ancienneté : utils/timeAgo.js, partagé avec les commentaires de la Tracking Sheet.
 const stamp = (iso) => asDate(iso)?.getTime() || 0;
-export function timeAgo(iso, now = Date.now()) {
-  const d = asDate(iso);
-  if (!d) return '';
-  const minutes = Math.round((now - d.getTime()) / 60000);
-  if (minutes < 1) return 'à l’instant';
-  if (minutes < 60) return `il y a ${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `il y a ${hours} h`;
-  const days = Math.round(hours / 24);
-  if (days === 1) return 'hier';
-  if (days < 7) return `il y a ${days} j`;
-  return d.toLocaleDateString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric' });
-}
-const fullDate = (iso) => asDate(iso)?.toLocaleString('fr-FR', { timeZone: 'Europe/Paris', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) || '';
+export { timeAgo };
 const authorOf = (e) => e.author_name || e.author_email || 'Inconnu';
 const firstName = (name) => String(name).split(/[\s@]/)[0];
 // « A et B », « A, B et C », « A, B, C et d'autres ».
@@ -217,9 +206,9 @@ function Reply({ c, t, threadKey }) {
   const key = `c:${c.id}`;
   const list = t.reactionsOf('comment', c.id);
   return (
-    <div className={`fx-sub${c.fresh ? ' is-fresh' : ''}`}>
-      <Head author={authorOf(c)} size={22} small iso={c.created_at} extra={c.updated_at ? ' · modifié' : ''}
-        menu={!t.readOnly && <><AnswerTo t={t} threadKey={threadKey} author={authorOf(c)} people={t.people} /><EmojiPalette onPick={(e) => t.react('comment', c.id, e)} />{t.canEdit(c) && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, c.body)} />}</>} />
+    <div className={`fx-sub${c.fresh ? ' is-fresh' : ''}${t.focusKey === key ? ' is-target' : ''}`} id={`fx-${key}`}>
+      <Head author={authorOf(c)} size={22} small iso={c.created_at} extra={c.updated_at ? ' · modifié' : ''} tags={<SalesAuthorTag comment={c} />}
+        menu={!t.readOnly && <><AnswerTo t={t} threadKey={threadKey} author={authorOf(c)} people={t.peopleFor(c.visibility)} /><EmojiPalette onPick={(e) => t.react('comment', c.id, e)} />{t.canEdit(c) && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, c.body)} />}</>} />
       <div className="fx-sub-in">
         {t.edit.key === key ? <EditBox t={t} mentions />
           : c.body && <Clamp max={88} measureKey={c.body}><div className="fx-text"><MentionedText text={c.body} mentions={c.mentions} /></div></Clamp>}
@@ -290,7 +279,8 @@ function SharedFoot({ kind, entry, t }) {
       </footer>
       {entry.replies.length > 0 && <Replies replies={entry.replies} t={t} threadKey={key} openSignal={t.bump.key === key ? t.bump.n : 0} />}
       <AnimatePresence initial={false}>
-        {t.replying === key && <InlineReply key={`reply-${t.replySeed.n}`} t={t} initial={t.replySeed.text} placeholder={`Répondre à ${firstName(author)}…`} onSend={(body) => t.sendReply(kind, entry, body)} />}
+        {t.replying === key && <InlineReply key={`reply-${t.replySeed.n}`} t={t} people={t.peopleFor(kind === 'rating' ? 'board' : entry.visibility)} initial={t.replySeed.text}
+          placeholder={entry.visibility === 'sales' ? `Répondre à ${firstName(author)} (le sales du client lira la réponse)…` : `Répondre à ${firstName(author)}…`} onSend={(body) => t.sendReply(kind, entry, body)} />}
       </AnimatePresence>
     </>
   );
@@ -300,8 +290,9 @@ const CARD_MOTION = { initial: { opacity: 0, y: -6 }, animate: { opacity: 1, y: 
 
 function MessageCard({ e, t }) {
   return (
-    <Motion.article id={`fx-${e.key}`} className="fx-card" {...CARD_MOTION}>
+    <Motion.article id={`fx-${e.key}`} className={`fx-card${t.focusKey === e.key ? ' is-target' : ''}`} {...CARD_MOTION}>
       <Head author={authorOf(e)} iso={e.created_at} extra={e.updated_at ? ' · modifié' : ''}
+        tags={<><SalesAuthorTag comment={e} /><VisibilityBadge visibility={e.visibility} /></>}
         menu={t.canEdit(e) && t.edit.key !== e.key && <ItemMenu label="Actions du message" items={editItems(t, e.key, e.body)} />} />
       <div className="fx-in">
         {t.edit.key === e.key ? <EditBox t={t} mentions />
@@ -394,7 +385,7 @@ export function LastExchange({ summary, onOpen }) {
 const KINDS = [['all', 'Tout', 'échange'], ['comment', 'Messages', 'message'], ['rating', 'Météo', 'notation'], ['note', 'Interne', 'note interne']];
 const plural = (n, unit) => `${n} ${unit.split(' ').map((w) => (n > 1 ? `${w}s` : w)).join(' ')}`;
 
-export default function ExchangeThread({ numero, internal = null, onShowToast, onSummary }) {
+export default function ExchangeThread({ numero, internal = null, onShowToast, onSummary, focus = null }) {
   const me = useMemo(() => apiClient.getUser() || {}, []);
   const myName = me.full_name || me.email || 'Moi';
   const readOnly = isReadOnlyViewer(me.role);
@@ -408,6 +399,11 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const [people, setPeople] = useState([]);
   // Annuaire des notes internes : la finance et la direction seulement. Vide si le serveur ne le sert pas encore.
   const [notePeople, setNotePeople] = useState([]);
+  // Répondre dans un fil « Interne » ou « Sales » : l'annuaire de sa visibilité (jamais le cabinet ; le sales du client).
+  const directories = useMentionDirectories(numero, !readOnly);
+  const peopleFor = (visibility) => (visibility === 'internal' || visibility === 'sales' ? directories[visibility] : people);
+  // Message mis en évidence après un lien direct (`focus`) : la clé de sa carte ou de sa réponse.
+  const [focusKey, setFocusKey] = useState(null);
   // État de chaque source : loading | ready | error | off (pas de numéro client ou pas de fil interne).
   const [shared, setShared] = useState(numero ? 'loading' : 'off');
   const [notesState, setNotesState] = useState(notesBase ? 'loading' : 'off');
@@ -504,15 +500,17 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const latest = useMemo(() => {
     if (loading) return null;
     const all = [
-      ...comments.map((c) => ({ author: authorOf(c), at: c.created_at, text: c.body || (c.attachments?.length ? plural(c.attachments.length, 'pièce jointe') : ''), internal: false })),
+      ...comments.map((c) => ({ author: authorOf(c), at: c.created_at, text: c.body || (c.attachments?.length ? plural(c.attachments.length, 'pièce jointe') : ''), internal: c.visibility === 'internal' })),
       ...ratings.map((r) => ({ author: authorOf(r), at: r.created_at, text: [weatherRatingLabel(r.score, r.weather_context), r.note].filter(Boolean).join(' · '), internal: false })),
       ...notes.map((n) => ({ author: authorOf(n), at: n.created_at, text: n.body, internal: true, pinned: !!n.pinned })),
     ];
     return all.sort((a, b) => (!!b.pinned - !!a.pinned) || stamp(b.at) - stamp(a.at)).slice(0, 3);
   }, [loading, comments, ratings, notes]);
-  const summaryKey = loading ? 'loading' : `${entries.length}|${(latest || []).map((e) => `${e.at}${e.text}${e.pinned ? 1 : 0}`).join('|')}`;
+  // Dernier commentaire du sales (ligne « Sales » de la fiche) : extrait, date, et le message à ouvrir.
+  const latestSales = useMemo(() => (loading ? null : latestSalesComment(comments)), [loading, comments]);
+  const summaryKey = loading ? 'loading' : `${entries.length}|${(latest || []).map((e) => `${e.at}${e.text}${e.pinned ? 1 : 0}`).join('|')}|${latestSales ? `${latestSales.id}${latestSales.text}` : ''}`;
   useEffect(() => {
-    onSummary?.(loading ? null : { count: entries.length, recent: latest });
+    onSummary?.(loading ? null : { count: entries.length, recent: latest, latestSales });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [summaryKey, onSummary]);
 
@@ -608,8 +606,9 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
     setError('');
     try {
       const mail = (parent.author_email || '').toLowerCase();
-      const author = people.find((p) => mail && (p.email || '').toLowerCase() === mail);
-      const ids = [...new Set([...mentionedIds(body, people), ...(author && mail !== (me.email || '').toLowerCase() ? [author.id] : [])])];
+      const directory = target === 'rating' ? people : peopleFor(parent.visibility);
+      const author = directory.find((p) => mail && (p.email || '').toLowerCase() === mail);
+      const ids = [...new Set([...mentionedIds(body, directory), ...(author && mail !== (me.email || '').toLowerCase() ? [author.id] : [])])];
       const link = target === 'rating' ? { rating_id: parent.id } : { parent_id: parent.id };
       const created = await apiClient.post(SHARED, { numero_client: numero, body, mentions: ids, ...link });
       setComments((prev) => [{ ...created, ...link, fresh: true }, ...prev]);
@@ -649,6 +648,22 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
     const timer = setTimeout(() => document.getElementById(`fx-${bump.key}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 320);
     return () => clearTimeout(timer);
   }, [bump]);
+
+  // Lien direct sur un message (`focus`) : tout le fil s'affiche, le fil du message s'ouvre et remonte sous les yeux,
+  // le message est mis en évidence un instant.
+  useEffect(() => {
+    if (!focus?.id || shared !== 'ready') return undefined;
+    const comment = comments.find((c) => sameId(c.id, focus.id));
+    if (!comment) return undefined;
+    const rootKey = `c:${comment.parent_id || comment.id}`;
+    setKind('all'); setLimit(Infinity);
+    setBump((b) => ({ key: rootKey, n: b.n + 1 }));
+    setFocusKey(`c:${comment.id}`);
+    const scroll = setTimeout(() => document.getElementById(`fx-c:${comment.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 460);
+    const clear = setTimeout(() => setFocusKey(null), 2800);
+    return () => { clearTimeout(scroll); clearTimeout(clear); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.id, focus?.n, shared]);
 
   const idOf = (key) => { const raw = key.slice(2); return /^\d+$/.test(raw) ? Number(raw) : raw; };
   const saveEdit = async () => {
@@ -704,7 +719,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   // Noms surlignés dans une note : l'annuaire interne, et soi-même (absent de son propre annuaire).
   const noteMentions = useMemo(() => [...notePeople, { id: me.id, name: myName }], [notePeople, me.id, myName]);
   const t = {
-    readOnly, ro, people, notePeople, noteMentions, myName, react, reactNote, sendReply, sendNoteReply, replySeed, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
+    readOnly, ro, people, peopleFor, focusKey, notePeople, noteMentions, myName, react, reactNote, sendReply, sendNoteReply, replySeed, replying, bump, edit, confirming, deleting, saveEdit, remove, togglePin,
     canPin: !!internal?.canPin,
     canEdit: (c) => !readOnly && (c.can_edit || mine(c) || ['admin', 'ceo'].includes(me.role)),
     reactionsOf: (target, id) => reactions[`${target}:${id}`] || [],
