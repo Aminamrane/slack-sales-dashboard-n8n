@@ -86,6 +86,8 @@ export default function MentionTextarea({ value, onChange, people = [], onKeyDow
                 <span style={{ fontSize: 13, fontWeight: 500, color: NAVY, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{person.name}
                   {/* Annuaire « Sales » (dev 17/11/2026) : le sales à qui le lead du client est attribué, proposé en tête. */}
                   {person.client_sales && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 6, background: '#e4f0fd', color: '#1b6fd0', fontSize: 10.5, fontWeight: 500 }}>Sales du client</span>}
+                  {/* Annuaire du sales (dev 17/11/2026) : la personne retenue pour la facturation de l'onboarding du client. */}
+                  {person.billing_contact && <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 6, background: '#e4f0fd', color: '#1b6fd0', fontSize: 10.5, fontWeight: 500 }}>Facturation du client</span>}
                 </span>
                 <span style={{ fontSize: 11, color: MUTED, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{groupLabel(person.role)} · {person.email}</span>
               </span>

@@ -116,7 +116,7 @@ export default function SalesClientThread({ leadId, dark = false }) {
   const myName = me.full_name || me.name || me.email || 'Moi';
   // loading | ready | none (pas encore de client) | denied (ni son lead, ni un de ses fils) | error
   const [state, setState] = useState('loading');
-  const [data, setData] = useState({ comments: [], people: [], numero_client: null, scope: 'all' });
+  const [data, setData] = useState({ comments: [], people: [], numero_client: null, scope: 'all', billing: null });
   const [refresh, setRefresh] = useState(0);
   const [draft, setDraft] = useState('');
   const [files, setFiles] = useState([]);
@@ -136,7 +136,7 @@ export default function SalesClientThread({ leadId, dark = false }) {
     let alive = true;
     setState('loading');
     apiClient.get(base)
-      .then((r) => { if (alive) { setData({ comments: r.comments || [], people: r.people || [], numero_client: r.numero_client, scope: r.scope || 'all' }); setState(r.available ? 'ready' : 'none'); } })
+      .then((r) => { if (alive) { setData({ comments: r.comments || [], people: r.people || [], numero_client: r.numero_client, scope: r.scope || 'all', billing: r.billing_contact || null }); setState(r.available ? 'ready' : 'none'); } })
       .catch((e) => { if (alive) setState(e?.status === 403 ? 'denied' : 'error'); });
     return () => { alive = false; };
   }, [base, refresh]);
@@ -247,7 +247,7 @@ export default function SalesClientThread({ leadId, dark = false }) {
                 <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={data.people} rows={2} className="fx-ta" maxLength={4000}
                   aria-label="Commentaire facturation"
                   onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
-                  placeholder="Échéancier, RIB, remise, demande du client… @ pour prévenir la finance ou le CSM" />
+                  placeholder={data.billing ? `Pour ${data.billing.name} (facturation du client) : échéancier, RIB, remise, demande du client…` : 'Échéancier, RIB, remise, demande du client… @ pour prévenir la finance ou le CSM'} />
                 <ComposerFiles files={files} disabled={posting} onRemove={dropFile} />
                 <div className="fx-bar">
                   <button type="button" className="fx-tool" onClick={insertAt} aria-label="Mentionner quelqu’un" title="Mentionner la finance, un CSM ou la direction : la personne reçoit un e-mail et une notification"><AtSign size={16} /></button>
@@ -258,7 +258,9 @@ export default function SalesClientThread({ leadId, dark = false }) {
                   <button type="button" className="fx-send" onClick={submit} disabled={posting || (!draft.trim() && !files.length)}>{posting ? 'Envoi…' : 'Envoyer'}</button>
                 </div>
               </div>
-              <p className="fx-scope">Lu par Owner (finance, CSM, direction), jamais par le cabinet. @ prévient par e-mail et notification.</p>
+              <p className="fx-scope">{data.billing
+                ? `Chaque message prévient ${data.billing.name}, à la facturation de ce client. Lu par Owner (finance, CSM, direction), jamais par le cabinet ; @ prévient une autre personne.`
+                : 'Lu par Owner (finance, CSM, direction), jamais par le cabinet. @ prévient par e-mail et notification.'}</p>
             </>
           ) : <p className="sct-empty">Vous êtes mentionné dans ce fil : répondez sous le message qui vous concerne.</p>}
           <AnimatePresence>

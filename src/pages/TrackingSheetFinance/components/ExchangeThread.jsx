@@ -20,7 +20,7 @@
 // `focus` ({ id, n }) ouvre le fil sur un message précis (le dernier commentaire du sales, sous « Sales » de la fiche).
 import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
-import { ArrowUpRight, AtSign, ChevronDown, CornerUpLeft, Lock, MoreHorizontal, Paperclip, Pencil, Pin, PinOff, SendHorizontal, Smile, Trash2, Users } from 'lucide-react';
+import { ArrowUpRight, AtSign, BriefcaseBusiness, ChevronDown, CornerUpLeft, Lock, MoreHorizontal, Paperclip, Pencil, Pin, PinOff, SendHorizontal, Smile, Trash2, Users } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
 import MentionTextarea, { MentionedText } from '../../../components/MentionTextarea.jsx';
 import { EmojiPalette, Reactions, toggledReactions } from '../../../components/BoardReactions.jsx';
@@ -31,6 +31,7 @@ import { weatherPresentation, weatherRatingLabel } from '../../../utils/weatherC
 import { mentionedIds, notifiedSummary } from '../../../utils/mentions.js';
 import { isReadOnlyViewer, READ_ONLY_PROPS } from '../../../utils/readOnlyRoles.js';
 import { SalesAuthorTag, VisibilityBadge, useMentionDirectories } from '../../../components/clientComments/CommentAudience.jsx';
+import { sendBlocker } from '../../../utils/commentVisibility.js';
 import { latestSalesComment } from '../../../utils/commentVisibility.js';
 import { asDate, fullDate, timeAgo } from '../../../utils/timeAgo.js';
 import './ExchangeThread.css';
@@ -477,9 +478,11 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   // Sans espace commun (client hors board, fil indisponible), on n'écrit que des notes internes ; et l'inverse.
   const canShare = shared === 'ready';
   const canNote = notesState === 'ready';
-  const mode = audience === 'shared' ? (canShare || !canNote ? 'shared' : 'note') : (canNote ? 'note' : 'shared');
+  // « Sales » (dev 17/11/2026) : un message du fil commun que seuls Owner et le sales du client lisent, jamais le
+  // cabinet ; la finance écrit au sales comme le Client Success depuis le board (le sales doit être mentionné).
+  const mode = audience === 'note' ? (canNote ? 'note' : 'shared') : (canShare || !canNote ? audience : 'note');
   const loading = shared === 'loading' || notesState === 'loading';
-  const canWrite = !readOnly && !loading && (mode === 'shared' ? canShare : canNote);
+  const canWrite = !readOnly && !loading && (mode === 'note' ? canNote : canShare);
 
   const isRatingReply = (c) => c.rating_id && ratings.some((r) => r.id === c.rating_id);
   // Réponse à une note : seulement si sa note est encore là (sinon elle reste lisible comme une note).
@@ -558,12 +561,15 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       return;
     }
     if (!body && !files.length) return;
+    if (mode === 'sales' && sendBlocker('sales', body, directories.sales)) return;
     setPosting(true); setError('');
     try {
       // Les pièces partent d'abord (en attente côté serveur), puis le message les rattache.
       const uploaded = [];
       for (const f of files) uploaded.push(await uploadMessageFile(numero, f.file));
-      const created = await apiClient.post(SHARED, { numero_client: numero, body, mentions: mentionedIds(body, people), attachment_ids: uploaded.map((u) => u.id) });
+      const salesMode = mode === 'sales';
+      const created = await apiClient.post(SHARED, { numero_client: numero, body, mentions: mentionedIds(body, salesMode ? directories.sales : people),
+        attachment_ids: uploaded.map((u) => u.id), ...(salesMode ? { visibility: 'sales' } : {}) });
       setComments((prev) => [{ ...created, attachments: created.attachments?.length ? created.attachments : uploaded }, ...prev]);
       setDraft('');
       setFiles((list) => { list.forEach((f) => f.thumb && URL.revokeObjectURL(f.thumb)); return []; });
@@ -760,7 +766,9 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
   const older = visible.slice(limit);
   const nextBatch = Math.min(STEP, older.length);
   const noteMode = mode === 'note';
-  const sendOff = !canWrite || posting || (noteMode ? !draft.trim() : (!draft.trim() && !files.length));
+  const salesMode = mode === 'sales';
+  const salesBlocker = salesMode ? sendBlocker('sales', draft, directories.sales) : '';
+  const sendOff = !canWrite || posting || !!salesBlocker || (noteMode ? !draft.trim() : (!draft.trim() && !files.length));
 
   return (
     <div ref={rootRef} className="fx">
@@ -769,10 +777,12 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
         onDragOver={(e) => { if (!noteMode && e.dataTransfer?.types?.includes('Files')) e.preventDefault(); }}
         onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget)) setDragging(false); }}
         onDrop={(e) => { if (noteMode || !e.dataTransfer?.files?.length) return; e.preventDefault(); setDragging(false); addFiles(e.dataTransfer.files); }}>
-        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? notePeople : people} rows={2} className="fx-ta" maxLength={4000}
-          aria-label={noteMode ? 'Note interne finance' : 'Message de l’espace commun'} onPaste={pasteFiles}
+        <MentionTextarea id={composerId} value={draft} onChange={setDraft} people={noteMode ? notePeople : salesMode ? directories.sales : people} rows={2} className="fx-ta" maxLength={4000}
+          aria-label={noteMode ? 'Note interne finance' : salesMode ? 'Message au sales du client' : 'Message de l’espace commun'} onPaste={pasteFiles}
           onKeyDown={(e) => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); submit(); } }}
-          placeholder={noteMode ? 'Note pour la finance : promesse de règlement, retour du cabinet…' : `Écrire à Owner, Opti’Lex et la finance… (collez une image avec ${isMac ? '⌘' : 'Ctrl'} V)`}
+          placeholder={noteMode ? 'Note pour la finance : promesse de règlement, retour du cabinet…'
+            : salesMode ? 'Écrire au sales du client : tapez @ et choisissez-le…'
+            : `Écrire à Owner, Opti’Lex et la finance… (collez une image avec ${isMac ? '⌘' : 'Ctrl'} V)`}
           {...ro} />
         <ComposerFiles files={files} disabled={posting} onRemove={dropFile} />
         <div className="fx-bar">
@@ -787,6 +797,7 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
           {notesBase && numero && (
             <div className="fx-aud" role="group" aria-label="À qui écrire">
               {[['shared', 'Partagé', Users, canShare, 'Visible par Owner, le cabinet Opti’Lex et la finance'],
+                ['sales', 'Sales', BriefcaseBusiness, canShare, 'Owner et le sales du client, jamais le cabinet : mentionnez le sales avec @'],
                 ['note', 'Interne', Lock, canNote && !files.length, files.length ? 'Retirez les pièces jointes : une note interne n’en accepte pas' : 'Note visible par la finance seulement']].map(([k, label, Icon, on, title]) => (
                 <button key={k} type="button" aria-pressed={mode === k} className={mode === k ? 'is-on' : ''} disabled={!on && mode !== k} title={title} onClick={() => setAudience(k)}>
                   {mode === k && <Motion.span layoutId={`${composerId}-aud`} className="fx-aud-thumb" transition={SPRING} />}
@@ -802,7 +813,9 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
       <p className="fx-scope">
         {noteMode
           ? <><Lock size={12} strokeWidth={2.1} />Note interne : seule la finance la voit, jamais le cabinet. @ prévient un collègue par e-mail et notification.</>
-          : <><Users size={12} strokeWidth={2.1} />Visible par Owner, le cabinet Opti’Lex et la finance. @ prévient par e-mail et notification.</>}
+          : salesMode
+            ? <><BriefcaseBusiness size={12} strokeWidth={2.1} />{salesBlocker && draft.trim() ? salesBlocker : 'Sales : Owner et le sales du client, jamais le cabinet. Le sales le lit dans sa Tracking Sheet et reçoit un e-mail.'}</>
+            : <><Users size={12} strokeWidth={2.1} />Visible par Owner, le cabinet Opti’Lex et la finance. @ prévient par e-mail et notification.</>}
       </p>
       <AnimatePresence>
         {notice && <Motion.p key="notice" role="status" className="fx-notice" initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>{notice}</Motion.p>}
