@@ -54,14 +54,19 @@ const LIST_ICONS = {
   video: <><rect x="2.5" y="6" width="13.5" height="12" rx="2.5" /><path d="m16 10.5 5.5-3v9L16 13.5" /></>,
   link: <><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7.1l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7.1l1.7-1.7" /></>,
   bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>,
+  // Le fantôme du no show, comme sur la ligne du board.
+  ghost: <><path d="M12 2.5a7.5 7.5 0 0 0-7.5 7.5v11l2.6-2.2 2.4 2.2 2.5-2.2 2.5 2.2 2.4-2.2 2.6 2.2V10A7.5 7.5 0 0 0 12 2.5Z" /><path d="M9.5 10h.01M14.5 10h.01" /></>,
   coin: <><circle cx="12" cy="12" r="8.5" /><path d="M14.5 9a3 3 0 0 0-2.5-1c-1.7 0-2.8 1-2.8 2 0 2.6 5.6 1.4 5.6 4 0 1-1.1 2-2.8 2a3 3 0 0 1-2.5-1M12 6.5v1.5M12 16v1.5" /></>,
   promise: <><path d="m11 17 2 2a1 1 0 1 0 3-3" /><path d="m14 14 2.5 2.5a1 1 0 1 0 3-3l-3.88-3.88a3 3 0 0 0-4.24 0l-.88.88a1 1 0 1 1-3-3l2.81-2.81a5.79 5.79 0 0 1 7.06-.87l.47.28a2 2 0 0 0 1.42.25L21 4" /><path d="m21 3 1 11h-2M3 3 2 14l6.5 6.5a1 1 0 1 0 3-3M3 4h8" /></>,
 };
 // Ligne encadrée : icône, libellé, valeur à droite (réf. « Recent contracts »).
+export const ListRowIcon = ({ name }) => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{LIST_ICONS[name]}</svg>
+);
 export function ListRow({ icon, label, children }) {
   return (
     <div className="ofd-li">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{LIST_ICONS[icon]}</svg>
+      <ListRowIcon name={icon} />
       <span className="ofd-li-k">{label}</span>
       <span className="ofd-li-v">{children}</span>
     </div>

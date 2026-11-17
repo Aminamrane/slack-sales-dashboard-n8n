@@ -3,8 +3,9 @@
 // social reprogrammables sans quitter le parcours),
 // 3. la convention Opti'Lex (prévenir Lisa), 4. la météo d'onboarding qui finalise la fiche,
 // 5. la clôture : réalisé (un bouton, puis confettis et ticket « Bravo » ; à la fermeture, le billet de la fiche se
-// découpe tout seul, dev 29/10/2026), ou à recaler (avec ou sans date). Règle finance affichée telle que le moteur
-// l'applique : le jour J, rien n'est dû avant la fin du rendez-vous.
+// découpe tout seul, dev 29/10/2026), no show (Vincent, 17/11/2026 : « un champ No-show dans l'onglet Faire
+// l'onboarding »), ou à recaler (avec ou sans date). Règle finance affichée telle que le moteur l'applique : le jour J,
+// rien n'est dû avant la fin du rendez-vous.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { motion as Motion, AnimatePresence } from "framer-motion";
@@ -15,10 +16,10 @@ import { OnboardingRatingForm } from "./BoardIntegrationSheet";
 import { METEO_MEANING, MeteoIcon, meteoStyle } from "./meteo.jsx";
 import { WEATHER, weatherPresentation } from "../utils/weatherCase";
 import BoardOnboardingDateCorrection from "./BoardOnboardingDateCorrection";
-import { onboardingDateOf } from "../utils/boardIntegration";
+import { onboardingDateOf, parisWallTime } from "../utils/boardIntegration";
 import { displayEtat } from "../utils/boardClientState";
 import { Barcode, ConfettiBurst, OnboardedPass } from "./OnboardingPass.jsx";
-import { Art, FolderCard, ListRow, Panel, Stat, Tag } from "./DashParts.jsx";
+import { Art, FolderCard, ListRow, ListRowIcon, Panel, Stat, Tag } from "./DashParts.jsx";
 import "./OnboardingFlowModal.css";
 
 const NAVY = "#1c1b19";
@@ -370,8 +371,57 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
   );
 }
 
-function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDate, onRescheduleLater, note, setNote, weatherDue, onWeather }) {
+// No show du rendez-vous prévu (Vincent, 17/11/2026) : une ligne du même dessin que « Rendez-vous d'onboarding », le
+// geste à droite. Noté au nom du Client Success, il reste dans l'historique de la fiche et dans les chiffres même quand
+// l'onboarding est réalisé plus tard. Possible une fois le rendez-vous passé.
+function NoShowRow({ num, day, onChanged }) {
+  const [state, setState] = useState({ loading: true, saved: null, saving: false, error: "" });
+  useEffect(() => {
+    let alive = true;
+    apiClient.get(`/api/v1/optilex/etat-history?numero_client=${encodeURIComponent(num)}`)
+      .then((r) => { if (alive) setState((s) => ({ ...s, loading: false, saved: (r?.no_shows || []).find((n) => n.rdv_date === day && n.qualified_by_name) || null })); })
+      .catch(() => { if (alive) setState((s) => ({ ...s, loading: false })); });
+    return () => { alive = false; };
+  }, [num, day]);
+  const passed = day <= parisWallTime().slice(0, 10);
+  const save = async () => {
+    setState((s) => ({ ...s, saving: true, error: "" }));
+    try {
+      const r = await apiClient.post("/api/v1/optilex/onboarding-no-show", { numero_client: num, rdv_date: day });
+      setState((s) => ({ ...s, saving: false, saved: r?.no_show || { rdv_date: day } }));
+      onChanged?.();
+    } catch (e) {
+      setState((s) => ({ ...s, saving: false, error: typeof e?.data?.detail === "string" ? e.data.detail : "Le no show n'a pas été enregistré. Réessayez." }));
+    }
+  };
+  const { saved } = state;
+  return (
+    <>
+      <div className="ofd-li is-noshow">
+        <ListRowIcon name="ghost" />
+        <span className="ofd-li-k">Le client n'est pas venu le {fmtDayMonth(day)}</span>
+        <span className="ofd-li-v">
+          <AnimatePresence mode="wait" initial={false}>
+            <Motion.span key={saved ? "saved" : "ask"} style={{ display: "inline-flex", alignItems: "center", gap: 8 }}
+              initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} transition={{ duration: 0.2, ease: EASE }}>
+              {saved ? <>
+                <span className="ofd-li-tag">No show noté</span>
+                {saved.qualified_by_name && <span className="ofd-li-by">par {saved.qualified_by_name}</span>}
+              </> : passed ? (
+                <Button small disabled={state.loading || state.saving} onClick={save}>{state.saving ? "Enregistrement…" : "Noter le no show"}</Button>
+              ) : <span className="ofd-li-wait">après le rendez-vous</span>}
+            </Motion.span>
+          </AnimatePresence>
+        </span>
+      </div>
+      {state.error && <div role="alert" className="ofd-li-error">{state.error}</div>}
+    </>
+  );
+}
+
+function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDate, onRescheduleLater, note, setNote, weatherDue, onWeather, onChanged }) {
   const alreadyDone = brief.onboarding.done;
+  const day = String(brief.onboarding.day || brief.onboarding.at || "").slice(0, 10);
   return (
     <>
       {/* La fiche attend la météo du Client Success (main 3fac728) : tant qu'elle manque, l'onboarding ne se conclut pas. */}
@@ -387,6 +437,7 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
         <FinishCard brief={brief} row={row} num={num} rated={rated} busy={busy} onDone={onDone} weatherDue={weatherDue} />
       )}
       <Panel title="Pas encore réalisé ?" className="ofd-later">
+        {!alreadyDone && /^\d{4}-\d{2}-\d{2}$/.test(day) && <NoShowRow num={num} day={day} onChanged={onChanged} />}
         <p className="ofd-note">Ces deux issues laissent la fiche « à recaler » jusqu'à la nouvelle date.</p>
         <div className="ofd-choices">
           <button type="button" className="ofd-choice" disabled={!!busy} onClick={onRescheduleWithDate}>
@@ -545,7 +596,8 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
                     weatherDue={weatherDue} onWeather={() => goTo(STEPS.findIndex((s) => s.key === "meteo"))}
                     onDone={() => finish({ rdv_onboarding_done: true }, "Onboarding réalisé. Bravo !", "done")}
                     onRescheduleWithDate={() => { onClose(); onRescheduleWithDate?.(); }}
-                    onRescheduleLater={() => finish({ onboarding_reschedule_pending: true, onboarding_reschedule_note: note.trim() || null }, "Onboarding marqué à recaler.", "later")} />
+                    onRescheduleLater={() => finish({ onboarding_reschedule_pending: true, onboarding_reschedule_note: note.trim() || null }, "Onboarding marqué à recaler.", "later")}
+                    onChanged={onChanged} />
                 )}
                 {error && <div role="alert" style={{ marginTop: 10, color: RED, fontSize: 12.5 }}>{error}</div>}
               </Motion.div>
