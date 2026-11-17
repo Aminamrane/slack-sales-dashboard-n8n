@@ -11,8 +11,10 @@ const CABINET_BOARD_ROLES = ['optilex', 'finance_team'];
 export function boardPathFor(role) {
   return CABINET_BOARD_ROLES.includes(role) ? '/optilex-board' : '/ceo/optilex-board';
 }
-// Alertes qui portent un client du board (numero_client) : le lien ouvre sa fiche.
-export const CLIENT_NOTIFICATION_TYPES = ['owner_rating_regression', 'optilex_contract_alert', 'optilex_client_sans_guid', 'onboarding_google_change'];
+// Alertes qui portent un client du board (numero_client) : le lien ouvre sa fiche. Passage en cours de résiliation et
+// client repêché (dev 17/11/2026) : la fiche du client.
+export const CLIENT_NOTIFICATION_TYPES = ['owner_rating_regression', 'optilex_contract_alert', 'optilex_client_sans_guid', 'onboarding_google_change',
+  'optilex_resiliation_alert', 'optilex_client_repeche'];
 export function notificationTarget(notif, role) {
   if (CLIENT_NOTIFICATION_TYPES.includes(notif.type)) {
     const numero = notif.data?.numero_client;

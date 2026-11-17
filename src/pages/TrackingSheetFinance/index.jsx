@@ -1,4 +1,5 @@
 import { confirmBoardFinanceExit } from '../../components/BoardFinanceExitDialog.jsx';
+import { confirmBoardResiliation } from '../../components/BoardResiliationDialog.jsx';
 import { requiresExitDecision } from '../../utils/boardFinanceExit.js';
 import { createLatestRequestTracker, withConfirmedEtat } from '../../utils/boardClientState.js';
 // TrackingSheetFinance/index.jsx — Tracking Finance page (production).
@@ -1145,7 +1146,13 @@ export default function TrackingSheetFinance() {
       payload = await confirmBoardFinanceExit(numero, payload);
       if (!payload) return { cancelled: true };
     }
-    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null } = payload;
+    // Passage « En cours de résiliation » (dev 17/11/2026) : comme sur le board, le mail de résiliation du client est
+    // demandé d'abord (facultatif).
+    if (payload.etat === 'En cours de résiliation' && !payload.attachment_ids) {
+      payload = await confirmBoardResiliation(numero, payload);
+      if (!payload) return { cancelled: true };
+    }
+    const { etat = null, etat_date = null, pause_end_date = null, pause_relance_date = null, finance_decision = null, attachment_ids = [] } = payload;
     if (!numero) return;
     const isLatest = etatRequests.start(numero);
     const pe = etat === 'Pause' ? pause_end_date : null;
@@ -1162,7 +1169,7 @@ export default function TrackingSheetFinance() {
     });
     try {
       const response = await apiClient.post('/api/v1/optilex/etat-change', {
-        numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision,
+        numero_client: numero, etat, etat_date, pause_end_date: pe, pause_relance_date: pr, finance_decision, attachment_ids,
       });
       if (isLatest()) {
         setBoardMap((prev) => {
