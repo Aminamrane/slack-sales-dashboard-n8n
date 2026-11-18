@@ -2977,7 +2977,8 @@ function OnboardingToConfirm({ row, onDone, onNotDone, onNoShow }) {
     try { await onNoShow(planned); setNoShow({ saving: false, error: "" }); }
     catch (e) { setNoShow({ saving: false, error: typeof e?.data?.detail === "string" ? e.data.detail : "La qualification n'a pas été enregistrée. Réessayez." }); }
   };
-  const canNoShow = onNoShow && planned && planned <= todayParis;
+  // Aucun blocage de date (dev 18/11/2026) : le no show se note même avant l'heure prévue.
+  const canNoShow = onNoShow && !!planned;
   // Une question, trois réponses de même poids : réalisé (avec sa date), puis, groupés, les deux « pas fait ».
   return (
     <div className="ob-confirm">
