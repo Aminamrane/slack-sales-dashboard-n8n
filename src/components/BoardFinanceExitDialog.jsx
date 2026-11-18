@@ -32,10 +32,10 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       .then(data => {
         if (!alive) return;
         setPreview(data);
-        setValues(Object.fromEntries(Object.entries(data.amounts).map(([key, amount]) => [key, Number(amount) === 0 || data.review.active_loss ? '0' : ''])));
+        setValues(Object.fromEntries(Object.entries(data.amounts).map(([key, amount]) => [key, Number(amount) === 0 || data.review.active_loss || payload.etat === 'Pause' ? '0' : ''])));
       }).catch(e => { if (alive) setError(typeof e?.data?.detail === 'string' ? e.data.detail : 'Impossible de charger les montants. Réessayez.'); });
     return () => { alive = false; };
-  }, [numero, version]);
+  }, [numero, version, payload.etat]);
   useEffect(() => {
     const previous = document.activeElement;
     dialog.current?.focus();
@@ -45,7 +45,10 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
   const amounts = preview ? exitAmounts(values, preview.amounts) : null;
   const total = amounts ? Object.values(amounts).reduce((a, b) => a + b, 0) : null;
   const needsLink = loss && !preview?.review?.finance_withdrawn_at;
-  const canConfirm = preview && date && (withdrawal || datedPause || (/^\d{4}-\d{2}$/.test(billedUntil) && (pause || amounts))) && (!needsLink || linked);
+  // Pause : perte facultative sur ce qui était dû AVANT la pause (créances, mois en cours), jamais le futur.
+  const pauseAmounts = pause && amounts ? { amount_past: amounts.amount_past, amount_current: amounts.amount_current, amount_future: 0 } : null;
+  const canConfirm = preview && date && (withdrawal || (pause ? Boolean(pauseAmounts) && (datedPause || /^\d{4}-\d{2}$/.test(billedUntil))
+    : /^\d{4}-\d{2}$/.test(billedUntil) && amounts)) && (!needsLink || linked);
   const keyDown = e => {
     if (e.key === 'Escape') { e.stopPropagation(); onResolve(null); }
     if (e.key === 'Tab') {
@@ -69,8 +72,16 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       {error && <div role="alert"><p style={{ color: '#c5221f' }}>{error}</p><button style={button} onClick={() => setVersion(v => v + 1)}><RefreshCw size={14}/> Réessayer</button></div>}
       {preview && <>
         {withdrawal ? <p style={{ padding: 14, background: '#fff7e9', borderRadius: 10 }}>Les attendus Owner et Opti’Lex seront automatiquement annulés depuis la signature. Les encaissements et remboursements restent dans l’historique.</p>
-        : datedPause ? <p style={{ padding: 14, background: '#f7f5f2', borderRadius: 10 }}>Aucun attendu du {frDay(date)} au {frDay(payload.pause_end_date)} (les mois qui commencent pendant la pause), puis la facturation normale reprend. Ce qui était dû avant la pause reste à recouvrer.</p>
-        : pause ? <p style={{ padding: 14, background: '#f7f5f2', borderRadius: 10 }}>Rien n’est passé en perte : la pause suspend seulement la facturation. Ce qui reste dû avant la pause reste à recouvrer, et la reprise se décide quand le client repart.</p> : <>
+        : pause ? <>
+          <p style={{ padding: 14, background: '#f7f5f2', borderRadius: 10 }}>{datedPause
+            ? <>Aucun attendu du {frDay(date)} au {frDay(payload.pause_end_date)} (les mois qui commencent pendant la pause), puis la facturation normale reprend.</>
+            : <>La pause suspend la facturation après le dernier mois facturé ; la reprise se décide quand le client repart.</>}</p>
+          <p>Facultatif : passer en perte ce que le client devait avant la pause. <strong>Le reste demeure à recouvrer.</strong></p>
+          {['past', 'current'].map(key => <label key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', marginTop: 12 }}>
+            <span>{labels[key]}<small style={{ display: 'block', color: '#8b867e' }}>Disponible : {money(preview.amounts[key])}</small></span>
+            <span><input aria-label={`Perte · ${labels[key]}`} inputMode="decimal" value={values[key]} disabled={Boolean(loss)} placeholder="0,00" style={{ ...input, textAlign: 'right' }} onChange={e => setValues(v => ({ ...v, [key]: e.target.value }))}/></span>
+          </label>)}
+        </> : <>
           <p>Choisissez les montants à passer en perte. <strong>Le reste demeure à recouvrer.</strong></p>
           {Object.entries(labels).map(([key, label]) => <label key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', marginTop: 12 }}>
             <span>{label}<small style={{ display: 'block', color: '#8b867e' }}>Disponible : {money(preview.amounts[key])}</small>{amounts && <small style={{ display: 'block', color: '#24735a' }}>Restant : {money(Number(preview.amounts[key]) - amounts[`amount_${key}`])}</small>}</span>
@@ -94,7 +105,7 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       </>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
         <button style={button} onClick={() => onResolve(null)}>Annuler</button>
-        <button disabled={!canConfirm} style={{ ...button, background: '#2b2927', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : datedPause ? { amount_past: 0, amount_current: 0, amount_future: 0 } : pause ? { last_month: billedUntil } : { ...amounts, all_remaining: allRemaining, last_month: billedUntil }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
+        <button disabled={!canConfirm} style={{ ...button, background: '#2b2927', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : datedPause ? pauseAmounts : pause ? { ...pauseAmounts, last_month: billedUntil } : { ...amounts, all_remaining: allRemaining, last_month: billedUntil }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
       </div>
     </section>
   </div>;
