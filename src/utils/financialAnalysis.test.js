@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { afterFirstYear, financialAnalysis, lifetimeLabel, sectorBreakdown, sectorKey, survival } from './financialAnalysis.js';
+import { afterFirstYear, asOfMonth, departures, financialAnalysis, fromApi, legalForms, lifetimeLabel, monthBounds, monthLabel,
+  monthlyResiliations, retentionCurve, sectorBreakdown, sectorKey } from './financialAnalysis.js';
 
-const row = (more) => ({ is_pending_contract: false, etat_affiche: 'Signé', etat_date: null, owner_signed_at: null, secteur_activite: '', ...more });
+const row = (more) => ({ is_pending_contract: false, etat_affiche: 'Signé', etat_date: null, owner_signed_at: null, secteur_activite: '', legal_form: null, ...more });
 const ASOF = '2026-11-17';
 
 test('lifetimeLabel : une durée se lit en années et mois', () => {
@@ -14,65 +15,95 @@ test('lifetimeLabel : une durée se lit en années et mois', () => {
   assert.equal(lifetimeLabel(800), '2 ans 2 mois');
 });
 
-test('survival : la part encore là au bout de N mois, parmi les clients assez anciens pour le dire', () => {
+test('fromApi : les lignes réduites de la route reprennent la forme du board', () => {
+  assert.deepEqual(fromApi([{ pending: false, etat: 'Signé', etat_date: null, signed: '2026-01-02', sector: 'BTP', legal_form: 'SAS' }]).map((r) => ({ ...r })),
+    [{ is_pending_contract: false, etat_affiche: 'Signé', etat_date: null, owner_signed_at: '2026-01-02', secteur_activite: 'BTP', legal_form: 'SAS' }]);
+  assert.deepEqual(fromApi(null), []);
+});
+
+test('le mois regardé : arrêté au dernier jour, ou aujourd’hui pour le mois en cours', () => {
+  assert.equal(asOfMonth('2026-10', '2026-11-17'), '2026-10-31');
+  assert.equal(asOfMonth('2026-11', '2026-11-17'), '2026-11-17');
+  assert.equal(monthLabel('2026-02'), 'février 2026');
+  assert.deepEqual(monthBounds([row({ owner_signed_at: '2025-03-04T10:00:00' }), row({ owner_signed_at: '2024-12-01' }), row({})], '2026-11-17'),
+    { first: '2024-12', last: '2026-11' });
+});
+
+test('retentionCurve : la part encore là au bout de N mois, tant qu’assez de clients le disent', () => {
   const lives = [
-    { signed: '2025-01-10', days: 676, open: true },    // encore là après 22 mois
-    { signed: '2025-03-01', days: 200, open: false },   // parti au bout de 6 mois et demi
-    { signed: '2026-01-05', days: 316, open: true },    // 10 mois : trop récent pour les 12 mois
-    { signed: '2026-09-01', days: 77, open: true },     // 2 mois et demi : trop récent pour tout
+    { signed: '2025-01-10', days: 676, open: true },
+    { signed: '2025-03-01', days: 200, open: false },
+    { signed: '2026-01-05', days: 316, open: true },
+    { signed: '2026-09-01', days: 77, open: true },
   ];
-  assert.deepEqual(survival(lives, ASOF).map((step) => [step.months, step.eligible, step.kept]), [[3, 3, 3], [6, 3, 3], [12, 2, 1], [18, 2, 1]]);
-  assert.equal(survival(lives, ASOF)[2].rate, 0.5);
+  const curve = retentionCurve(lives, ASOF, { minEligible: 2 });
+  assert.deepEqual(curve[0], { month: 0, eligible: 4, kept: 4, rate: 1 });
+  assert.deepEqual([curve[3].eligible, curve[3].kept], [3, 3]);
+  assert.deepEqual([curve[12].eligible, curve[12].kept, curve[12].rate], [2, 1, 0.5]);
+  // Au-delà de 20 mois, il ne reste qu'un client assez ancien : la courbe s'arrête.
+  assert.equal(curve.at(-1).month, 20);
 });
 
-test('afterFirstYear : ceux qui ont passé un an, et le temps resté au-delà', () => {
-  const stats = afterFirstYear([{ days: 365 + 100, open: true }, { days: 365 + 300, open: false }, { days: 200, open: false }, { days: 364, open: true }]);
-  assert.deepEqual([stats.passed, stats.stillHere, stats.gone, stats.extraDays, stats.goneExtraDays], [2, 1, 1, 200, 300]);
-  assert.equal(afterFirstYear([]).extraDays, null);
+test('afterFirstYear et departures : après un an, et au bout de quand on résilie', () => {
+  const year = afterFirstYear([{ days: 465, open: true }, { days: 665, open: false }, { days: 200, open: false }, { days: 364, open: true }]);
+  assert.deepEqual([year.passed, year.stillHere, year.gone, year.extraDays], [2, 1, 1, 200]);
+  const left = (days, etat) => ({ days, open: false, row: row({ etat_affiche: etat }) });
+  const out = departures([left(60, 'Résiliation'), left(300, 'Self-Résiliation'), left(400, 'Résiliation'), left(500, 'Liquidation'), { days: 900, open: true, row: row({}) }]);
+  assert.deepEqual([out.count, out.averageDays, out.medianDays, out.afterOneYear], [3, (60 + 300 + 400) / 3, 300, 1]);
+  assert.deepEqual(out.buckets.map((b) => b.count), [1, 0, 1, 1, 0, 0]);
 });
 
-test('sectorBreakdown : les niches, écriture la plus fréquente, non renseigné à part', () => {
+test('monthlyResiliations : les douze derniers mois, le mois en cours compté jusqu’à aujourd’hui', () => {
+  const rows = [
+    row({ owner_signed_at: '2025-01-01' }), row({ owner_signed_at: '2025-01-01' }),
+    row({ owner_signed_at: '2025-01-01', etat_affiche: 'Résiliation', etat_date: '2026-10-12' }),
+    row({ owner_signed_at: '2025-01-01', etat_affiche: 'Résiliation', etat_date: '2026-11-25' }),   // après aujourd'hui
+  ];
+  const months = monthlyResiliations(rows, '2026-11', ASOF, 3);
+  assert.deepEqual(months.map((m) => [m.key, m.count, m.base]), [['2026-09', 0, 4], ['2026-10', 1, 4], ['2026-11', 0, 3]]);
+  assert.equal(months[1].label, 'octobre 2026');
+});
+
+test('sectorBreakdown : les niches, nom corrigé, autres secteurs regroupés, non renseigné à part', () => {
   const life = (secteur, open, days, etat = 'Signé') => ({ row: row({ secteur_activite: secteur, etat_affiche: etat }), open, days });
   const out = sectorBreakdown([
-    life('Micro-crèche', true, 400), life('micro-creche', true, 200), life('Micro-crèche', false, 300, 'Résiliation'),
+    life('Micro créche', true, 400), life('micro-creche', true, 200), life('Micro créche', false, 300, 'Résiliation'),
     life('Restauration', true, 100), life('Restauration', false, 500, 'Liquidation'),
     life('', true, 50), life('BTP', true, 80),
   ], 2);
   assert.deepEqual(out.sectors.map((s) => [s.label, s.open, s.resiliated, s.clients]),
-    [['Micro-crèche', 2, 1, 3], ['Restauration', 1, 0, 2], ['Autres secteurs', 1, 0, 1], ['Secteur non renseigné', 1, 0, 1]]);
+    [['Micro-crèche', 2, 1, 3], ['Restauration', 1, 0, 2], ['Autres secteurs (1)', 1, 0, 1], ['Secteur non renseigné', 1, 0, 1]]);
   assert.equal(out.sectors[0].averageDays, 300);
-  assert.equal(out.sectors[0].share, 2 / 5);
-  assert.deepEqual([out.named, out.known, out.unknown], [3, 6, 1]);
+  assert.equal(out.sectors[0].resiliationRate, 1 / 3);
+  assert.deepEqual([out.named, out.unknown], [3, 1]);
 });
 
-test('financialAnalysis : mêmes chiffres que le dashboard, plus la rétention et les niches', () => {
+test('legalForms : SARL, SAS… parmi les clients en cours qui ont rempli leur NDA', () => {
+  const life = (form, open = true) => ({ open, row: row({ legal_form: form }) });
+  const out = legalForms([life('SARL'), life('sarl'), life('SAS'), life('SCI'), life(null), life('SAS', false)]);
+  assert.deepEqual([out.known, out.unknown], [4, 1]);
+  assert.deepEqual(out.forms.map((f) => [f.label, f.count]), [['SARL', 2], ['SAS', 1], ['Autres', 1]]);
+});
+
+test('financialAnalysis : la LTV posée comme une division, une niche restreint tout sauf la liste des niches', () => {
   assert.equal(financialAnalysis(null, ASOF), null);
-  const out = financialAnalysis([
-    row({ owner_signed_at: '2025-01-10', secteur_activite: 'BTP' }),
-    row({ owner_signed_at: '2025-03-01', etat_affiche: 'Résiliation', etat_date: '2025-09-17', secteur_activite: 'BTP' }),
-    row({ owner_signed_at: '2026-09-20', etat_affiche: 'Rétractation', etat_date: '2026-10-01' }),   // jamais vraiment client
-    row({ owner_signed_at: '2026-06-01', is_pending_contract: true }),                                // contrat en vol
-    row({ owner_signed_at: '2026-01-05' }),
-  ], ASOF);
-  assert.equal(out.inCourse, 2);
-  assert.deepEqual([out.lifetime.measured, out.lifetime.open, out.lifetime.closed], [3, 2, 1]);
-  assert.deepEqual([out.resiliationGlobal.count, out.resiliationGlobal.base], [1, 2]);
-  assert.deepEqual(out.sectors.map((s) => [s.label, s.open, s.resiliated]), [['BTP', 1, 1], ['Secteur non renseigné', 1, 0]]);
-  assert.equal(out.afterFirstYear.passed, 1);
-  assert.deepEqual([out.signed, out.gone, out.retracted], [3, 1, 1]);
-});
-
-test('financialAnalysis : une niche restreint les chiffres, la liste des niches reste celle du parc', () => {
   const rows = [
-    row({ owner_signed_at: '2025-01-10', secteur_activite: 'BTP' }),
+    row({ owner_signed_at: '2025-01-10', secteur_activite: 'BTP', legal_form: 'SARL' }),
     row({ owner_signed_at: '2025-03-01', etat_affiche: 'Résiliation', etat_date: '2025-09-17', secteur_activite: 'btp' }),
-    row({ owner_signed_at: '2026-01-05', secteur_activite: 'Micro-crèche' }),
-    row({ owner_signed_at: '2026-02-05' }),
+    row({ owner_signed_at: '2026-09-20', etat_affiche: 'Rétractation', etat_date: '2026-10-01' }),
+    row({ owner_signed_at: '2026-06-01', is_pending_contract: true }),
+    row({ owner_signed_at: '2026-01-05', secteur_activite: 'Micro créche' }),
   ];
+  const all = financialAnalysis(rows, ASOF);
+  assert.deepEqual([all.measured, all.inCourse, all.gone, all.retracted], [3, 2, 1, 1]);
+  assert.equal(all.ltv.clients, 3);
+  assert.equal(all.ltv.averageDays, all.ltv.totalDays / 3);
+  assert.equal(all.ltv.averageDays, all.lifetime.averageDays, 'la même moyenne que le dashboard');
+  assert.equal(all.forms.known, 1);
   const btp = financialAnalysis(rows, ASOF, sectorKey('BTP'));
-  assert.deepEqual([btp.signed, btp.inCourse, btp.gone, btp.resiliationGlobal.count], [2, 1, 1, 1]);
-  assert.deepEqual(btp.sectors.map((s) => s.label), ['BTP', 'Micro-crèche', 'Secteur non renseigné']);
-  // Sans secteur renseigné : la clé vide.
-  assert.equal(financialAnalysis(rows, ASOF, '').signed, 1);
-  assert.equal(financialAnalysis(rows, ASOF).signed, 4);
+  assert.deepEqual([btp.measured, btp.inCourse, btp.gone], [2, 1, 1]);
+  // Le rétracté (sans secteur) n'est pas un client mesuré : il n'apparaît dans aucune niche.
+  assert.deepEqual(btp.sectors.map((s) => s.label), ['BTP', 'Micro-crèche']);
+  // Un mois passé : ce qui est arrivé après n'existe pas encore.
+  assert.equal(financialAnalysis(rows, '2025-12-31').measured, 2);
 });

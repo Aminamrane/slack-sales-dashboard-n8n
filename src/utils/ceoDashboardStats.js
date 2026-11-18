@@ -257,6 +257,16 @@ const lastDayBefore = (monthKeyStr) => {
   return new Date(Date.UTC(y, m - 1, 0)).toISOString().slice(0, 10);
 };
 
+// Taux de résiliation d'un mois (AAAA-MM), compté jusqu'au jour `upTo` : résiliations datées dans le mois ÷ clients en
+// cours la veille du 1er. Exporté pour la série mois par mois de « Analyse financière » (une seule définition).
+export function resiliationRateOfMonth(established, key, upTo) {
+  const exitDate = (r) => dateOnly(r.etat_date);
+  const base = established.filter((r) => isInCourseAt(r, lastDayBefore(key))).length;
+  const count = established.filter((r) => RESILIATION_ETATS.includes(displayEtat(r))
+    && (exitDate(r) || '').slice(0, 7) === key && exitDate(r) <= upTo).length;
+  return { key, count, base, rate: base ? count / base : null };
+}
+
 // Rétention à la date `asOf` (AAAA-MM-JJ), mêmes définitions que la Finance, vérifiées contre
 // sa feuille du 14/05/2026 (36 résiliations pour 521 clients en cours ; le CRM en donne 36 pour 520).
 //  - client en cours à une date : signé au plus tard ce jour-là et pas encore sorti (pause, attente
@@ -271,12 +281,7 @@ export function computeRetention(established, asOf, monthKeyStr) {
   const inCourseAt = isInCourseAt;
   const isResiliation = (r) => RESILIATION_ETATS.includes(displayEtat(r));
 
-  const monthRate = (key, upTo) => {
-    const base = established.filter((r) => inCourseAt(r, lastDayBefore(key))).length;
-    const count = established.filter((r) => isResiliation(r)
-      && (exitDate(r) || '').slice(0, 7) === key && exitDate(r) <= upTo).length;
-    return { key, count, base, rate: base ? count / base : null };
-  };
+  const monthRate = (key, upTo) => resiliationRateOfMonth(established, key, upTo);
   // Le mois précédent, complet, sert de comparaison.
   const previousKey = lastDayBefore(monthKeyStr).slice(0, 7);
 
