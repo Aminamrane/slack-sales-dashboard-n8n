@@ -97,7 +97,10 @@ export function statementAllocationRows({ periods = [], entity, month, splits = 
 
 // Un relevé retrace les mouvements de l'entité choisie jusqu'au mois d'émission.
 // Aucun remboursement global n'est attribué arbitrairement à une structure.
-export function statementRows({ periods = [], entity, month, offer = '', structure = null, splits = [], refunds = [], priorDebts = [] }) {
+// `statement` : le relevé du serveur pour l'entité (timeline.statement[entity]). Avec lui, le PDF dit le même solde
+// que le tableau (dev 2026-11-18) : chaque mois facture ce qu'il ajoute vraiment au solde (0 en pause, reports et
+// corrections rattachés compris), et les corrections hors encaissement (alignement, reste dû, perte) ont leur ligne.
+export function statementRows({ periods = [], entity, month, offer = '', structure = null, splits = [], refunds = [], priorDebts = [], statement = null }) {
   const byMonth = new Map();
   if (structure) {
     for (const split of splits) {
@@ -111,6 +114,14 @@ export function statementRows({ periods = [], entity, month, offer = '', structu
     return [...byMonth.values()].filter(r => r.paid !== 0)
       .sort((a, b) => a.month.localeCompare(b.month) || Number(a.kind === 'overdue') - Number(b.kind === 'overdue'))
       .map(r => ({ periodLabel: formatMonthLabel(r.month), offre: nature(r.kind), billed: 0, paid: r.paid / 100 }));
+  } else if (Array.isArray(statement) && statement.length) {
+    for (const m of statement) {
+      const key = monthKey(m.period);
+      if (!included(key, month)) continue;
+      const billed = toNumber(m.charged);
+      const paid = toNumber(m.received) + toNumber(m.received_overdue);
+      if (billed !== 0 || paid !== 0) byMonth.set(key, { billed, paid });
+    }
   } else {
     for (const period of periods) {
       const key = String(period.period || '').slice(0, 7);
@@ -133,10 +144,24 @@ export function statementRows({ periods = [], entity, month, offer = '', structu
       if (refund.entity !== entity || toNumber(refund.amount) <= 0 || !/^\d{4}-\d{2}$/.test(key) || key > month) continue;
       rows.push({ month: key, billed: 0, paid: -toNumber(refund.amount), refund: true, reason: refund.reason || '' });
     }
+    // Corrections hors encaissement du relevé : ce qui reste de `adjustment` une fois retirés le solde antérieur et
+    // les remboursements, déjà sur leurs lignes. Le total du PDF tombe ainsi sur le solde du tableau.
+    if (Array.isArray(statement)) {
+      const listed = new Map();
+      for (const debt of priorDebts) if (debt.entity === entity) listed.set(monthKey(debt.period), (listed.get(monthKey(debt.period)) || 0) + toNumber(debt.amount));
+      for (const refund of refunds) if (refund.entity === entity) listed.set(monthKey(refund.period), (listed.get(monthKey(refund.period)) || 0) + toNumber(refund.amount));
+      for (const m of statement) {
+        const key = monthKey(m.period);
+        if (!included(key, month)) continue;
+        const correction = Math.round((toNumber(m.adjustment) - (listed.get(key) || 0)) * 100) / 100;
+        if (correction !== 0) rows.push({ month: key, billed: correction, paid: 0, correction: true });
+      }
+    }
   }
   return rows.sort((a, b) => a.month.localeCompare(b.month) || Number(!!b.prior) - Number(!!a.prior) || Number(!!a.refund) - Number(!!b.refund)).map(r => ({
     periodLabel: formatMonthLabel(r.month),
-    offre: r.prior ? `Solde antérieur${r.reason ? ` — ${r.reason}` : ''}` : r.refund ? `Remboursement de trop-perçu${r.reason ? ` — ${r.reason}` : ''}` : offer,
+    offre: r.prior ? `Solde antérieur${r.reason ? ` — ${r.reason}` : ''}` : r.refund ? `Remboursement de trop-perçu${r.reason ? ` — ${r.reason}` : ''}`
+      : r.correction ? 'Correction de solde' : offer,
     billed: r.billed, paid: r.paid,
   }));
 }

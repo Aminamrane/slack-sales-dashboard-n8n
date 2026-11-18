@@ -127,3 +127,17 @@ test('le téléchargement relit la société et toutes les ventilations, même p
   await assert.rejects(loadStatementData(async url=>url.endsWith('/splits')?{}:get(url),12),/incomplètes/);
   await assert.rejects(loadStatementData(async()=>{throw new Error('réseau');},12),/réseau/);
 });
+
+// Dev 2026-11-18 : avec le relevé du serveur, le PDF dit le même solde que le tableau.
+test('le PDF suit le relevé du serveur : ce que le mois ajoute, et une ligne par correction', () => {
+  const statement = [
+    { period: '2025-11', charged: '1800', received: '0', received_overdue: '0', adjustment: '0' },
+    { period: '2025-12', charged: '0', received: '0', received_overdue: '1800', adjustment: '0' },
+    { period: '2026-10', charged: '1800', received: '0', received_overdue: '0', adjustment: '-300' },
+  ];
+  const rows = statementRows({ entity: 'owner', month: '2026-11', offer: '1-2 salariés', statement,
+    priorDebts: [{ entity: 'owner', period: '2026-10-01', amount: '200' }] });
+  const total = rows.reduce((sum, r) => sum + r.billed - r.paid, 0);
+  assert.equal(total, 1800 + 1800 - 1800 - 300);
+  assert.deepEqual(rows.filter(r => r.offre === 'Correction de solde').map(r => r.billed), [-500]);
+});

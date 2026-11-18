@@ -324,13 +324,29 @@ export default function ExpectedManager({
         const avantReport = round2(attendu + effectiveIn - recu + corrected);
         const reportApplique = round2(Math.min(deferredOut, Math.max(avantReport, 0)));
         if (deferredOut > 0) applied[key] = reportApplique / deferredOut;
-        const reste = round2(Math.max(avantReport - reportApplique, 0));
+        // Même calcul que le tableau (dev 2026-11-18) : le serveur sert, pour chaque mois, ce qui y reste dû et ce
+        // que le mois a reçu pour lui-même, avances et alignements compris. La grille ne recalcule plus rien à
+        // côté : un mois payé d'avance est « Encaissée », un mois soldé par un alignement aussi.
+        const balance = p[`balance_${entity}`];
+        const imputation = p[`imputation_${entity}`];
+        const engine = Boolean(balance && imputation);
+        const reste = engine ? round2(Math.max(Number(balance.current_remaining) || 0, 0))
+          : round2(Math.max(avantReport - reportApplique, 0));
+        const paye = engine ? round2(Number(imputation.paid_for_month) || 0) : round2(Math.min(recu, attendu));
+        const avance = engine ? round2(Number(imputation.advance_applied) || 0) : 0;
         const pauseActive = !!p.expected_pause_active;
         const reportedTo = reported[key]?.to || [];
         const reportedFrom = reported[key]?.from || [];
         let status = 'none';
         if (reportedTo.length && attendu === 0 && recu === 0) {
           status = 'deferred';
+        } else if (engine && (attendu > 0 || recu > 0 || effectiveIn > 0)) {
+          if (attendu > 0 ? reste <= 0 && !pauseActive : recu > 0) status = 'paid';
+          else if (paye > 0 || recu > 0) status = 'partial';
+          else if (deferredOut > 0 && reste === 0) status = 'deferred';
+          else if (pauseActive) status = 'paused';
+          else if (key > nowKey) status = 'upcoming';
+          else status = 'late';
         } else if (attendu > 0 || recu > 0 || effectiveIn > 0) {
           if (recu >= attendu + effectiveIn && recu > 0) status = 'paid';
           else if (recu > 0) status = 'partial';
@@ -343,7 +359,7 @@ export default function ExpectedManager({
         }
         return {
           id: p.id, key, label: formatMonthLabel(key),
-          attendu, recu, recuMois, recuCreances, reste, status, deferredOut, deferredIn, corrected,
+          attendu, recu, recuMois, recuCreances, reste, paye, avance, status, deferredOut, deferredIn, corrected,
           deferTo, deferFrom, effectiveIn, reportedTo, reportedFrom,
           // Report posé mais sans effet (ou en partie) : le mois a changé depuis.
           reportSansEffet: round2(deferredOut - reportApplique),
@@ -355,7 +371,7 @@ export default function ExpectedManager({
           passe: key < nowKey, courant: key === nowKey, futur: key > nowKey,
         };
       });
-  }, [periods, f, nowKey, deferred, links, corrections, reported, pendingMonths]);
+  }, [periods, f, entity, nowKey, deferred, links, corrections, reported, pendingMonths]);
 
   const byId = useMemo(() => new Map(rows.map((r) => [r.id, r])), [rows]);
 
