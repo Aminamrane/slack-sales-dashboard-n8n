@@ -5027,7 +5027,7 @@ function NoShowOnboardingModal({ row, num, day, onSave, onClose, onDone }) {
               Le no show reste dans l’historique de la fiche et dans les chiffres, même si l’onboarding est réalisé plus tard. La fiche passe « à recaler » jusqu’à la nouvelle date. Le client ne reçoit rien.
             </div>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} disabled={saving}
-              placeholder="Pourquoi, et quand rappeler (facultatif)"
+              placeholder="Note (facultatif)"
               style={{ marginTop: 12, width: "100%", boxSizing: "border-box", resize: "vertical", padding: "9px 11px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", outline: "none" }} />
             {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#c5221f", lineHeight: 1.5 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
