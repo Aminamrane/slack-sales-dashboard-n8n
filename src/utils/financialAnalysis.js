@@ -1,10 +1,17 @@
-// « Analyse financière » (dev 17/11/2026, demande du 26/10 : la durée de vie d'un client, les taux de résiliation et de
-// quoi le parc est fait, pour répondre au fonds). Logique pure : tout part des lignes du board Owner/Opti'Lex et des
-// mêmes définitions que le dashboard (`computeRetention`, `clientLifetimes`), pour que les chiffres concordent partout.
-import { RESILIATION_ETATS, clientLifetimes, computeRetention } from './ceoDashboardStats.js';
-import { displayEtat } from './boardClientState.js';
+// « Analyse financière » (demande de la direction du 26/10/2026) : logique pure de la page.
+//
+// Ce qui est demandé : le taux de résiliation du mois et depuis le début ; la LTV, c'est-à-dire la durée de vie moyenne
+// d'un client chez Owner, qui avance chaque jour sauf pour ceux qui sont partis ; combien de temps un client reste après
+// sa première année, et au bout de quand il résilie en moyenne ; puis les niches, SARL / SAS, les gains au total et par
+// client.
+//
+// Tout part des lignes du board Owner/Opti'Lex et des mêmes définitions que le dashboard (`computeRetention`,
+// `clientLifetimes`, `resiliationRateOfMonth`) : les chiffres concordent partout.
+import { RESILIATION_ETATS, clientLifetimes, computeRetention, periodEndISO, resiliationRateOfMonth } from './ceoDashboardStats.js';
+import { displayEtat, withDisplayEtat } from './boardClientState.js';
 
-const MONTH_DAYS = 30.4375;
+export const MONTH_DAYS = 30.4375;
+const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
 // Une durée en jours, lue comme on la dit : « 1 an 10 mois », « 9 mois », « 12 jours ».
 export function lifetimeLabel(days) {
@@ -17,23 +24,73 @@ export function lifetimeLabel(days) {
 }
 
 const average = (values) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null);
+const median = (values) => {
+  if (!values.length) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.floor(sorted.length / 2)];
+};
 const dayNumber = (iso) => Math.round(Date.parse(`${iso}T00:00:00Z`) / 86400000);
+const fold = (text) => String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s-]+/g, ' ').trim();
 
-// Rétention dans le temps : parmi les clients signés depuis au moins N mois, la part encore là au bout de N mois.
-// Seuls les clients assez anciens pour qu'on le sache comptent : un client signé il y a 4 mois ne dit rien des 12 mois.
-export function survival(lives, asOf, thresholds = [3, 6, 12, 18, 24, 36]) {
-  const today = dayNumber(asOf);
-  return thresholds.map((months) => {
-    const needed = Math.round(months * MONTH_DAYS);
-    const eligible = lives.filter((life) => today - dayNumber(life.signed) >= needed);
-    const kept = eligible.filter((life) => life.days >= needed).length;
-    return { months, eligible: eligible.length, kept, rate: eligible.length ? kept / eligible.length : null };
-  }).filter((step) => step.eligible > 0);
+// ── Les lignes ─────────────────────────────────────────────────────────────────────────────────────────────────────
+// La route dédiée (`/ceo-dashboard/financial-analysis`) sert des lignes réduites, sans nom ni numéro ; on les remet
+// dans la forme du board, celle que lisent les définitions du dashboard.
+export function fromApi(clients) {
+  return (Array.isArray(clients) ? clients : []).map((row) => withDisplayEtat({
+    is_pending_contract: Boolean(row.pending),
+    etat_date: row.etat_date ?? null,
+    owner_signed_at: row.signed ?? null,
+    secteur_activite: row.sector ?? null,
+    legal_form: row.legal_form ?? null,
+  }, row.etat));
 }
 
-// Après la première année (la question du fonds : « le client, il reste combien de temps après les 1 ans ») : ceux
-// qui l'ont passée, combien sont encore là, et combien de temps ils sont restés au-delà. Cette durée avance chaque
-// jour pour ceux qui sont encore là.
+// Ce que la page garde d'une ligne complète du board, quand la route dédiée n'est pas encore là.
+export function fromBoard(rows) {
+  return (Array.isArray(rows) ? rows : []).map((row) => withDisplayEtat({
+    is_pending_contract: Boolean(row.is_pending_contract),
+    etat_date: row.etat_date ?? null,
+    owner_signed_at: row.owner_signed_at ?? null,
+    secteur_activite: row.secteur_activite ?? null,
+    legal_form: row.legal_form ?? null,
+  }, displayEtat(row)));
+}
+
+// ── Le mois regardé ────────────────────────────────────────────────────────────────────────────────────────────────
+export const monthLabel = (key) => `${MONTHS_FR[Number(key.slice(5, 7)) - 1]} ${key.slice(0, 4)}`;
+const shiftMonth = (key, by) => {
+  const d = new Date(Date.UTC(Number(key.slice(0, 4)), Number(key.slice(5, 7)) - 1 + by, 1));
+  return d.toISOString().slice(0, 7);
+};
+
+// La date d'arrêté d'un mois : son dernier jour, ou aujourd'hui pour le mois en cours.
+export const asOfMonth = (key, today) => (key === today.slice(0, 7) ? today : periodEndISO(key));
+
+// Les mois qu'on peut regarder : du mois de la première signature au mois en cours.
+export function monthBounds(rows, today) {
+  const first = rows.map((row) => String(row.owner_signed_at || '').slice(0, 7)).filter(Boolean).sort()[0] || today.slice(0, 7);
+  return { first, last: today.slice(0, 7) };
+}
+
+// ── La durée de vie ────────────────────────────────────────────────────────────────────────────────────────────────
+
+// La rétention mois par mois : parmi les clients signés depuis au moins N mois, la part encore là au bout de N mois.
+// Seuls les clients assez anciens pour qu'on le sache comptent ; la courbe s'arrête quand il en reste trop peu.
+export function retentionCurve(lives, asOf, { maxMonths = 36, minEligible = 30 } = {}) {
+  const today = dayNumber(asOf);
+  const points = [{ month: 0, eligible: lives.length, kept: lives.length, rate: lives.length ? 1 : null }];
+  for (let month = 1; month <= maxMonths; month += 1) {
+    const needed = Math.round(month * MONTH_DAYS);
+    const eligible = lives.filter((life) => today - dayNumber(life.signed) >= needed);
+    if (eligible.length < minEligible) break;
+    const kept = eligible.filter((life) => life.days >= needed).length;
+    points.push({ month, eligible: eligible.length, kept, rate: kept / eligible.length });
+  }
+  return points;
+}
+
+// Après la première année : ceux qui l'ont passée, combien sont encore là, et combien de temps ils sont restés au-delà
+// (ce temps avance chaque jour pour ceux qui sont encore là).
 export function afterFirstYear(lives) {
   const passed = lives.filter((life) => life.days >= 365);
   const gone = passed.filter((life) => !life.open);
@@ -42,20 +99,51 @@ export function afterFirstYear(lives) {
     stillHere: passed.length - gone.length,
     gone: gone.length,
     extraDays: average(passed.map((life) => life.days - 365)),
-    goneExtraDays: average(gone.map((life) => life.days - 365)),
   };
 }
 
-const fold = (text) => String(text ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+// « Au bout de quand il résilie en moyenne » : pour les clients partis par résiliation, le temps passé chez nous,
+// en moyenne et en médiane, et la répartition par tranche.
+const BUCKETS = [[0, 3, 'Moins de 3 mois'], [3, 6, '3 à 6 mois'], [6, 12, '6 mois à 1 an'], [12, 18, '1 an à 18 mois'], [18, 24, '18 mois à 2 ans'], [24, Infinity, 'Plus de 2 ans']];
+export function departures(lives) {
+  const left = lives.filter((life) => !life.open && RESILIATION_ETATS.includes(displayEtat(life.row)));
+  const days = left.map((life) => life.days);
+  return {
+    count: left.length,
+    averageDays: average(days),
+    medianDays: median(days),
+    afterOneYear: left.filter((life) => life.days >= 365).length,
+    buckets: BUCKETS.map(([from, to, label]) => ({
+      label,
+      count: left.filter((life) => life.days >= from * MONTH_DAYS && life.days < to * MONTH_DAYS).length,
+    })),
+  };
+}
 
-// Les niches : les clients rangés par secteur d'activité (celui de la fiche du board). Pour chaque secteur : les
-// clients encore là, les résiliés, et la durée de vie moyenne. Les secteurs les moins représentés sont réunis en
-// « Autres secteurs » au-delà de `limit` ; un client sans secteur est compté à part.
+// ── Les résiliations mois par mois ─────────────────────────────────────────────────────────────────────────────────
+// Les `count` derniers mois jusqu'au mois regardé, même définition que le dashboard ; le mois en cours est compté
+// jusqu'à aujourd'hui.
+export function monthlyResiliations(established, monthKey, today, count = 12) {
+  return Array.from({ length: count }, (_, index) => {
+    const key = shiftMonth(monthKey, index - count + 1);
+    return { ...resiliationRateOfMonth(established, key, asOfMonth(key, today)), label: monthLabel(key) };
+  });
+}
+
+// ── De quoi le parc est fait ───────────────────────────────────────────────────────────────────────────────────────
+
+// Le nom d'une niche à l'écran : l'écriture la plus fréquente, avec la seule correction connue (« Micro créche »).
+const LABELS = { 'micro creche': 'Micro-crèche' };
+export const sectorKey = (text) => fold(text);
+
+// Les niches : les clients rangés par secteur d'activité. Pour chaque secteur : les clients encore là, les résiliés,
+// la durée de vie moyenne. Au-delà de `limit`, les secteurs les moins représentés sont réunis en « Autres secteurs » ;
+// un client sans secteur est compté à part.
 export function sectorBreakdown(lives, limit = 12) {
   const groups = new Map();
   lives.forEach((life) => {
     const raw = String(life.row.secteur_activite || '').trim();
-    const key = fold(raw) || '';
+    const key = fold(raw);
     const group = groups.get(key) || { key, labels: new Map(), open: 0, resiliated: 0, days: [] };
     if (raw) group.labels.set(raw, (group.labels.get(raw) || 0) + 1);
     if (life.open) group.open += 1;
@@ -65,46 +153,75 @@ export function sectorBreakdown(lives, limit = 12) {
   });
   const total = lives.filter((life) => life.open).length;
   const row = (group, label) => ({ key: group.key, label, open: group.open, resiliated: group.resiliated, clients: group.days.length,
-    share: total ? group.open / total : null, averageDays: average(group.days) });
-  // Le libellé d'un secteur : son écriture la plus fréquente ; à égalité, celle qui commence par une majuscule.
+    share: total ? group.open / total : null, averageDays: average(group.days),
+    resiliationRate: group.days.length ? group.resiliated / group.days.length : null });
+  const nameOf = (group) => LABELS[group.key] || [...group.labels].sort((a, b) => b[1] - a[1]
+    || Number(/^\p{Lu}/u.test(b[0])) - Number(/^\p{Lu}/u.test(a[0])) || a[0].localeCompare(b[0], 'fr'))[0][0];
   const named = [...groups.values()].filter((group) => group.key !== '')
-    .map((group) => row(group, [...group.labels].sort((a, b) => b[1] - a[1] || Number(/^\p{Lu}/u.test(b[0])) - Number(/^\p{Lu}/u.test(a[0])) || a[0].localeCompare(b[0], 'fr'))[0][0]))
+    .map((group) => row(group, nameOf(group)))
     .sort((a, b) => b.open - a.open || b.clients - a.clients || a.label.localeCompare(b.label, 'fr'));
-  const merge = (list, key, label) => (list.length ? [row({ key, open: list.reduce((n, g) => n + g.open, 0), resiliated: list.reduce((n, g) => n + g.resiliated, 0),
-    days: list.flatMap((g) => Array(g.clients).fill(g.averageDays)) }, label)] : []);
+  const rest = named.slice(limit);
+  const merged = rest.length ? [row({ key: 'others', open: rest.reduce((n, g) => n + g.open, 0), resiliated: rest.reduce((n, g) => n + g.resiliated, 0),
+    days: rest.flatMap((g) => Array(g.clients).fill(g.averageDays)) }, `Autres secteurs (${rest.length})`)] : [];
   const unnamed = groups.get('');
   return {
-    sectors: [...named.slice(0, limit), ...merge(named.slice(limit), 'others', 'Autres secteurs'), ...(unnamed ? [row(unnamed, 'Secteur non renseigné')] : [])],
+    sectors: [...named.slice(0, limit), ...merged, ...(unnamed ? [row(unnamed, 'Secteur non renseigné')] : [])],
     named: named.length,
-    known: lives.length - (unnamed ? unnamed.days.length : 0),
     unknown: unnamed ? unnamed.days.length : 0,
   };
 }
 
-// La clé d'un secteur : son nom sans accent ni casse (« Micro-crèche » et « micro creche » sont la même niche).
-export const sectorKey = (text) => fold(text);
+// Les formes juridiques des clients en cours (« combien il y a de SARL, combien il y a de SAS ») : celles du NDA,
+// quand le client en a rempli un.
+const FORMS = ['SARL', 'SAS', 'SASU', 'EURL'];
+export function legalForms(lives) {
+  const here = lives.filter((life) => life.open);
+  const counts = new Map();
+  let known = 0;
+  here.forEach((life) => {
+    const form = String(life.row.legal_form || '').trim().toUpperCase();
+    if (!form) return;
+    known += 1;
+    const key = FORMS.includes(form) ? form : 'Autres';
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  return {
+    known,
+    unknown: here.length - known,
+    forms: [...FORMS, 'Autres'].map((label) => ({ label, count: counts.get(label) || 0, share: known ? (counts.get(label) || 0) / known : null }))
+      .filter((item) => item.count > 0),
+  };
+}
 
-// Tout ce que la page montre, à la date `asOf` (AAAA-MM-JJ) : `null` tant que le board n'est pas chargé.
-// `sector` (clé d'un secteur, `sectorKey`) restreint la durée de vie, les résiliations et la rétention à cette niche ;
-// la liste des niches, elle, se lit toujours sur tout le parc.
-export function financialAnalysis(boardRows, asOf, sector = null) {
+// ── Tout ce que la page montre ─────────────────────────────────────────────────────────────────────────────────────
+// À la date `asOf` (AAAA-MM-JJ) du mois `monthKey`. `sector` (clé, `sectorKey`) restreint tous les chiffres à cette
+// niche ; la liste des niches, elle, se lit toujours sur tout le parc. `null` tant que les lignes ne sont pas là.
+export function financialAnalysis(boardRows, asOf, sector = null, { today = asOf } = {}) {
   if (!Array.isArray(boardRows)) return null;
   const established = boardRows.filter((row) => !row.is_pending_contract);
   const breakdown = sectorBreakdown(clientLifetimes(established, asOf).lives);
   const scoped = sector == null ? established : established.filter((row) => fold(row.secteur_activite) === sector);
-  const retention = computeRetention(scoped, asOf, asOf.slice(0, 7));
+  const monthKey = asOf.slice(0, 7);
+  const retention = computeRetention(scoped, asOf, monthKey);
   const { lives } = clientLifetimes(scoped, asOf);
+  const totalDays = lives.reduce((sum, life) => sum + life.days, 0);
   return {
     asOf,
+    monthKey,
     sector,
     ...retention,
     inCourse: retention.resiliationGlobal.base,
-    signed: lives.length,
+    measured: lives.length,
     gone: lives.filter((life) => !life.open).length,
     // Les rétractés n'entrent dans aucun calcul : ils n'ont jamais vraiment commencé.
-    retracted: scoped.filter((row) => displayEtat(row) === 'Rétractation').length,
-    survival: survival(lives, asOf),
+    retracted: scoped.filter((row) => displayEtat(row) === 'Rétractation' && String(row.owner_signed_at || '').slice(0, 10) <= asOf).length,
+    // La LTV, posée comme une division : la somme des durées de vie ÷ le nombre de clients mesurés.
+    ltv: { totalDays, totalMonths: totalDays / MONTH_DAYS, clients: lives.length, averageDays: lives.length ? totalDays / lives.length : null },
+    curve: retentionCurve(lives, asOf),
     afterFirstYear: afterFirstYear(lives),
+    departures: departures(lives),
+    months: monthlyResiliations(scoped, monthKey, today),
+    forms: legalForms(lives),
     ...breakdown,
   };
 }

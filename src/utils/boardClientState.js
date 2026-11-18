@@ -12,6 +12,9 @@ export const isOutOfOnboarding = (displayedState) => EXITED_ETATS.includes(displ
 // Opti'Lex lisent tous cette valeur : ils ne peuvent plus diverger (décision
 // dev 26/10/2026, le board fait foi). Aucune règle de repli côté front.
 export const displayEtat = (row) => row.etat_affiche ?? null;
+// Une ligne réduite (route « Analyse financière », 18/11/2026) remise dans la forme du board : l'état affiché ne se pose
+// qu'ici, comme il ne se lit que par `displayEtat`.
+export const withDisplayEtat = (row, etat) => ({ ...row, etat_affiche: etat ?? null });
 
 // Ligne après un POST /optilex/etat-change réussi : l'état posé tel que le
 // serveur l'a enregistré, et l'état affiché qu'il en déduit. Sans cela, l'écran
