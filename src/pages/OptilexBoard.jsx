@@ -5012,7 +5012,6 @@ function NoShowOnboardingModal({ row, num, day, onSave, onClose, onDone }) {
           <div style={{ textAlign: "center", padding: "10px 0" }}>
             <div style={{ display: "inline-flex" }}><GhostIcon size={44} /></div>
             <div style={{ marginTop: 10, fontSize: 15, fontWeight: 500, color: GREEN }}>No show noté, onboarding à recaler</div>
-            <div style={{ marginTop: 4, fontSize: 12.5, color: MUTED }}>Il reste dans l’historique de la fiche. Le client n’a rien reçu.</div>
           </div>
         ) : (
           <>
@@ -5023,12 +5022,9 @@ function NoShowOnboardingModal({ row, num, day, onSave, onClose, onDone }) {
                 <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}{when ? ` · ${fmtDT(when)}` : ""}</div>
               </div>
             </div>
-            <div style={{ marginTop: 14, fontSize: 13, color: TEXT, lineHeight: 1.55 }}>
-              Le no show reste dans l’historique de la fiche et dans les chiffres, même si l’onboarding est réalisé plus tard. La fiche passe « à recaler » jusqu’à la nouvelle date. Le client ne reçoit rien.
-            </div>
             <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} disabled={saving}
               placeholder="Note (facultatif)"
-              style={{ marginTop: 12, width: "100%", boxSizing: "border-box", resize: "vertical", padding: "9px 11px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", outline: "none" }} />
+              style={{ marginTop: 14, width: "100%", boxSizing: "border-box", resize: "vertical", padding: "9px 11px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", outline: "none" }} />
             {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#c5221f", lineHeight: 1.5 }}>{error}</div>}
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
               <button type="button" disabled={saving} onClick={onClose}
