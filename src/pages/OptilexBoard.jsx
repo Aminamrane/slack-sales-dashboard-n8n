@@ -2227,6 +2227,7 @@ export default function OptilexBoard({ embed = false }) {
         .ob-tk-cta{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border:0;border-radius:11px;background:#2b2927;color:#fff;font:inherit;font-size:13.5px;font-weight:500;cursor:pointer;box-shadow:0 6px 16px rgba(43,41,39,.126)}
         .ob-tk-chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px 3px 4px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:500;color:${NAVY};cursor:pointer;transition:border-color .15s}
         .ob-tk-chip:hover{border-color:#e3ded6}
+        .ob-tk-chip:disabled{cursor:default;color:${MUTED};border-color:${BORDER}}
         .ob-tk-resched{display:inline-flex;align-items:center;gap:6px;padding:4px 11px 4px 8px;border:1px solid ${BORDER};border-radius:999px;background:${CARD};font:inherit;font-size:12px;font-weight:500;color:${NAVY};cursor:pointer;transition:border-color .15s,background-color .15s,transform .15s}
         .ob-tk-resched svg{flex-shrink:0;color:#55514b}
         .ob-tk-resched-hand{transform-origin:16px 16px;transition:transform .7s cubic-bezier(.34,1.56,.64,1)}
@@ -3060,7 +3061,7 @@ const TK_STATUS_ICONS = {
 const capFirst = (t) => (t ? t.charAt(0).toUpperCase() + t.slice(1) : t);
 const fullDay = (p) => (p ? `${p.label.replace(".", "")} ${p.year}` : "");
 
-function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onReschedule, onCancel, onDateSaved, hostInfo, onTransfer }) {
+function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onReschedule, onCancel, onDateSaved, hostInfo, onTransfer, onNoShow }) {
   const reduce = useReducedMotion();
   const date = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
   const done = !!row.rdv_onboarding_done;
@@ -3085,6 +3086,9 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
     ["Lancement social", row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done, "social"],
   ];
   const host = date && !done ? hostInfo?.host : null;
+  // No show du rendez-vous prévu : déjà noté quand le dernier no show qualifié (champ `no_show` du board) est ce jour-là.
+  const canNoShow = !!onNoShow && !done && !!plannedDay;
+  const noShowNoted = canNoShow && String(row.no_show?.day || "").slice(0, 10) === plannedDay;
   // Forme du billet : dessinée en SVG derrière le contenu (fond, contour, ombre, encoches à la hauteur de la
   // perforation), à la taille mesurée du billet. Un masque CSS ombré par un filtre perdait son ombre dans Safari.
   const ticketRef = useRef(null);
@@ -3210,10 +3214,11 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
               : "—"}</strong></div>
             <div><span>Dossier</span><strong>{row.numero_client || "—"}</strong></div>
           </div>
-          {/* Reprogrammer, et transfert à l'équipe pour le responsable (dev 29/10/2026). */}
-          {host && (onReschedule || (onTransfer && hostInfo.transfer_to?.length)) && (
+          {/* Reprogrammer, et transfert à l'équipe pour le responsable (dev 29/10/2026). No show (dev 18/11/2026) : noté
+              d'ici, sans ouvrir le parcours jusqu'à sa dernière étape ; même enregistrement que cette étape. */}
+          {((host && (onReschedule || (onTransfer && hostInfo.transfer_to?.length))) || canNoShow) && (
             <div className="ob-tk-actions">
-              {onReschedule && (
+              {host && onReschedule && (
                 <button type="button" className="ob-tk-resched" onClick={() => onReschedule("onboarding")} {...(isBoardReadOnly() ? READ_ONLY_PROPS : {})}>
                   {/* Calendrier et horloge : l'aiguille fait un tour au survol. */}
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -3223,11 +3228,18 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
                   Reprogrammer
                 </button>
               )}
-              {onTransfer && (hostInfo.transfer_to || []).map((t) => (
+              {host && onTransfer && (hostInfo.transfer_to || []).map((t) => (
                 <button key={t.name} type="button" className="ob-tk-chip" onClick={() => onTransfer(t)}>
                   <HostFace name={t.name} photo={t.photo} size={18} />Transférer à {t.name}
                 </button>
               ))}
+              {canNoShow && (
+                <button type="button" className="ob-tk-chip" onClick={onNoShow} disabled={noShowNoted}
+                  title={noShowNoted ? `No show du ${fmt(plannedDay)} noté${row.no_show?.by ? ` par ${row.no_show.by}` : ""}` : `Le client n'est pas venu le ${fmt(plannedDay)}`}
+                  {...(isBoardReadOnly() ? READ_ONLY_PROPS : {})}>
+                  <GhostIcon size={18} />{noShowNoted ? "No show noté" : "No show"}
+                </button>
+              )}
             </div>
           )}
           {/* Les lancements, comme passager / siège / classe. */}
@@ -4589,6 +4601,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
   const [apptVersion, setApptVersion] = useState(0);      // recalage fait depuis le parcours : il relit ses RDV
   const [onboardingOpen, setOnboardingOpen] = useState(false); // parcours « Faire l'onboarding » (Client Success)
   const [transferTo, setTransferTo] = useState(null);      // « Transférer à … » : animateur cible (dev 29/10/2026)
+  const [noShowOpen, setNoShowOpen] = useState(false);     // « No show » depuis le billet d'onboarding (dev 18/11/2026)
   // Fiche de conservation ou no show qualifié (dev 17/11/2026) : le board se relit et l'historique de la fiche aussi.
   const [histBump, setHistBump] = useState(0);
   const afterHistory = () => { setHistBump((v) => v + 1); reload(); };
@@ -4663,7 +4676,7 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             <OnboardingCard row={row} holdCut={onboardingOpen} onStart={() => setOnboardingOpen(true)} onDateSaved={reload}
               onManualDone={(d) => patch(num, { rdv_onboarding_done: true, rdv_onboarding_done_date: d })}
               onReschedule={(kind) => setReschedOpen(kind)} onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
-              hostInfo={onboardingHost} onTransfer={(t) => setTransferTo(t)} />
+              hostInfo={onboardingHost} onTransfer={(t) => setTransferTo(t)} onNoShow={() => setNoShowOpen(true)} />
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 22 }}>
               <RdvRow label="Rendez-vous Onboarding Owner" date={row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date} done={row.rdv_onboarding_done}
@@ -4859,6 +4872,12 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
           {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
           {transferTo && <TransferOnboardingModal row={row} num={num} target={transferTo} current={onboardingHost?.host} slot={onboardingHost?.slot}
             onClose={() => setTransferTo(null)} onDone={() => { setTransferTo(null); setApptVersion((v) => v + 1); reload(); }} />}
+          {noShowOpen && <NoShowOnboardingModal row={row} num={num} day={String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date || "").slice(0, 10)}
+            onSave={async (note) => {
+              await apiClient.post("/api/v1/optilex/onboarding-no-show", { numero_client: num, rdv_date: String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date || "").slice(0, 10) });
+              await patch(num, { onboarding_reschedule_pending: true, onboarding_reschedule_note: note || null });
+            }}
+            onClose={() => setNoShowOpen(false)} onDone={() => { setNoShowOpen(false); afterHistory(); }} />}
           {cancelOpen && <CancelLaunchModal kind={cancelOpen} row={row} num={num} onClose={() => setCancelOpen(false)} onDone={() => { setCancelOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
         </div>
         </div>
@@ -4952,6 +4971,71 @@ function TransferOnboardingModal({ row, num, target, current, slot, onClose, onD
               <motion.button type="button" whileTap={{ scale: 0.97 }} disabled={saving} onClick={confirm}
                 style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
                 {saving ? "Transfert…" : `Transférer à ${target.name}`}
+              </motion.button>
+            </div>
+          </>
+        )}
+      </motion.div>
+    </div>,
+    document.body
+  );
+}
+
+// « No show » depuis le billet d'onboarding (dev 18/11/2026) : la même chose que « Noter le no show » à la dernière étape
+// du parcours — la trace du no show (gardée pour toujours), puis la fiche « à recaler » avec la note facultative.
+function NoShowOnboardingModal({ row, num, day, onSave, onClose, onDone }) {
+  const [note, setNote] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [done, setDone] = useState(false);
+  const [error, setError] = useState(null);
+  const label = ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num;
+  const when = row.rdv_onboarding_date_manual || row.rdv_onboarding_date;
+  const confirm = async () => {
+    if (saving || done) return;
+    setSaving(true); setError(null);
+    try {
+      await onSave(note.trim());
+      setDone(true);
+      setTimeout(() => onDone(), 1400);
+    } catch (e) {
+      const d = e?.data?.detail;
+      setError(typeof d === "string" ? d : "Le no show n’a pas été enregistré. Réessayez.");
+      setSaving(false);
+    }
+  };
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label={`No show du ${fmt(day)}`} style={{ position: "fixed", inset: 0, zIndex: 10070, display: "flex", alignItems: "center", justifyContent: "center", padding: 20, fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif" }}>
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} onClick={() => { if (!saving) onClose(); }} style={{ position: "absolute", inset: 0, background: "rgba(28,27,25,.22)" }} />
+      <motion.div initial={{ opacity: 0, scale: 0.97, y: 8 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+        style={{ position: "relative", width: "min(440px, 100%)", background: CARD, borderRadius: 22, border: `1px solid ${BORDER}`, boxShadow: "0 24px 60px rgba(28,27,25,.14)", padding: "20px 22px" }}>
+        {done ? (
+          <div style={{ textAlign: "center", padding: "10px 0" }}>
+            <div style={{ display: "inline-flex" }}><GhostIcon size={44} /></div>
+            <div style={{ marginTop: 10, fontSize: 15, fontWeight: 500, color: GREEN }}>No show noté, onboarding à recaler</div>
+            <div style={{ marginTop: 4, fontSize: 12.5, color: MUTED }}>Il reste dans l’historique de la fiche. Le client n’a rien reçu.</div>
+          </div>
+        ) : (
+          <>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <GhostIcon size={34} />
+              <div style={{ minWidth: 0, marginLeft: 4 }}>
+                <div style={{ fontSize: 15, fontWeight: 500, color: NAVY }}>No show du {fmt(day)}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{label}{when ? ` · ${fmtDT(when)}` : ""}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 14, fontSize: 13, color: TEXT, lineHeight: 1.55 }}>
+              Le no show reste dans l’historique de la fiche et dans les chiffres, même si l’onboarding est réalisé plus tard. La fiche passe « à recaler » jusqu’à la nouvelle date. Le client ne reçoit rien.
+            </div>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} disabled={saving}
+              placeholder="Pourquoi, et quand rappeler (facultatif)"
+              style={{ marginTop: 12, width: "100%", boxSizing: "border-box", resize: "vertical", padding: "9px 11px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, lineHeight: 1.5, fontFamily: "inherit", outline: "none" }} />
+            {error && <div role="alert" style={{ marginTop: 10, fontSize: 12, color: "#c5221f", lineHeight: 1.5 }}>{error}</div>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}>
+              <button type="button" disabled={saving} onClick={onClose}
+                style={{ padding: "9px 14px", borderRadius: 10, border: `1px solid ${BORDER}`, background: CARD, color: NAVY, fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit" }}>Annuler</button>
+              <motion.button type="button" whileTap={{ scale: 0.97 }} disabled={saving} onClick={confirm}
+                style={{ padding: "9px 16px", borderRadius: 10, border: "none", background: GREEN, color: "#fff", fontSize: 13, fontWeight: 500, cursor: saving ? "default" : "pointer", fontFamily: "inherit", opacity: saving ? 0.75 : 1 }}>
+                {saving ? "Enregistrement…" : "Noter le no show"}
               </motion.button>
             </div>
           </>
