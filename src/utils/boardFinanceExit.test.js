@@ -4,7 +4,7 @@ import { exitAmounts, requiresExitDecision } from './boardFinanceExit.js';
 
 test('only existing finance decision roles enter the connected exit flow', () => {
   for (const role of ['admin', 'ceo', 'finance_director']) {
-    for (const state of ['Rétractation', 'Résiliation', 'Self-Résiliation']) assert.equal(requiresExitDecision(role, state), true);
+    for (const state of ['Rétractation', 'Résiliation', 'Self-Résiliation', 'Liquidation', 'Pause']) assert.equal(requiresExitDecision(role, state), true);
     assert.equal(requiresExitDecision(role, 'En cours de résiliation'), false);
   }
   for (const role of ['finance_team', 'optilex', 'customer_success_manager']) assert.equal(requiresExitDecision(role, 'Résiliation'), false);
