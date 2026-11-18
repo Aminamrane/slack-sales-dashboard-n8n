@@ -61,7 +61,7 @@ import StatisticsView from './statistics/StatisticsView.jsx';
 import {
   TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
   RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
-  PauseIcon, LiquidationIcon, RecoveredIcon,
+  PauseIcon, LiquidationIcon, RecoveredIcon, NoShowIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import { loadExchanges } from './exportExchanges.js';
@@ -102,6 +102,7 @@ import {
   PENDING_OPTILEX_LABEL, pendingFinanceRow,
   canUseGlobalScope,
 } from './constants.js';
+import { noShowOf } from './boardFollow.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Palette de la page : toile grège chaude, cartes blanches, encre presque noire,
@@ -327,6 +328,7 @@ const VIEW_ICONS = {
   attente_optilex:  ContractPendingIcon,
   resilies:         ExitIcon,
   recuperes:        RecoveredIcon,
+  no_show:          NoShowIcon,
   pause:            PauseIcon,
   liquidation:      LiquidationIcon,
 };
@@ -357,6 +359,9 @@ const VIEW_FILTERS = [
   // à n'importe quelle date, les sort des deux phases (précision dev le
   // même jour : « les très anciens clients ne nous intéressent pas »).
   { key: 'onboarding',  label: 'Onboarding' },
+  // No show d'onboarding (dev 2026-11-18) : la règle du board et le no show qualifié par le Client Success ; une date à
+  // venir qui suit le no show fait passer le client dans « Recalés » (boardFollow.js).
+  { key: 'no_show',     label: 'No show' },
   { key: 'non_auto',    label: 'Non automatisé' },
   // Montant déclaré sans tranche dans la modalité du client : l'attendu
   // retombe sur l'effectif de la fiche. La finance tranche en fixant la
@@ -381,6 +386,12 @@ const VIEW_FILTERS = [
 const ONBOARDING_PHASES = [
   { key: 'past',     label: 'Passés',  Icon: CalendarCheckIcon },
   { key: 'upcoming', label: 'À venir', Icon: CalendarClockIcon },
+];
+
+// Les deux temps de la vue « No show » : le no show, puis le recalage quand une nouvelle date suit.
+const NO_SHOW_PHASES = [
+  { key: 'noshow', label: 'No show', Icon: NoShowIcon, hint: 'Onboarding manqué, pas encore recalé' },
+  { key: 'recale', label: 'Recalés', Icon: CalendarClockIcon, hint: 'Nouvel onboarding prévu après le no show' },
 ];
 
 // Sous-filtre de la vue « Attente Opti'Lex » (dev 2026-09-23) : où en est le
@@ -620,6 +631,8 @@ export default function TrackingSheetFinance() {
   const [relanceMonths, setRelanceMonths] = useState(() => new Set());
   // Vue « Attente Opti'Lex » : 'all' | 'done' | 'past' | 'upcoming' | 'none'.
   const [optilexPhase, setOptilexPhase] = useState('all');
+  // Vue « No show » : 'noshow' | 'recale'.
+  const [noShowPhase, setNoShowPhase] = useState('noshow');
   // Sous-filtre des créances antérieures par ANCIENNETÉ (demande dev
   // 2026-09-01) : 'all' | 'old' (≥ 2 mois) | 'recent' (< 2 mois).
   // L'ancienneté vient du serveur (`overdue_*_since`) : c'est le premier mois
@@ -636,6 +649,13 @@ export default function TrackingSheetFinance() {
     const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
     return br ? displayEtat(br) : null;
   }, [boardMap]);
+
+  // No show d'onboarding d'une ligne, ou son recalage (boardFollow.js) : jour de Paris figé au chargement du board.
+  const noShowToday = useMemo(() => (boardMap ? parisToday() : null), [boardMap]);
+  const noShowStateOf = useCallback((r) => {
+    const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+    return br ? noShowOf(br, noShowToday, displayEtat(br)) : null;
+  }, [boardMap, noShowToday]);
 
   const isHiddenInView = useCallback((r, filterKey) =>
     filterKey === 'creances' && hideLiquidations && isLiquidationEtat(boardEtatOf(r)),
@@ -687,6 +707,8 @@ export default function TrackingSheetFinance() {
         const m = `${onboarding.getFullYear()}-${String(onboarding.getMonth() + 1).padStart(2, '0')}`;
         return relanceMonths.has(m);
       }
+      case 'no_show':
+        return noShowStateOf(r)?.kind === noShowPhase;
       case 'non_auto':
         return matchesNonAutomated(r, scope);
       case 'resilies': {
@@ -716,7 +738,7 @@ export default function TrackingSheetFinance() {
       default:
         return true; // 'all'
     }
-  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period, formulaChecks, lateOnboarding, renewals]);
+  }, [scope, boardMap, boardEtatOf, relanceMonths, creanceAge, onboardingPhase, optilexPhase, period, formulaChecks, lateOnboarding, renewals, noShowStateOf, noShowPhase]);
 
   // Filtre « Météo client » (menu Filtre), réservé à deux personnes : les
   // bandes du board avec leur volume, plus « Sans météo ».
@@ -808,6 +830,16 @@ export default function TrackingSheetFinance() {
     }
     return counts;
   }, [pendingRows, rows, boardMap, boardEtatOf]);
+
+  // Compteurs de la vue « No show », par temps.
+  const noShowPhaseCounts = useMemo(() => {
+    const counts = { noshow: 0, recale: 0 };
+    for (const r of rows) {
+      const kind = noShowStateOf(r)?.kind;
+      if (kind) counts[kind] += 1;
+    }
+    return counts;
+  }, [rows, noShowStateOf]);
 
   const viewCounts = useMemo(() => {
     const counts = {};
@@ -1562,6 +1594,9 @@ export default function TrackingSheetFinance() {
                 optilexPhase={optilexPhase}
                 onOptilexPhaseChange={setOptilexPhase}
                 optilexPhaseCounts={optilexPhaseCounts}
+                noShowPhase={noShowPhase}
+                onNoShowPhaseChange={setNoShowPhase}
+                noShowPhaseCounts={noShowPhaseCounts}
               />
               {viewFilter === 'annual_renewals' && renewalsError && <p role="alert">{renewalsError}</p>}
               {viewFilter === 'creances' && (
@@ -2677,7 +2712,7 @@ function fitChipRow(row) {
 
 function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingChange, onboardingPhase, onOnboardingPhaseChange,
   relanceMonths, onRelanceMonthsChange, creanceAge, onCreanceAgeChange,
-  optilexPhase = 'all', onOptilexPhaseChange, optilexPhaseCounts }) {
+  optilexPhase = 'all', onOptilexPhaseChange, optilexPhaseCounts, noShowPhase = 'noshow', onNoShowPhaseChange, noShowPhaseCounts }) {
   const rowRef = useRef(null);
   // Après chaque rendu (compteurs, puce active : le texte change de largeur).
   useLayoutEffect(() => {
@@ -2805,23 +2840,40 @@ function ViewChips({ active, onChange, counts, lateOnboarding, onLateOnboardingC
           </motion.div>
         )}
       </AnimatePresence>
+      <AnimatePresence initial={false}>
+        {active === 'no_show' && (
+          <motion.div
+            key="no-show-phase"
+            initial={{ opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -6 }}
+            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}
+          >
+            <OptilexIntegrationPicker value={noShowPhase} onChange={onNoShowPhaseChange} counts={noShowPhaseCounts}
+              phases={NO_SHOW_PHASES} layoutId="tsf-no-show-phase" ariaLabel="No show d’onboarding" />
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
 // Sous-filtre « Attente Opti'Lex » : où en est le RDV d'intégration ?
 // Même forme que le sélecteur de phase de l'onboarding, pilule propre.
-function OptilexIntegrationPicker({ value, onChange, counts }) {
+// Sert aussi à la vue « No show » (`phases`, `layoutId`, `ariaLabel`).
+function OptilexIntegrationPicker({ value, onChange, counts, phases = OPTILEX_INTEGRATION_PHASES,
+  layoutId = 'tsf-optilex-integration-phase', ariaLabel = 'Rendez-vous d’intégration Opti’Lex' }) {
   return (
     <div
       role="radiogroup"
-      aria-label="Rendez-vous d’intégration Opti’Lex"
+      aria-label={ariaLabel}
       style={{
         display: 'inline-flex', alignItems: 'center', gap: 2, marginLeft: 4,
         padding: 2, border: `1px solid ${N.border}`, borderRadius: 999, background: '#fff',
       }}
     >
-      {OPTILEX_INTEGRATION_PHASES.map((o) => {
+      {phases.map((o) => {
         const actif = value === o.key;
         const count = counts?.[o.key];
         return (
@@ -2845,7 +2897,7 @@ function OptilexIntegrationPicker({ value, onChange, counts }) {
           >
             {actif && (
               <motion.span
-                layoutId="tsf-optilex-integration-phase"
+                layoutId={layoutId}
                 transition={{ type: 'spring', stiffness: 480, damping: 38 }}
                 style={{ position: 'absolute', inset: 0, background: N.text, borderRadius: 999 }}
               />

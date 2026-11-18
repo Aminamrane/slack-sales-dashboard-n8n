@@ -123,6 +123,15 @@ export const CalendarCheckIcon = (p) => (
   </Icon>
 );
 
+// No show d'onboarding — le calendrier barré d'une croix (le pendant du calendrier coché).
+export const NoShowIcon = (p) => (
+  <Icon {...p}>
+    <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+    <path d="M3.5 9.5h17M8 3v3.5M16 3v3.5" />
+    <path d="m9.8 13.2 4.4 4.4M14.2 13.2l-4.4 4.4" />
+  </Icon>
+);
+
 // Onboarding à venir — le calendrier, une horloge posée dans le coin.
 export const CalendarClockIcon = (p) => (
   <Icon {...p}>
