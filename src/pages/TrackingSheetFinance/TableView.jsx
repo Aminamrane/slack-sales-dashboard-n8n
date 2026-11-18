@@ -93,13 +93,14 @@ import { upcomingExpectedHint } from './upcomingExpected.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
 import StructureAmountCell from './components/StructureAmountCell.jsx';
-import { ContractPendingIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
+import { CalendarClockIcon, ContractPendingIcon, ExitIcon, NoShowIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
 import { recoveredInfo } from './recovered.js';
+import { departureOf, noShowInfo, noShowOf } from './boardFollow.js';
 // Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
 // client s'affiche à côté du nom (MeteoIcon + bandes rouge/orange/vert).
-import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
+import { displayEtat, ETAT_STYLE, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import CommentPopup from './CommentPopup.jsx';
 import apiClient from '../../services/apiClient.js';
 import { isReadOnlyViewer, readOnlyProps } from '../../utils/readOnlyRoles.js';
@@ -1085,6 +1086,34 @@ function RecoveredFlag({ recovered }) {
     </span>
   );
 }
+// Ce que la Finance doit savoir du board avant d'appeler (dev 2026-11-18) : un départ en cours ou acté, à la couleur
+// de l'état sur le board, puis le no show d'onboarding ou son recalage. Même dessin que les flags voisins.
+function FollowFlag({ icon, label, tone, title }) {
+  return (
+    <span title={title} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+      color: tone.fg, background: tone.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+      fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      {icon}
+      {label}
+    </span>
+  );
+}
+function BoardFollowFlags({ boardRow }) {
+  if (!boardRow) return null;
+  const etat = displayEtat(boardRow);
+  const departure = departureOf(etat);
+  const noShow = noShowInfo(noShowOf(boardRow, undefined, etat));
+  return (
+    <>
+      {departure && <FollowFlag icon={<ExitIcon size={13} strokeWidth={1.8} />} label={departure} tone={ETAT_STYLE[departure]}
+        title={`${departure} : état posé sur le board Owner / Opti’Lex`} />}
+      {noShow && <FollowFlag icon={noShow.kind === 'recale' ? <CalendarClockIcon size={13} strokeWidth={1.8} /> : <NoShowIcon size={13} strokeWidth={1.8} />}
+        label={`${noShow.label} ${noShow.value}`.trim()} tone={noShow.tone} title={noShow.title} />}
+    </>
+  );
+}
 const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, keys, stickyLefts, collapsingCol }) {
   const [hover, setHover] = useState(false);
   const c = row.client || {};
@@ -1251,14 +1280,21 @@ function SocieteCell({ row, boardRow }) {
           </span>
         )}
       </span>
-      {representant && (
-        <span style={{
-          fontSize: 12, color: N.textMuted,
-          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-        }}
-          title={representant}
-        >
-          {representant}
+      {/* Seconde ligne : le contact, puis ce que la Finance doit savoir avant d'appeler (départ, no show) ; sur la
+          première ligne, ces flags longs écrasaient le nom de la société. */}
+      {(representant || boardRow) && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+          {representant && (
+            <span style={{
+              fontSize: 12, color: N.textMuted,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0,
+            }}
+              title={representant}
+            >
+              {representant}
+            </span>
+          )}
+          <BoardFollowFlags boardRow={boardRow} />
         </span>
       )}
     </div>

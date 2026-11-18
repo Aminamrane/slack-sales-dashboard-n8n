@@ -106,7 +106,8 @@ import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StateReview from './components/StateReview.jsx';
-import { RecoveredIcon } from './components/FinanceIcons.jsx';
+import { CalendarClockIcon, NoShowIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
+import { noShowInfo, noShowOf } from './boardFollow.js';
 import { recoveredInfo } from './recovered.js';
 import { reviewedInstallment } from './installmentFollowup.js';
 import InstallmentFollowup from './components/InstallmentFollowup.jsx';
@@ -3351,6 +3352,20 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
       value: 'à rétablir',
       title: 'Le client est de nouveau « Signé » : rétablir sa facturation depuis l’onglet Paiements.',
       pillBg: recovered.tone.bg, pillFg: recovered.tone.fg,
+    });
+  }
+
+  // Ce que la Finance doit savoir avant d'appeler (dev 2026-11-18) : le no show d'onboarding, ou le nouvel onboarding
+  // prévu après lui (règle du board et no show qualifié par le Client Success, voir boardFollow.js).
+  const etatShown = boardRow ? displayEtat(boardRow) : null;
+  const noShow = noShowInfo(noShowOf(boardRow, undefined, etatShown));
+  if (noShow) {
+    items.push({
+      icon: noShow.kind === 'recale' ? <CalendarClockIcon size={12} strokeWidth={1.8} /> : <NoShowIcon size={12} strokeWidth={1.8} />,
+      label: noShow.label,
+      value: noShow.value,
+      title: noShow.title,
+      pillBg: noShow.tone.bg, pillFg: noShow.tone.fg,
     });
   }
 
