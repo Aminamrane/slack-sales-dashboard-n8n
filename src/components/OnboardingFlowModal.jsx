@@ -372,9 +372,10 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
 }
 
 // No show du rendez-vous prévu (Vincent, 17/11/2026 ; dev 18/11 : « à recaler sans date » et no show, c'est la même
-// chose, « c'est No show qu'on doit garder ») : la carte « No show » remplace « À recaler, sans date ». Une fois le
-// rendez-vous passé, elle note le no show au nom du Client Success et laisse la fiche « à recaler » jusqu'à la nouvelle
-// date. Il reste dans l'historique de la fiche et dans les chiffres, même si l'onboarding est réalisé plus tard.
+// chose, « c'est No show qu'on doit garder ») : la carte « No show » remplace « À recaler, sans date ». Sans blocage de
+// date (dev 18/11) : elle note le no show au nom du Client Success, quand il le sait, et laisse la fiche « à recaler »
+// jusqu'à la nouvelle date. Il reste dans l'historique de la fiche et dans les chiffres, même si l'onboarding est réalisé
+// plus tard.
 function useNoShowOf(num, day) {
   const [saved, setSaved] = useState(null);
   useEffect(() => {
@@ -388,7 +389,7 @@ function useNoShowOf(num, day) {
   return saved;
 }
 
-// Rendez-vous passé : heure de Paris quand on la connaît (un rendez-vous de l'après-midi n'est pas manqué le matin).
+// Rendez-vous passé (pour la phrase de la carte) : heure de Paris quand on la connaît.
 function appointmentPassed(onboarding) {
   const at = String(onboarding?.at || "");
   const now = parisWallTime();
@@ -400,8 +401,10 @@ function appointmentPassed(onboarding) {
 function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDate, onRescheduleLater, note, setNote, weatherDue, onWeather }) {
   const alreadyDone = brief.onboarding.done;
   const day = String(brief.onboarding.day || brief.onboarding.at || "").slice(0, 10);
-  const missed = !alreadyDone && appointmentPassed(brief.onboarding);
-  const saved = useNoShowOf(num, missed ? day : null);
+  // Aucun blocage de date (dev 18/11/2026) : le no show se note dès que le CSM le sait, même avant l'heure prévue.
+  const canNoShow = !alreadyDone && /^\d{4}-\d{2}-\d{2}$/.test(day);
+  const missed = canNoShow && appointmentPassed(brief.onboarding);
+  const saved = useNoShowOf(num, canNoShow ? day : null);
   return (
     <>
       {/* La fiche attend la météo du Client Success (main 3fac728) : tant qu'elle manque, l'onboarding ne se conclut pas. */}
@@ -425,11 +428,12 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
           </button>
           <div className="ofd-choice is-form">
             <strong>No show</strong>
-            <small>{!day ? "Aucun rendez-vous prévu." : missed ? `Le client n'est pas venu le ${fmtDayMonth(day)} : rappelez-le pour fixer une nouvelle date.`
-              : `Possible une fois le rendez-vous du ${fmtDayMonth(day)} passé.`}</small>
+            <small>{!canNoShow ? (alreadyDone ? "Onboarding déjà réalisé." : "Aucun rendez-vous prévu.")
+              : missed ? `Le client n'est pas venu le ${fmtDayMonth(day)} : rappelez-le pour fixer une nouvelle date.`
+                : `Rendez-vous du ${fmtDayMonth(day)} : la fiche reste « à recaler » jusqu'à la nouvelle date.`}</small>
             {saved && <span className="ofd-noshow-done"><span className="ofd-li-tag">No show noté</span>{saved.qualified_by_name && ` par ${saved.qualified_by_name}`}</span>}
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Pourquoi, et quand rappeler (facultatif)" disabled={!missed} />
-            <Button small disabled={!!busy || !missed} onClick={() => onRescheduleLater(saved ? null : day)}>{busy === "later" ? "Enregistrement…" : saved ? "Mettre à jour la note" : "Noter le no show"}</Button>
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Pourquoi, et quand rappeler (facultatif)" disabled={!canNoShow} />
+            <Button small disabled={!!busy || !canNoShow} onClick={() => onRescheduleLater(saved ? null : day)}>{busy === "later" ? "Enregistrement…" : saved ? "Mettre à jour la note" : "Noter le no show"}</Button>
           </div>
         </div>
       </Panel>
