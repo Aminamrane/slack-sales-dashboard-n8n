@@ -21,7 +21,7 @@
 // Les deux sont réservés à la direction (admin, direction financière) : ce
 // sont des décisions qui engagent, pas des corrections de saisie.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
@@ -29,7 +29,6 @@ import { X, TriangleAlert, RotateCcw, CalendarDays, Check } from 'lucide-react';
 import FrenchDateInput from '../../../components/salesJourney/FrenchDateInput.jsx';
 import { ETAT_DATE_CONFIG } from '../../OptilexBoard.jsx';
 import { formatEUR, formatDateFR, formatMonthLabel, shiftMonth, ACTED_EXIT_ETATS } from '../constants.js';
-import { lossPreview } from '../lossPreview.js';
 
 const N = {
   text: '#1c1b19',
@@ -64,11 +63,14 @@ const btn = (kind) => ({
   cursor: 'pointer',
 });
 
-// Aperçu par périmètre : voir lossPreview.js (même règle que le serveur, le
-// reste du contrat s'arrête à l'échéance du contrat).
-function useLossPreview(periods, contractEnd) {
-  return useMemo(() => lossPreview(periods, { contractEnd }), [periods, contractEnd]);
-}
+// Aperçu par périmètre : chiffré par le serveur, avec le moteur du Suivi des
+// paiements (avances, alignements, corrections), et servi par la fiche. C'est
+// le chiffre que la perte écrira : l'écran ne le recalcule pas de son côté.
+const EMPTY_PREVIEW = {
+  past: { amount: 0, months: 0 },
+  current: { amount: 0, months: 0 },
+  future: { amount: 0, months: 0 },
+};
 
 // Une ligne de périmètre : la case, le montant total, et — si la finance
 // n'abandonne qu'une partie — le montant abandonné et le restant à recouvrer.
@@ -177,7 +179,7 @@ function AmountField({ label, value, max, onChange, danger = false }) {
 const round2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
 
 export default function ExitClientDialog({
-  open, onClose, client, boardRow, periods, contractEnd = null,
+  open, onClose, client, boardRow, lossAmounts = null, contractEnd = null,
   onEtatChange, onDeclareLoss, onRevertLoss, loss,
   // Dernier mois facturé choisi par la direction (« AAAA-MM »), et son
   // enregistrement : contrôle total sur la fin de facturation (dev 2026-09-18).
@@ -225,7 +227,7 @@ export default function ExitClientDialog({
   // Montant abandonné par périmètre. `null` = tout le périmètre (cas courant).
   const [partial, setPartial] = useState({ past: null, current: null, future: null });
 
-  const preview = useLossPreview(periods, contractEnd);
+  const preview = lossAmounts || EMPTY_PREVIEW;
   const amountFor = (k) => (partial[k] == null ? preview[k].amount : partial[k]);
   const selectedTotal = ['past', 'current', 'future']
     .reduce((sum, k) => sum + (scope[k] ? amountFor(k) : 0), 0);

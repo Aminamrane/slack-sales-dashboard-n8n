@@ -1164,11 +1164,8 @@ export default function DetailPanel({
             onClose={() => setExitOpen(false)}
             client={client}
             boardRow={boardRow}
-            // La timeline BRUTE, pas `installments` : celle-ci est déjà
-            // agrégée selon la vision active (Owner / Opti'lex) et a perdu
-            // les colonnes par entité. Or une perte porte sur les DEUX
-            // entités, exactement comme le fait le serveur.
-            periods={periods}
+            // Ce que la perte abandonnerait, chiffré par le serveur.
+            lossAmounts={profile?.loss_preview || null}
             contractEnd={profile?.contract_end || null}
             loss={profile?.loss || null}
             initialEtat={exitPreset}
