@@ -232,28 +232,38 @@ export function Departures({ departures }) {
 
 // ── Les résiliations, mois par mois ────────────────────────────────────────────────────────────────────────────────
 // Douze barres : le taux de chaque mois. Le mois regardé est en noir ; un clic sur une barre le choisit.
-export function MonthlyResiliations({ months, value, onPick }) {
+export function MonthlyResiliations({ months, worst, value, onPick }) {
   const [hover, setHover] = useState(null);
-  const top = Math.max(0.005, ...months.map((month) => month.rate || 0));
+  // L'échelle se prend sur les mois comparables : un mois de dix clients ne doit pas écraser les autres.
+  const top = Math.max(0.005, ...months.filter((month) => month.comparable).map((month) => month.rate || 0));
   const shown = months.find((month) => month.key === (hover ?? value));
   return (
     <div className="fa-months">
-      <div className="fa-months-bars" onMouseLeave={() => setHover(null)}>
-        {months.map((month, i) => (
-          <button key={month.key} type="button" className="fa-mbar" aria-pressed={month.key === value} onMouseEnter={() => setHover(month.key)} onFocus={() => setHover(month.key)}
-            onClick={() => onPick(month.key)} title={`${month.label} : ${percent(month.rate)}`}>
-            <span className="fa-mbar-track">
-              <Motion.i initial={{ height: 0 }} animate={{ height: `${Math.max(month.count ? 4 : 1.5, ((month.rate || 0) / top) * 100)}%` }}
-                transition={{ duration: 0.7, ease: EASE, delay: 0.1 + i * 0.035 }} />
-            </span>
-            <span className="fa-mbar-label">{shortMonth(month.key)}</span>
-          </button>
-        ))}
+      <div className="fa-months-bars" style={{ "--n": months.length }} onMouseLeave={() => setHover(null)}>
+        {months.map((month, i) => {
+          const year = i === 0 || month.key.endsWith("-01") ? month.key.slice(0, 4) : null;
+          const peak = worst?.key === month.key;
+          return (
+            <button key={month.key} type="button" className="fa-mbar" aria-pressed={month.key === value} data-thin={month.comparable ? undefined : ""}
+              data-peak={peak ? "" : undefined} onMouseEnter={() => setHover(month.key)} onFocus={() => setHover(month.key)}
+              onClick={() => onPick(month.key)} title={`${month.label} : ${percent(month.rate)}`}>
+              <span className="fa-mbar-track">
+                <Motion.i initial={{ height: 0 }} animate={{ height: `${Math.min(100, Math.max(month.count ? 4 : 1.5, ((month.rate || 0) / top) * 100))}%` }}
+                  transition={{ duration: 0.7, ease: EASE, delay: 0.1 + Math.min(i, 36) * 0.02 }}>
+                  {peak && <em className="fa-mbar-peak fst-num">{percent(month.rate)}</em>}
+                </Motion.i>
+              </span>
+              <span className="fa-mbar-label">{shortMonth(month.key)}</span>
+              <span className="fa-mbar-year" data-first={i === 0 && !month.key.endsWith("-01") ? "" : undefined}>{year}</span>
+            </button>
+          );
+        })}
       </div>
       <AnimatePresence mode="wait" initial={false}>
         {shown && (
           <Motion.p key={shown.key} className="fa-months-detail" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ duration: 0.18 }}>
             <b>{shown.label}</b> · {number(shown.count)} résiliation{shown.count > 1 ? "s" : ""} pour {number(shown.base)} clients en cours au 1er · <b className="fst-num">{percent(shown.rate)}</b>
+            {!shown.comparable && <span className="fa-months-note"> · trop peu de clients pour comparer</span>}
           </Motion.p>
         )}
       </AnimatePresence>

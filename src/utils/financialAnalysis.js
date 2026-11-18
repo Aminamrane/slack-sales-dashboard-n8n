@@ -13,14 +13,18 @@ import { displayEtat, withDisplayEtat } from './boardClientState.js';
 export const MONTH_DAYS = 30.4375;
 const MONTHS_FR = ['janvier', 'février', 'mars', 'avril', 'mai', 'juin', 'juillet', 'août', 'septembre', 'octobre', 'novembre', 'décembre'];
 
-// Une durée en jours, lue comme on la dit : « 1 an 10 mois », « 9 mois », « 12 jours ».
+// Une durée en jours, lue comme on la dit, jours compris (dev 18/11/2026 : « il faut aussi les jours ») :
+// « 10 mois 5 jours », « 1 an 2 mois 5 jours », « 12 jours ». Mois moyen de 30,44 jours, comme le dashboard.
 export function lifetimeLabel(days) {
   if (days == null) return '–';
-  const months = Math.round(days / MONTH_DAYS);
-  if (months < 1) return `${Math.round(days)} jour${Math.round(days) > 1 ? 's' : ''}`;
+  const total = Math.round(days);
+  let months = Math.floor(total / MONTH_DAYS);
+  let rest = Math.round(total - months * MONTH_DAYS);
+  if (rest >= 30) { months += 1; rest = 0; }
   const years = Math.floor(months / 12);
-  const rest = months % 12;
-  return [years ? `${years} an${years > 1 ? 's' : ''}` : '', rest ? `${rest} mois` : ''].filter(Boolean).join(' ');
+  const month = months % 12;
+  const parts = [years ? `${years} an${years > 1 ? 's' : ''}` : '', month ? `${month} mois` : '', rest ? `${rest} jour${rest > 1 ? 's' : ''}` : ''].filter(Boolean);
+  return parts.length ? parts.join(' ') : '0 jour';
 }
 
 const average = (values) => (values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : null);
@@ -121,13 +125,23 @@ export function departures(lives) {
 }
 
 // ── Les résiliations mois par mois ─────────────────────────────────────────────────────────────────────────────────
-// Les `count` derniers mois jusqu'au mois regardé, même définition que le dashboard ; le mois en cours est compté
-// jusqu'à aujourd'hui.
-export function monthlyResiliations(established, monthKey, today, count = 12) {
-  return Array.from({ length: count }, (_, index) => {
-    const key = shiftMonth(monthKey, index - count + 1);
-    return { ...resiliationRateOfMonth(established, key, asOfMonth(key, today)), label: monthLabel(key) };
-  });
+// Chaque mois de `firstKey` à `lastKey`, même définition que le dashboard ; le mois en cours est compté jusqu'à
+// aujourd'hui. Un mois qui partait de moins de `minBase` clients en cours n'est pas comparable (un départ sur dix
+// clients fait 10 %) : il est montré, mais marqué.
+export function monthlyResiliations(established, firstKey, lastKey, today, { minBase = 30 } = {}) {
+  const months = [];
+  for (let key = firstKey; key <= lastKey; key = shiftMonth(key, 1)) {
+    const month = resiliationRateOfMonth(established, key, asOfMonth(key, today));
+    months.push({ ...month, label: monthLabel(key), comparable: month.base >= minBase });
+  }
+  return months;
+}
+
+// Le mois où l'on a le plus résilié : le taux le plus haut parmi les mois comparables (à taux égal, le plus de
+// résiliations). `null` sans aucune résiliation.
+export function worstMonth(months) {
+  return months.filter((month) => month.comparable && month.count > 0)
+    .reduce((worst, month) => (!worst || month.rate > worst.rate || (month.rate === worst.rate && month.count > worst.count) ? month : worst), null);
 }
 
 // ── De quoi le parc est fait ───────────────────────────────────────────────────────────────────────────────────────
@@ -220,7 +234,7 @@ export function financialAnalysis(boardRows, asOf, sector = null, { today = asOf
     curve: retentionCurve(lives, asOf),
     afterFirstYear: afterFirstYear(lives),
     departures: departures(lives),
-    months: monthlyResiliations(scoped, monthKey, today),
+    months: monthlyResiliations(scoped, monthBounds(scoped, today).first, today.slice(0, 7), today),
     forms: legalForms(lives),
     ...breakdown,
   };
