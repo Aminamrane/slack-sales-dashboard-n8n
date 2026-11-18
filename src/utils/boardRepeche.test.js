@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dayMonth, historyItems, matchesMeteo, noShowLine, repecheLine, REPECHE_FILTER, slotLabel } from './boardRepeche.js';
+import { CONSERVATION_STATES, dayMonth, historyItems, matchesMeteo, noShowLine, repecheLine, REPECHE_FILTER, slotLabel } from './boardRepeche.js';
 
 test('le repêchage se lit « le JJ/MM par X · jusqu au JJ/MM », jour du repêchage à Paris', () => {
   assert.equal(repecheLine({ at: '2026-11-02T23:30:00+00:00', by: 'Camille Test', until: '2027-01-03' }),
@@ -39,4 +39,9 @@ test('l historique mêle états, fiches de conservation et no shows, le plus anc
   });
   assert.deepEqual(items.map((i) => i.key), ['no_show-1', 'etat-1', 'conservation-1', 'etat-2']);
   assert.deepEqual(historyItems({ history: [] }), []);
+});
+
+test('la fiche de conservation s ouvre en cours de résiliation comme en cours de rétractation', () => {
+  assert.deepEqual(CONSERVATION_STATES, ['En cours de résiliation', 'En cours de rétractation']);
+  assert.equal(CONSERVATION_STATES.includes('Signé'), false);
 });
