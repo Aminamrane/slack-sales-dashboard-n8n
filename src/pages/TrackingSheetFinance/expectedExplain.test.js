@@ -167,7 +167,7 @@ test("n°565, octobre en retard alors que le serveur l'a déjà imputé d'avance
   });
   const ex = explainExpectedMonth(row('2026-10', { attendu: 169.4, status: 'late' }), oct, ctx());
   assert.equal(ex.label, null);
-  assert.equal(ex.text, '168,80 € déjà payés d’avance (0,20 € payés en septembre 2026, 168,60 € de crédit) : le reste dû de cette ligne ne les déduit pas.');
+  assert.equal(ex.text, '168,80 € payés d’avance (0,20 € payés en trop en septembre 2026, 168,60 € de crédit constaté), déjà déduits du reste dû.');
   // Un mois dû sans avance n'a rien à expliquer.
   assert.equal(explainExpectedMonth(row('2026-06', { attendu: 169.4, status: 'late' }), period('2026-06', { expected_owner: '169.40' }), ctx()).text, null);
 });

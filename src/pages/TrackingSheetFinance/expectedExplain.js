@@ -77,14 +77,14 @@ export const expectedOpsByMonth = (ops, entity) => {
   return out;
 };
 
-// Ce que le serveur a déjà imputé sur le mois depuis un trop-perçu antérieur.
-// Le reste dû de la ligne suit l'attendu et le reçu du mois : il ne le déduit pas.
+// Ce que le serveur a imputé sur le mois depuis un trop-perçu antérieur. Le reste dû de la ligne est celui du
+// tableau (dev 2026-11-18) : il les déduit déjà. Une avance ne vient que d'argent réellement payé en trop.
 const advanceBit = (period, entity) => {
   const amount = scopedAdvance(period, entity);
   if (!(amount > 0)) return null;
   const detail = advanceLinks(period, entity, 'from')
-    .map((l) => `${formatEUR(l.amount)} ${l.month ? `payés en ${month(l.month)}` : 'de crédit'}`);
-  return `${formatEUR(amount)} déjà payés d’avance${detail.length ? ` (${detail.join(', ')})` : ''} : le reste dû de cette ligne ne les déduit pas.`;
+    .map((l) => `${formatEUR(l.amount)} ${l.month ? `payés en trop en ${month(l.month)}` : 'de crédit constaté'}`);
+  return `${formatEUR(amount)} payés d’avance${detail.length ? ` (${detail.join(', ')})` : ''}, déjà déduits du reste dû.`;
 };
 
 // Le dernier geste posé sur le mois, tel que l'historique l'a enregistré.
@@ -167,7 +167,7 @@ export const explainExpectedMonth = (row, period, ctx = {}) => {
 
   // ── Mois qui doit encore quelque chose : ce que le serveur a déjà imputé ──
   if (!zero) {
-    if (row.status === 'late' || row.status === 'upcoming' || row.status === 'partial') {
+    if (['late', 'upcoming', 'partial', 'paid'].includes(row.status)) {
       return { ...none, text: advanceBit(period, entity) };
     }
     return none;

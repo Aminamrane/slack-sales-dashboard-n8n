@@ -598,7 +598,7 @@ export default function DetailPanel({
 
       const rows = statementRows({ periods: statementPeriods, entity, month: nowMonth, offer: offre,
         structure: selectedStructure, splits: statementSplits, refunds: statementProfile?.refunds || [],
-        priorDebts: statementProfile?.prior_debts || [] });
+        priorDebts: statementProfile?.prior_debts || [], statement: statementTimeline.statement?.[entity] || null });
       const allocations = !selectedStructure && (statementStructures.length > 1 || statementSplits.length > 0)
         ? statementAllocationRows({ periods: statementPeriods, entity, month: nowMonth,
           splits: statementSplits, structures: statementStructures }) : [];
