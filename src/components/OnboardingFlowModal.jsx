@@ -432,7 +432,7 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
               : missed ? `Le client n'est pas venu le ${fmtDayMonth(day)} : rappelez-le pour fixer une nouvelle date.`
                 : `Rendez-vous du ${fmtDayMonth(day)} : la fiche reste « à recaler » jusqu'à la nouvelle date.`}</small>
             {saved && <span className="ofd-noshow-done"><span className="ofd-li-tag">No show noté</span>{saved.qualified_by_name && ` par ${saved.qualified_by_name}`}</span>}
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Pourquoi, et quand rappeler (facultatif)" disabled={!canNoShow} />
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Note (facultatif)" disabled={!canNoShow} />
             <Button small disabled={!!busy || !canNoShow} onClick={() => onRescheduleLater(saved ? null : day)}>{busy === "later" ? "Enregistrement…" : saved ? "Mettre à jour la note" : "Noter le no show"}</Button>
           </div>
         </div>
