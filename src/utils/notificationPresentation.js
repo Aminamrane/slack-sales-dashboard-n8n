@@ -33,6 +33,8 @@ export function notificationTarget(notif, role) {
   }
   // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur).
   if (notif.type === 'finance_note_mention') return notif.data?.path || '/tracking-finance';
+  // Client sorti repassé dans un état actif (dev 18/11/2026) : sa fiche Finance, où la facturation décide de la reprise.
+  if (notif.type === 'finance_resume_after_exit') return notif.data?.path || '/tracking-finance';
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
   // Lapin reprogrammé (dev 14/10/2026) ou RDV repositionné (agenda setter, dev 27/10/2026) par un setter : le commercial
   // retrouve le lead dans sa sheet.
