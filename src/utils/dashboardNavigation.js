@@ -44,6 +44,7 @@ export const CEO_TAB_ROUTES = {
   work_hours: "/ceo/work-hours", sequences: "/ceo/sequences", optilex_board: "/ceo/optilex-board",
   financial_analysis: "/ceo/analyse-financiere",
   optilex_automation: "/ceo/automatisation-missions",
+  leads_dashboard: "/ceo/leads",
 };
 
 export function navigateBackToDashboard(navigate, role, ceoTabId = null) {

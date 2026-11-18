@@ -47,6 +47,10 @@ const SIDEBAR_TABS = [
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg>
   )},
   { section: 'ACQUISITION' },
+  // Dashboard Leads (dev 18/11/2026) : les leads reçus par canal, jour par jour, le travail des setters, Meta.
+  { key: 'leads_dashboard', label: 'Leads', icon: (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></svg>
+  )},
   { key: 'perf_sales', label: 'Perf Sales', icon: (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
   )},
@@ -151,7 +155,7 @@ const ROUTE_TABS = {
   variables: '/ceo/variables', conges: '/ceo/conges', work_hours: '/ceo/work-hours', campaigns: '/ceo/campaigns',
   my_tracking_sheet: '/tracking-sheet', optilex_board: '/ceo/optilex-board', sales_recordings: '/ceo/sales-recordings',
   meta_ads: '/ceo/meta-ads', bot_ia: '/ceo/Sub-Tickets', financial_analysis: '/ceo/analyse-financiere',
-  optilex_automation: '/ceo/automatisation-missions',
+  optilex_automation: '/ceo/automatisation-missions', leads_dashboard: '/ceo/leads',
 };
 
 // Rafraîchissements : le board et le classement bougent dans la journée (60 s, en
