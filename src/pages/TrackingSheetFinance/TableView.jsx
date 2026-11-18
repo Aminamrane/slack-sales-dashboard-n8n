@@ -1076,6 +1076,21 @@ function PendingFlag() {
     </span>
   );
 }
+// Vente signée que le commercial n'a pas encore déclarée (dev 2026-11-18) : la fiche existe déjà pour que la
+// finance voie l'attendu et confirme les paiements ; il manque la déclaration du commercial.
+function UndeclaredSaleFlag() {
+  return (
+    <span title="Le commercial n'a pas encore déclaré la vente. L'attendu vient du contrat signé et de la réservation de l'onboarding."
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+        color: PENDING.fg, background: PENDING.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+        fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+      }}>
+      <ContractPendingIcon size={13} strokeWidth={1.8} />
+      Vente non déclarée
+    </span>
+  );
+}
 // Flag « Récupéré », après le nom (dev 2026-11-18) : pêche tant que la facturation est à rétablir, vert ensuite.
 function RecoveredFlag({ recovered }) {
   const info = recoveredInfo(recovered);
@@ -1267,6 +1282,7 @@ function SocieteCell({ row, boardRow }) {
             Opti'Lex » se lise d'un coup d'œil. */}
         {boardRow && displayEtat(boardRow) === PENDING_OPTILEX_LABEL && <PendingFlag />}
         {boardRow?.recupere && <RecoveredFlag recovered={boardRow.recupere} />}
+        {row.client?.sale_undeclared && <UndeclaredSaleFlag />}
         {/* Météo client : l'icône seule demandait de connaître le code
             couleur — le mot dit l'état sans effort (demande dev
             2026-08-28). Pastille discrète pour ne pas concurrencer le nom. */}
