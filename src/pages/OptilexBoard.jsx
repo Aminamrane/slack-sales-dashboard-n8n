@@ -1,7 +1,7 @@
 import { confirmBoardFinanceExit } from '../components/BoardFinanceExitDialog.jsx';
 import { requiresExitDecision } from '../utils/boardFinanceExit.js';
 import { confirmBoardResiliation } from '../components/BoardResiliationDialog.jsx';
-import { CONSERVATION_ISSUES, CONSERVATION_ROLES, historyItems, matchesMeteo, noShowLine, RESILIATION, REPECHE_FILTER, repecheLine, slotLabel } from '../utils/boardRepeche.js';
+import { CONSERVATION_ISSUES, CONSERVATION_ROLES, CONSERVATION_STATES, historyItems, matchesMeteo, noShowLine, RESILIATION, RETRACTATION, REPECHE_FILTER, repecheLine, slotLabel } from '../utils/boardRepeche.js';
 import { BoardCalls, BoardDocuments, ComposerFiles, ContractFolders, ContractThumb, MESSAGE_FILE_ACCEPT, MESSAGE_FILE_MAX, MessageFiles, uploadMessageFile, useClientFiles } from '../components/BoardClientFiles.jsx';
 import { EmojiPalette, Reactions, toggledReactions } from '../components/BoardReactions.jsx';
 import { RECEIVABLES_ROLES, ReceivablesValue } from '../components/BoardReceivables.jsx';
@@ -4216,8 +4216,9 @@ function EtatSection({ row, num, changeEtat, compact = false, bare = false, onCo
     <div style={{ marginBottom: compact || bare ? 0 : 22, minWidth: 0, ...(compact && (cfg || isEtatPending(row)) ? { gridColumn: "1 / -1" } : {}) }}>
       {bare ? null : compact ? <div style={{ fontSize: 12, color: MUTED, marginBottom: 5 }}>Situation du client</div> : <SecTitle icon="etat">État du client</SecTitle>}
       <EtatPicker etat={etat} disabled={!num || readOnly} onPick={(v) => changeEtat(num, { etat: v })} />
-      {/* Client « En cours de résiliation » : après son appel, le Client Success remplit la fiche de conservation. */}
-      {num && !readOnly && row.etat_manuel === RESILIATION && CONSERVATION_ROLES.includes(roleOf()) && (
+      {/* Client « En cours de résiliation » ou « de rétractation » (dev 18/11/2026) : après son appel, le Client Success
+          remplit la fiche de conservation ; « Repêché » le garde client. */}
+      {num && !readOnly && CONSERVATION_STATES.includes(row.etat_manuel) && CONSERVATION_ROLES.includes(roleOf()) && (
         <button type="button" className="ob-btn-ghost" onClick={() => setConservationOpen(true)}
           style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 9, fontSize: 12, padding: "5px 11px" }}>
           <PencilIcon size={13} />Fiche de conservation
@@ -5188,7 +5189,8 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
   );
 }
 
-// Fiche de conservation (dev 17/11/2026) : après son appel avec un client « En cours de résiliation », le Client Success
+// Fiche de conservation (dev 17/11/2026) : après son appel avec un client « En cours de résiliation » ou « En cours de
+// rétractation » (dev 18/11/2026), le Client Success
 // note les motifs du départ (obligatoires), ce qui a été proposé ou fait, et l'issue. Repêché : le client repasse
 // « Signé », la direction et le juriste référent sont prévenus. Problème opérationnel : un créneau de 30 min dans
 // l'agenda du juriste du pôle social, choisi en pastilles, la fiche dans l'invitation. Le client part : rien d'automatique.
@@ -5253,7 +5255,7 @@ function ConservationModal({ row, num, onClose, onSaved }) {
             <p style={{ fontSize: 13, color: TEXT, lineHeight: 1.55, margin: 0 }}>
               {done.issue === "repeche" ? "Le client repasse « Signé ». La direction et le juriste référent sont prévenus."
                 : done.issue === "probleme_operationnel" ? `Rendez-vous de 30 min posé le ${slotLabel(done.rdv_slot)}, la fiche dans l'invitation.`
-                : "La fiche est dans l'historique du client. La résiliation s'acte comme d'habitude."}
+                : `La fiche est dans l'historique du client. La ${row.etat_manuel === RETRACTATION ? "rétractation" : "résiliation"} s'acte comme d'habitude.`}
             </p>
             <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 18 }}>
               <button type="button" className="ob-composer-send" onClick={onClose} autoFocus>Fermer</button>
