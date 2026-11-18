@@ -22,6 +22,7 @@ test('rating notification opens the exact client board; existing invitation rout
   assert.equal(notificationTarget({type:'board_mention'}),'/optilex-board');
   assert.equal(notificationTarget({type:'finance_note_mention',data:{path:'/tracking-finance?client=12&onglet=echanges'}}),'/tracking-finance?client=12&onglet=echanges');
   assert.equal(notificationTarget({type:'finance_note_mention'}),'/tracking-finance');
+  assert.equal(notificationTarget({type:'finance_resume_after_exit',data:{path:'/tracking-finance?client=12'}}),'/tracking-finance?client=12');
   assert.equal(notificationTarget({type:'other'}),null);
 });
 test('poll and websocket duplicates never produce repeated notification previews',()=>{
