@@ -151,9 +151,9 @@ const LABELS = { 'micro creche': 'Micro-crèche' };
 export const sectorKey = (text) => fold(text);
 
 // Les niches : les clients rangés par secteur d'activité. Pour chaque secteur : les clients encore là, les résiliés,
-// la durée de vie moyenne. Au-delà de `limit`, les secteurs les moins représentés sont réunis en « Autres secteurs » ;
-// un client sans secteur est compté à part.
-export function sectorBreakdown(lives, limit = 12) {
+// la durée de vie moyenne. Toutes les niches sont listées ; avec un `limit`, les secteurs les moins représentés au-delà
+// sont réunis en « Autres secteurs ». Un client sans secteur est compté à part.
+export function sectorBreakdown(lives, limit = Infinity) {
   const groups = new Map();
   lives.forEach((life) => {
     const raw = String(life.row.secteur_activite || '').trim();
@@ -186,7 +186,7 @@ export function sectorBreakdown(lives, limit = 12) {
 }
 
 // Les formes juridiques des clients en cours (« combien il y a de SARL, combien il y a de SAS ») : celles du NDA,
-// quand le client en a rempli un.
+// sinon celle relevée au registre des entreprises (le back les fournit déjà fusionnées).
 const FORMS = ['SARL', 'SAS', 'SASU', 'EURL'];
 export function legalForms(lives) {
   const here = lives.filter((life) => life.open);

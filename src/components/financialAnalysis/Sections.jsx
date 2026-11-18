@@ -299,7 +299,7 @@ export function Niches({ sectors, value, onPick }) {
 
 const FORM_SHADES = ["var(--charcoal)", "#6f6a63", "#a8a39b", "#cfcac2", "#e7e3dc"];
 export function LegalForms({ forms }) {
-  if (!forms.known) return <p className="fa-empty">Aucune forme juridique connue : les clients n’ont pas rempli leur NDA.</p>;
+  if (!forms.known) return <p className="fa-empty">Aucune forme juridique connue : ni dans les NDA, ni au registre des entreprises.</p>;
   return (
     <div className="fa-forms">
       <div className="fa-forms-bar" role="img" aria-label={forms.forms.map((f) => `${f.label} ${percent(f.share, 0)}`).join(", ")}>
@@ -312,7 +312,7 @@ export function LegalForms({ forms }) {
           <li key={form.label}><i style={{ background: FORM_SHADES[i] }} /><span>{form.label}</span><b className="fst-num">{number(form.count)}</b><em className="fst-num">{percent(form.share, 0)}</em></li>
         ))}
       </ul>
-      <p className="fa-note">Forme juridique connue pour {number(forms.known)} clients en cours sur {number(forms.known + forms.unknown)} : celle de leur NDA.</p>
+      <p className="fa-note">Forme juridique connue pour {number(forms.known)} clients en cours sur {number(forms.known + forms.unknown)} : celle de leur NDA, sinon celle du registre des entreprises.</p>
     </div>
   );
 }

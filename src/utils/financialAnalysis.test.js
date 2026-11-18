@@ -91,6 +91,10 @@ test('sectorBreakdown : les niches, nom corrigé, autres secteurs regroupés, no
   assert.equal(out.sectors[0].averageDays, 300);
   assert.equal(out.sectors[0].resiliationRate, 1 / 3);
   assert.deepEqual([out.named, out.unknown], [3, 1]);
+  // Sans limite, toutes les niches sont listées, même au-delà de douze.
+  const many = sectorBreakdown(Array.from({ length: 15 }, (_, i) => life(`Niche ${i}`, true, 100)));
+  assert.equal(many.sectors.length, 15);
+  assert.ok(!many.sectors.some((s) => s.key === 'others'));
 });
 
 test('legalForms : SARL, SAS… parmi les clients en cours qui ont rempli leur NDA', () => {
