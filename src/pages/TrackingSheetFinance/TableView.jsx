@@ -569,7 +569,7 @@ const PRIOR_DEBT_ROW = '#fdf4f3';
 // ── Cell wrapper helper ─────────────────────────────────────────────────────
 function Cell({
   k, cols, stickyLefts, hover, isActive, children, extraStyle,
-  selected, onSelect, commentable, commentCount, onOpenCommentPopup, collapsingCol,
+  selected, onSelect, commentable, commentCount, onOpenCommentPopup, collapsingCol, onOpen,
 }) {
   const c = cols[k];
   const isCollapsing = collapsingCol === k;
@@ -596,7 +596,7 @@ function Cell({
         // Cell sélectionnée boostée pour que le point cyan déborde au-dessus
         // de toutes les cells voisines (sticky ou non).
         zIndex: selected ? 50 : (c.sticky ? 10 : 0),
-        cursor: c.editable ? 'pointer' : 'default',
+        cursor: c.editable || onOpen ? 'pointer' : 'default',
         display: 'flex',
         alignItems: 'center',
         justifyContent: c.align === 'right'
@@ -627,6 +627,9 @@ function Cell({
         // Ne pas trigger select sur le bouton OUVRIR ou autre child interactif
         if (e.target.closest('.tsf-open-btn')) return;
         onSelect?.(k);
+        // Cellule qui ouvre la fiche (le nom du client) : un clic n'importe où
+        // dedans l'ouvre, sauf quand on vient de sélectionner du texte à copier.
+        if (onOpen && !window.getSelection?.()?.toString()) onOpen();
       }}
     >
       <div style={{
@@ -796,7 +799,7 @@ const RowRenderer = React.memo(function RowRenderer({
   const rowBg = isActive ? N.rowActive : (hover ? N.rowHover : N.pageBg);
 
   // Cell wrapper bound to current row state (click → select cell, pas ouvrir row)
-  const C = useCallback((k, children, extraStyle) => {
+  const C = useCallback((k, children, extraStyle, onOpen) => {
     const commentable = !!SCOPED_COMMENT_FIELDS[scope]?.[k];
     const commentCount = commentable ? (rowCommentCounts?.[k] || 0) : 0;
     return (
@@ -813,6 +816,7 @@ const RowRenderer = React.memo(function RowRenderer({
         onOpenCommentPopup={(colKey, rect) => onOpenCommentPopup?.(row.id, colKey, rect)}
         collapsingCol={collapsingCol}
         extraStyle={extraStyle}
+        onOpen={onOpen}
       >
         {children}
       </Cell>
@@ -866,7 +870,8 @@ const RowRenderer = React.memo(function RowRenderer({
         <NumeroCell numero={row.client?.numero_client} priorDebt={hasPriorDebt} />
       ), hasPriorDebt ? { background: PRIOR_DEBT_ROW, transition: 'background 0.25s ease' } : undefined)}
 
-      {/* Identité — Nom client + entreprise + météo + bouton OUVRIR au hover */}
+      {/* Identité — Nom client + entreprise + météo + bouton OUVRIR au hover.
+          Toute la cellule ouvre la fiche, pas seulement le bouton. */}
       {keys.includes('societe') && C('societe', (
         <>
           <SocieteCell row={row} boardRow={boardRow} />
@@ -883,7 +888,7 @@ const RowRenderer = React.memo(function RowRenderer({
             <ArrowUpRight size={14} />
           </button>
         </>
-      ), hasPriorDebt ? { background: PRIOR_DEBT_ROW, transition: 'background 0.25s ease' } : undefined)}
+      ), hasPriorDebt ? { background: PRIOR_DEBT_ROW, transition: 'background 0.25s ease' } : undefined, () => onOpenRow?.(row))}
 
       {/* Modalités — chip N×/M/A + pastilles prélèvement O/X (colonne fusionnée) */}
       {keys.includes('modalites') && C('modalites', (
