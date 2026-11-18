@@ -106,6 +106,8 @@ import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
 import StateReview from './components/StateReview.jsx';
+import { RecoveredIcon } from './components/FinanceIcons.jsx';
+import { recoveredInfo } from './recovered.js';
 import { reviewedInstallment } from './installmentFollowup.js';
 import InstallmentFollowup from './components/InstallmentFollowup.jsx';
 // Documents, e-mails et appels : le dossier du board, le même des deux côtés.
@@ -3331,6 +3333,26 @@ const isoDay = (s) => {
 // `readOnly` (rôles en lecture seule) : la pastille « Facturé jusqu'à » reste un bouton, désactivé.
 function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false, billingLastMonth = null, onEditBilling = null, readOnly = false }) {
   const items = [];
+
+  // Client récupéré (dev 2026-11-18) : repassé « Signé » après une rétractation ou une résiliation. Tant que la revue
+  // du retour attend la Finance, la pastille le dit : la facturation est à rétablir (onglet Paiements).
+  const recovered = recoveredInfo(boardRow?.recupere);
+  if (recovered) {
+    items.push({
+      icon: <RecoveredIcon size={12} strokeWidth={1.8} />,
+      label: 'Récupéré',
+      value: recovered.day ? `le ${recovered.day}` : '',
+      title: recovered.title,
+      pillBg: recovered.tone.bg, pillFg: recovered.tone.fg,
+    });
+    if (recovered.toRestore) items.push({
+      icon: <CalendarRange size={12} />,
+      label: 'Facturation',
+      value: 'à rétablir',
+      title: 'Le client est de nouveau « Signé » : rétablir sa facturation depuis l’onglet Paiements.',
+      pillBg: recovered.tone.bg, pillFg: recovered.tone.fg,
+    });
+  }
 
   // Sortie de contrat posée au board : elle prime sur le renouvellement —
   // un contrat qui s'arrête ne se renouvelle pas. La date vient de l'état

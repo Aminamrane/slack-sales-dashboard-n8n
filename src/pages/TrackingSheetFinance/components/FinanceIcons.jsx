@@ -171,6 +171,15 @@ export const ExitIcon = (p) => (
   </Icon>
 );
 
+// Récupérés — la flèche qui revient vers la porte (le pendant de « Résiliés »).
+export const RecoveredIcon = (p) => (
+  <Icon {...p}>
+    <path d="M14 20.5h4a1.5 1.5 0 0 0 1.5-1.5V5A1.5 1.5 0 0 0 18 3.5h-4" />
+    <path d="M10 8l4.5 4-4.5 4" />
+    <path d="M14.5 12H4.5" />
+  </Icon>
+);
+
 // En pause — le cercle et ses deux barres.
 export const PauseIcon = (p) => (
   <Icon {...p}>

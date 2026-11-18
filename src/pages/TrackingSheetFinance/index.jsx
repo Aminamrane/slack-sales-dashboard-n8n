@@ -61,7 +61,7 @@ import StatisticsView from './statistics/StatisticsView.jsx';
 import {
   TableIcon, InboxIcon, LossIcon, CheckCircleIcon, ClockIcon, OverdueIcon,
   RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
-  PauseIcon, LiquidationIcon,
+  PauseIcon, LiquidationIcon, RecoveredIcon,
 } from './components/FinanceIcons.jsx';
 import { exportFinanceXlsx } from './exportExcel.js';
 import { loadExchanges } from './exportExchanges.js';
@@ -326,6 +326,7 @@ const VIEW_ICONS = {
   non_auto:         BankOffIcon,
   attente_optilex:  ContractPendingIcon,
   resilies:         ExitIcon,
+  recuperes:        RecoveredIcon,
   pause:            PauseIcon,
   liquidation:      LiquidationIcon,
 };
@@ -365,6 +366,9 @@ const VIEW_FILTERS = [
   // ni attendu, flaguées (demande dev 2026-09-18).
   { key: 'attente_optilex', label: PENDING_OPTILEX_LABEL },
   { key: 'resilies',    label: 'Résiliés / Rétractés' },
+  // Repassés « Signé » juste après une rétractation ou une résiliation (champ `recupere` du board) : la finance
+  // rétablit leur facturation (dev 2026-11-18).
+  { key: 'recuperes',   label: 'Clients récupérés' },
   // Clients dont l'état affiché au board est « Pause », puis ceux en
   // liquidation (« Liquidation » et « En cours de liquidation ») : mêmes
   // règles d'état que le board et que le masquage des Créances antérieures
@@ -700,6 +704,10 @@ export default function TrackingSheetFinance() {
         if (optilexPhase === 'all') return true;
         const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
         return optilexIntegrationPhaseOf(br) === optilexPhase;
+      }
+      case 'recuperes': {
+        const numero = r.client?.numero_client;
+        return !!(numero && boardMap && boardMap.get(numero)?.recupere);
       }
       case 'pause':
         return boardEtatOf(r) === 'Pause';

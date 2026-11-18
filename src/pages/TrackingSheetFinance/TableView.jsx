@@ -93,7 +93,8 @@ import { upcomingExpectedHint } from './upcomingExpected.js';
 import { EditableNumber, EditableSelect, EditableDate } from './EditableCell.jsx';
 import ModalitesCell from './components/ModalitesCell.jsx';
 import StructureAmountCell from './components/StructureAmountCell.jsx';
-import { ContractPendingIcon } from './components/FinanceIcons.jsx';
+import { ContractPendingIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
+import { recoveredInfo } from './recovered.js';
 // Palette + règles du board Owner/Opti'Lex (imports read-only) : l'état
 // teinte en pastel les cellules sticky N°/société (la colonne État dédiée a
 // été retirée 2026-08-21, l'édition vit dans le DetailPanel), et la météo
@@ -1069,6 +1070,21 @@ function PendingFlag() {
     </span>
   );
 }
+// Flag « Récupéré », après le nom (dev 2026-11-18) : pêche tant que la facturation est à rétablir, vert ensuite.
+function RecoveredFlag({ recovered }) {
+  const info = recoveredInfo(recovered);
+  if (!info) return null;
+  return (
+    <span title={info.title} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0,
+      color: info.tone.fg, background: info.tone.bg, borderRadius: 4, padding: '1px 6px 1px 4px',
+      fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap',
+    }}>
+      <RecoveredIcon size={13} strokeWidth={1.8} />
+      Récupéré
+    </span>
+  );
+}
 const PendingRowRenderer = React.memo(function PendingRowRenderer({ row, cols, keys, stickyLefts, collapsingCol }) {
   const [hover, setHover] = useState(false);
   const c = row.client || {};
@@ -1216,6 +1232,7 @@ function SocieteCell({ row, boardRow }) {
             les contrats sans numéro client, pour que la vue « Attente
             Opti'Lex » se lise d'un coup d'œil. */}
         {boardRow && displayEtat(boardRow) === PENDING_OPTILEX_LABEL && <PendingFlag />}
+        {boardRow?.recupere && <RecoveredFlag recovered={boardRow.recupere} />}
         {/* Météo client : l'icône seule demandait de connaître le code
             couleur — le mot dit l'état sans effort (demande dev
             2026-08-28). Pastille discrète pour ne pas concurrencer le nom. */}
