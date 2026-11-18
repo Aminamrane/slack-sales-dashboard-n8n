@@ -2371,6 +2371,20 @@ export default function OptilexBoard({ embed = false }) {
         .ob-msg-panel-bar{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-top:8px}
         .ob-msg-confirm{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-top:8px;padding:8px 10px;border-radius:9px;background:#fdf2f1;font-size:12.5px;font-weight:500;color:${TEXT}}
         .ob-msg-confirm>span{margin-right:auto}
+        .ob-confirm{border:1px solid #d6d4f6;background:#f6f5fd;border-radius:14px;padding:12px 14px;margin-bottom:14px}
+        .ob-confirm-title{font-size:13px;font-weight:500;color:#4a3fc4}
+        .ob-confirm-sub{font-size:12px;color:${MUTED};margin-top:2px}
+        .ob-confirm-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+        .ob-confirm-date{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:${TEXT}}
+        .ob-confirm-date input{height:32px;box-sizing:border-box;padding:0 8px;border:1px solid #e3ded6;border-radius:10px;background:${CARD};font:inherit;font-size:12.5px;color:${TEXT};outline:0;transition:border-color .15s,box-shadow .15s}
+        .ob-confirm-date input:focus{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
+        .ob-confirm-btn{display:inline-flex;align-items:center;height:32px;box-sizing:border-box;padding:0 14px;border-radius:10px;transition:background .15s,border-color .15s,transform .15s cubic-bezier(.22,1,.36,1)}
+        .ob-confirm-btn:active:not(:disabled){transform:scale(.97)}
+        .ob-confirm-btn.ob-btn-ghost:hover:not(:disabled){border-color:#d8d3cb;background:#fdfcfb}
+        .ob-confirm-btn:focus-visible{outline:2px solid ${TEXT};outline-offset:2px}
+        .ob-confirm-sep{width:1px;height:20px;margin:0 4px;background:#d6d4f6}
+        .ob-confirm-error{margin-top:8px;padding:7px 10px;border-radius:10px;background:#fde6e6;color:#c5221f;font-size:12px}
+        @media (max-width:520px){.ob-confirm-sep{display:none}}
         .ob-btn-ghost{padding:6px 12px;border:1px solid ${BORDER};border-radius:8px;background:${CARD};color:${TEXT};font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
         .ob-btn-ghost:hover{border-color:#e3ded6}
         .ob-btn-danger{padding:6px 12px;border:0;border-radius:8px;background:#c5221f;color:#fff;font:inherit;font-size:12.5px;font-weight:500;cursor:pointer}
@@ -2963,30 +2977,30 @@ function OnboardingToConfirm({ row, onDone, onNotDone, onNoShow }) {
     try { await onNoShow(planned); setNoShow({ saving: false, error: "" }); }
     catch (e) { setNoShow({ saving: false, error: typeof e?.data?.detail === "string" ? e.data.detail : "La qualification n'a pas été enregistrée. Réessayez." }); }
   };
+  const canNoShow = onNoShow && planned && planned <= todayParis;
+  // Une question, trois réponses de même poids : réalisé (avec sa date), puis, groupés, les deux « pas fait ».
   return (
-    <div style={{ border: "1px solid #d6d4f6", background: "#f6f5fd", borderRadius: 12, padding: "12px 14px", marginBottom: 14 }}>
-      <div style={{ fontSize: 13, fontWeight: 500, color: "#4a3fc4" }}>Onboarding à confirmer</div>
-      <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>
-        En attente de qualification : {row.rdv_onboarding_done ? "coché réalisé sans action du Client Success" : "le Client Success est intervenu, l'onboarding n'est pas coché"}.
-        Le client n'est pas prévenu.
+    <div className="ob-confirm">
+      <div className="ob-confirm-title">Onboarding à confirmer</div>
+      <div className="ob-confirm-sub">
+        {row.rdv_onboarding_done ? "Coché réalisé sans action du Client Success." : "Le Client Success est intervenu, l'onboarding n'est pas coché."}
       </div>
-      <form onSubmit={(e) => { e.preventDefault(); if (day) onDone(day); }} style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 8, marginTop: 10 }}>
-        <label style={{ fontSize: 12, color: TEXT, display: "flex", alignItems: "center", gap: 6 }}>
+      <form className="ob-confirm-actions" onSubmit={(e) => { e.preventDefault(); if (day) onDone(day); }}>
+        <label className="ob-confirm-date">
           Réalisé le
-          <input type="date" required value={day} max={todayParis} onChange={(e) => setDay(e.target.value)}
-            style={{ border: `1px solid ${BORDER}`, borderRadius: 7, padding: "4px 6px", fontFamily: "inherit", fontSize: 12 }} />
+          <input type="date" required value={day} max={todayParis} onChange={(e) => setDay(e.target.value)} />
         </label>
-        <button type="submit" className="ob-composer-send" disabled={!day}>Réalisé</button>
-        <button type="button" className="ob-btn-ghost" onClick={onNotDone}>Pas encore fait</button>
-        {onNoShow && planned && planned <= todayParis && (
-          <button type="button" className="ob-btn-ghost" disabled={noShow.saving} onClick={qualify}
-            title={`No show à l'onboarding du ${fmt(planned)} : la trace reste, même si l'onboarding est réalisé plus tard`}
-            style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
-            <GhostIcon size={14} />{noShow.saving ? "Enregistrement…" : "No show"}
+        <button type="submit" className="ob-composer-send ob-confirm-btn" disabled={!day}>Réalisé</button>
+        <span className="ob-confirm-sep" aria-hidden="true" />
+        <button type="button" className="ob-btn-ghost ob-confirm-btn" onClick={onNotDone}>Pas encore fait</button>
+        {canNoShow && (
+          <button type="button" className="ob-btn-ghost ob-confirm-btn" disabled={noShow.saving} onClick={qualify}
+            title={`Le client n'est pas venu le ${fmt(planned)} : la trace reste dans l'historique, même si l'onboarding est réalisé plus tard`}>
+            {noShow.saving ? "Enregistrement…" : "No show"}
           </button>
         )}
       </form>
-      {noShow.error && <div role="alert" style={{ fontSize: 12, color: "#c5221f", marginTop: 8 }}>{noShow.error}</div>}
+      {noShow.error && <div role="alert" className="ob-confirm-error">{noShow.error}</div>}
     </div>
   );
 }
