@@ -29,9 +29,8 @@
 .ofd-li-v b { font-weight:500; }
 .ofd-li-v a { color:#1b6fd0; font-weight:500; text-decoration:none; }
 .ofd-li-v a:hover { text-decoration:underline; }
-.ofd-noshow-check { display:flex; align-items:center; gap:7px; margin:-2px 0 8px; font-size:12px; color:#55514b; cursor:pointer; }
-.ofd-noshow-check input { width:14px; height:14px; margin:0; accent-color:#2b2927; cursor:pointer; }
-.ofd-noshow-done { display:flex; align-items:center; gap:6px; margin:-2px 0 8px; font-size:12px; color:#8b867e; }
+.ofd-noshow-done { display:flex; align-items:center; gap:6px; margin:2px 0 2px; font-size:12px; color:#8b867e; }
+.ofd-choice textarea:disabled { background:#f7f5f2; color:#a8a39b; cursor:not-allowed; }
 .ofd-li-tag { display:inline-flex; align-items:center; gap:5px; height:22px; padding:0 8px; border:1px solid #f8d4ba; border-radius:7px; background:#fde9da; color:#c2500e; font-size:11.5px; font-weight:500; white-space:nowrap; }
 /* Montants du mois. */
 .ofd-money { display:grid; grid-template-columns:repeat(auto-fit, minmax(150px, 1fr)); gap:8px; }

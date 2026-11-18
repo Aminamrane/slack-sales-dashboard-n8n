@@ -3,8 +3,8 @@
 // social reprogrammables sans quitter le parcours),
 // 3. la convention Opti'Lex (prévenir Lisa), 4. la météo d'onboarding qui finalise la fiche,
 // 5. la clôture : réalisé (un bouton, puis confettis et ticket « Bravo » ; à la fermeture, le billet de la fiche se
-// découpe tout seul, dev 29/10/2026), ou à recaler (avec ou sans date) ; le recalage sans date d'un rendez-vous passé
-// note le no show (Vincent, 17/11/2026 : « un champ No-show dans l'onglet Faire l'onboarding »). Règle finance affichée telle que le moteur l'applique : le jour J,
+// découpe tout seul, dev 29/10/2026), nouvelle date, ou no show (Vincent, 17/11/2026 : « un champ No-show dans
+// l'onglet Faire l'onboarding » ; il remplace « à recaler, sans date », dev 18/11/2026). Règle finance affichée telle que le moteur l'applique : le jour J,
 // rien n'est dû avant la fin du rendez-vous.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
@@ -38,7 +38,7 @@ const STEPS = [
   { key: "rdv", title: "Rendez-vous de lancement", hint: "Fiscal et social" },
   { key: "optilex", title: "Convention Opti'Lex", hint: "Signée, en attente, ou à relancer par le cabinet partenaire" },
   { key: "meteo", title: "Météo d'onboarding", hint: "Votre note finalise la fiche d'intégration" },
-  { key: "cloture", title: "Clôture", hint: "Réalisé, ou à recaler" },
+  { key: "cloture", title: "Clôture", hint: "Réalisé, nouvelle date ou no show" },
 ];
 
 const fmtDate = (iso) => {
@@ -371,9 +371,10 @@ function CelebrationTicket({ brief, row, num, rated, onClose, onRate }) {
   );
 }
 
-// No show du rendez-vous prévu (Vincent, 17/11/2026 ; dev : « les à recaler sans date sont souvent des no show ») :
-// il se note avec « À recaler, sans date », par une case cochée d'office une fois le rendez-vous passé. Noté au nom du
-// Client Success, il reste dans l'historique de la fiche et dans les chiffres même si l'onboarding est réalisé plus tard.
+// No show du rendez-vous prévu (Vincent, 17/11/2026 ; dev 18/11 : « à recaler sans date » et no show, c'est la même
+// chose, « c'est No show qu'on doit garder ») : la carte « No show » remplace « À recaler, sans date ». Une fois le
+// rendez-vous passé, elle note le no show au nom du Client Success et laisse la fiche « à recaler » jusqu'à la nouvelle
+// date. Il reste dans l'historique de la fiche et dans les chiffres, même si l'onboarding est réalisé plus tard.
 function useNoShowOf(num, day) {
   const [saved, setSaved] = useState(null);
   useEffect(() => {
@@ -401,7 +402,6 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
   const day = String(brief.onboarding.day || brief.onboarding.at || "").slice(0, 10);
   const missed = !alreadyDone && appointmentPassed(brief.onboarding);
   const saved = useNoShowOf(num, missed ? day : null);
-  const [noShow, setNoShow] = useState(true);
   return (
     <>
       {/* La fiche attend la météo du Client Success (main 3fac728) : tant qu'elle manque, l'onboarding ne se conclut pas. */}
@@ -424,17 +424,12 @@ function ClotureStep({ brief, row, num, rated, busy, onDone, onRescheduleWithDat
             <strong>Je fixe la nouvelle date</strong><small>Le recalage s'ouvre tout de suite</small>
           </button>
           <div className="ofd-choice is-form">
-            <strong>À recaler, sans date</strong>
-            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Pourquoi, et quand rappeler (facultatif)" />
-            {missed && (saved ? (
-              <span className="ofd-noshow-done"><span className="ofd-li-tag">No show noté</span>{saved.qualified_by_name && ` par ${saved.qualified_by_name}`}</span>
-            ) : (
-              <label className="ofd-noshow-check">
-                <input type="checkbox" checked={noShow} disabled={!!busy} onChange={(e) => setNoShow(e.target.checked)} />
-                Le client n'est pas venu le {fmtDayMonth(day)} (no show)
-              </label>
-            ))}
-            <Button small disabled={!!busy} onClick={() => onRescheduleLater(missed && !saved && noShow ? day : null)}>{busy === "later" ? "Enregistrement…" : brief.onboarding.reschedule_pending ? "Mettre à jour la note" : "Marquer « à recaler »"}</Button>
+            <strong>No show</strong>
+            <small>{!day ? "Aucun rendez-vous prévu." : missed ? `Le client n'est pas venu le ${fmtDayMonth(day)} : rappelez-le pour fixer une nouvelle date.`
+              : `Possible une fois le rendez-vous du ${fmtDayMonth(day)} passé.`}</small>
+            {saved && <span className="ofd-noshow-done"><span className="ofd-li-tag">No show noté</span>{saved.qualified_by_name && ` par ${saved.qualified_by_name}`}</span>}
+            <textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} maxLength={1000} placeholder="Pourquoi, et quand rappeler (facultatif)" disabled={!missed} />
+            <Button small disabled={!!busy || !missed} onClick={() => onRescheduleLater(saved ? null : day)}>{busy === "later" ? "Enregistrement…" : saved ? "Mettre à jour la note" : "Noter le no show"}</Button>
           </div>
         </div>
       </Panel>
@@ -590,7 +585,7 @@ export default function OnboardingFlowModal({ row, num, onClose, patch, onResche
                         catch (e) { setError(typeof e?.data?.detail === "string" ? e.data.detail : "Le no show n'a pas été enregistré. Réessayez."); setBusy(null); return; }
                       }
                       finish({ onboarding_reschedule_pending: true, onboarding_reschedule_note: note.trim() || null },
-                        noShowDay ? "No show noté, onboarding à recaler." : "Onboarding marqué à recaler.", "later");
+                        noShowDay ? "No show noté, onboarding à recaler." : "Note mise à jour.", "later");
                     }} />
                 )}
                 {error && <div role="alert" style={{ marginTop: 10, color: RED, fontSize: 12.5 }}>{error}</div>}
