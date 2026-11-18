@@ -22,6 +22,9 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
   const dialog = useRef(null);
   const withdrawal = payload.etat === 'Rétractation';
   const pause = payload.etat === 'Pause';
+  // Pause datée : aucun attendu pendant la pause, facturation normale ensuite ; les mois découlent des dates.
+  const datedPause = pause && Boolean(payload.pause_end_date);
+  const frDay = iso => iso ? new Date(`${iso}T12:00:00`).toLocaleDateString('fr-FR') : '';
   useEffect(() => {
     let alive = true;
     setPreview(null); setError(''); setLinked(false); setAllRemaining(false);
@@ -42,7 +45,7 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
   const amounts = preview ? exitAmounts(values, preview.amounts) : null;
   const total = amounts ? Object.values(amounts).reduce((a, b) => a + b, 0) : null;
   const needsLink = loss && !preview?.review?.finance_withdrawn_at;
-  const canConfirm = preview && date && (withdrawal || (/^\d{4}-\d{2}$/.test(billedUntil) && (pause || amounts))) && (!needsLink || linked);
+  const canConfirm = preview && date && (withdrawal || datedPause || (/^\d{4}-\d{2}$/.test(billedUntil) && (pause || amounts))) && (!needsLink || linked);
   const keyDown = e => {
     if (e.key === 'Escape') { e.stopPropagation(); onResolve(null); }
     if (e.key === 'Tab') {
@@ -60,12 +63,13 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
         <button style={{ ...button, padding: 6, border: 0 }} aria-label="Fermer" onClick={() => onResolve(null)}><X size={20}/></button>
       </div>
       <label style={{ display: 'block', marginTop: 20 }}>Date d’effet<input required aria-label="Date d’effet" type="date" value={date} onChange={e => setDate(e.target.value)} style={{ ...input, marginTop: 6 }}/></label>
-      {!withdrawal && <label style={{ display: 'block', marginTop: 14 }}>Dernier mois facturé<input required aria-label="Dernier mois facturé" type="month" value={billedUntil} onChange={e => setLastMonth(e.target.value)} style={{ ...input, marginTop: 6 }}/>
+      {!withdrawal && !datedPause && <label style={{ display: 'block', marginTop: 14 }}>Dernier mois facturé<input required aria-label="Dernier mois facturé" type="month" value={billedUntil} onChange={e => setLastMonth(e.target.value)} style={{ ...input, marginTop: 6 }}/>
         <small style={{ display: 'block', color: '#8b867e', marginTop: 4 }}>{pause ? 'La facturation est suspendue après ce mois.' : 'Plus aucun attendu après ce mois.'} Un mois déjà encaissé ou fixé à la main n’est jamais effacé.</small></label>}
       {!preview && !error && <p role="status">Chargement des montants financiers…</p>}
       {error && <div role="alert"><p style={{ color: '#c5221f' }}>{error}</p><button style={button} onClick={() => setVersion(v => v + 1)}><RefreshCw size={14}/> Réessayer</button></div>}
       {preview && <>
         {withdrawal ? <p style={{ padding: 14, background: '#fff7e9', borderRadius: 10 }}>Les attendus Owner et Opti’Lex seront automatiquement annulés depuis la signature. Les encaissements et remboursements restent dans l’historique.</p>
+        : datedPause ? <p style={{ padding: 14, background: '#f7f5f2', borderRadius: 10 }}>Aucun attendu du {frDay(date)} au {frDay(payload.pause_end_date)} (les mois qui commencent pendant la pause), puis la facturation normale reprend. Ce qui était dû avant la pause reste à recouvrer.</p>
         : pause ? <p style={{ padding: 14, background: '#f7f5f2', borderRadius: 10 }}>Rien n’est passé en perte : la pause suspend seulement la facturation. Ce qui reste dû avant la pause reste à recouvrer, et la reprise se décide quand le client repart.</p> : <>
           <p>Choisissez les montants à passer en perte. <strong>Le reste demeure à recouvrer.</strong></p>
           {Object.entries(labels).map(([key, label]) => <label key={key} style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 12, alignItems: 'center', marginTop: 12 }}>
@@ -90,7 +94,7 @@ export function BoardFinanceExitDialog({ numero, payload, onResolve }) {
       </>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
         <button style={button} onClick={() => onResolve(null)}>Annuler</button>
-        <button disabled={!canConfirm} style={{ ...button, background: '#2b2927', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : pause ? { last_month: billedUntil } : { ...amounts, all_remaining: allRemaining, last_month: billedUntil }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
+        <button disabled={!canConfirm} style={{ ...button, background: '#2b2927', color: '#fff', opacity: canConfirm ? 1 : 0.45 }} onClick={() => onResolve({ ...payload, etat_date: date, finance_decision: { token: preview.token, ...(withdrawal ? {} : datedPause ? { amount_past: 0, amount_current: 0, amount_future: 0 } : pause ? { last_month: billedUntil } : { ...amounts, all_remaining: allRemaining, last_month: billedUntil }), reason, link_loss_id: linked ? loss?.id : null } })}>Confirmer et appliquer en Finance</button>
       </div>
     </section>
   </div>;
