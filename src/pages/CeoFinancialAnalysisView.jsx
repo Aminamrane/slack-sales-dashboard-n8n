@@ -23,7 +23,7 @@ import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
 import { Page } from "./TrackingSheetFinance/components/PageKit.jsx";
-import { asOfMonth, financialAnalysis, fromApi, fromBoard, monthBounds, monthLabel } from "../utils/financialAnalysis.js";
+import { asOfMonth, financialAnalysis, fromApi, fromBoard, monthBounds, monthLabel, worstMonth } from "../utils/financialAnalysis.js";
 import { Answer, Departures, Gains, LegalForms, MonthlyResiliations, MonthPicker, NicheBar, Niches, Panel, RetentionCurve, Skeleton }
   from "../components/financialAnalysis/Sections.jsx";
 import { number, percent } from "../components/financialAnalysis/format.js";
@@ -148,6 +148,7 @@ export default function CeoFinancialAnalysisView() {
   const [sector, setSector] = useState(null);
   const asOf = asOfMonth(month, today);
   const stats = useMemo(() => financialAnalysis(rows, asOf, sector, { today }), [rows, asOf, sector, today]);
+  const worstOf = useMemo(() => (stats ? worstMonth(stats.months) : null), [stats]);
   const scope = sector == null ? null : stats?.sectors.find((item) => item.key === sector);
   const scopeName = sector == null ? "Tout le parc" : scope?.label || "Niche";
   const pickMonth = (key) => setMonth(key < bounds.first ? bounds.first : key > bounds.last ? bounds.last : key);
@@ -227,8 +228,8 @@ export default function CeoFinancialAnalysisView() {
               </div>
 
               <Panel index={3} title="Les résiliations, mois par mois"
-                sub={`Le taux de chaque mois${sector == null ? "" : ` pour ${scopeName}`} ; depuis le début : ${percent(stats.resiliationGlobal.rate)}. Cliquez un mois pour le regarder.`}>
-                <MonthlyResiliations months={stats.months} value={month} onPick={pickMonth} />
+                sub={`Chaque mois depuis le début${sector == null ? "" : ` pour ${scopeName}`}${worstOf ? `. Le plus haut : ${worstOf.label}, ${percent(worstOf.rate)} (${number(worstOf.count)} résiliation${worstOf.count > 1 ? "s" : ""} pour ${number(worstOf.base)} clients)` : ""}. Cliquez un mois pour le regarder.`}>
+                <MonthlyResiliations months={stats.months} worst={worstOf} value={month} onPick={pickMonth} />
               </Panel>
 
               <div className="fa-three">

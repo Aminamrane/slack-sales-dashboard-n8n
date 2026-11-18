@@ -1,18 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { afterFirstYear, asOfMonth, departures, financialAnalysis, fromApi, legalForms, lifetimeLabel, monthBounds, monthLabel,
-  monthlyResiliations, retentionCurve, sectorBreakdown, sectorKey } from './financialAnalysis.js';
+  monthlyResiliations, retentionCurve, sectorBreakdown, sectorKey, worstMonth } from './financialAnalysis.js';
 
 const row = (more) => ({ is_pending_contract: false, etat_affiche: 'Signé', etat_date: null, owner_signed_at: null, secteur_activite: '', legal_form: null, ...more });
 const ASOF = '2026-11-17';
 
-test('lifetimeLabel : une durée se lit en années et mois', () => {
+test('lifetimeLabel : une durée se lit en années, mois et jours', () => {
   assert.equal(lifetimeLabel(null), '–');
+  assert.equal(lifetimeLabel(0), '0 jour');
+  assert.equal(lifetimeLabel(1), '1 jour');
   assert.equal(lifetimeLabel(12), '12 jours');
   assert.equal(lifetimeLabel(274), '9 mois');
+  assert.equal(lifetimeLabel(309), '10 mois 5 jours');
   assert.equal(lifetimeLabel(365), '1 an');
-  assert.equal(lifetimeLabel(670), '1 an 10 mois');
-  assert.equal(lifetimeLabel(800), '2 ans 2 mois');
+  assert.equal(lifetimeLabel(431), '1 an 2 mois 5 jours');
+  assert.equal(lifetimeLabel(800), '2 ans 2 mois 9 jours');
+  // Un jour de plus, et le libellé suit : la durée avance chaque jour.
+  assert.notEqual(lifetimeLabel(310), lifetimeLabel(309));
 });
 
 test('fromApi : les lignes réduites de la route reprennent la forme du board', () => {
@@ -53,15 +58,25 @@ test('afterFirstYear et departures : après un an, et au bout de quand on résil
   assert.deepEqual(out.buckets.map((b) => b.count), [1, 0, 1, 1, 0, 0]);
 });
 
-test('monthlyResiliations : les douze derniers mois, le mois en cours compté jusqu’à aujourd’hui', () => {
+test('monthlyResiliations : chaque mois depuis le début, le mois en cours compté jusqu’à aujourd’hui', () => {
   const rows = [
     row({ owner_signed_at: '2025-01-01' }), row({ owner_signed_at: '2025-01-01' }),
     row({ owner_signed_at: '2025-01-01', etat_affiche: 'Résiliation', etat_date: '2026-10-12' }),
     row({ owner_signed_at: '2025-01-01', etat_affiche: 'Résiliation', etat_date: '2026-11-25' }),   // après aujourd'hui
   ];
-  const months = monthlyResiliations(rows, '2026-11', ASOF, 3);
+  const months = monthlyResiliations(rows, '2026-09', '2026-11', ASOF, { minBase: 2 });
   assert.deepEqual(months.map((m) => [m.key, m.count, m.base]), [['2026-09', 0, 4], ['2026-10', 1, 4], ['2026-11', 0, 3]]);
   assert.equal(months[1].label, 'octobre 2026');
+  assert.equal(monthlyResiliations(rows, '2024-11', '2026-11', ASOF).length, 25);
+  // Le graphique part de la première signature, quel que soit le mois regardé.
+  assert.equal(financialAnalysis(rows, '2026-03-31', null, { today: ASOF }).months[0].key, '2025-01');
+});
+
+test('worstMonth : le mois où l’on résilie le plus, parmi les mois assez peuplés pour comparer', () => {
+  const m = (key, count, base) => ({ key, count, base, rate: base ? count / base : null, comparable: base >= 30 });
+  assert.equal(worstMonth([m('2024-01', 1, 5), m('2025-06', 6, 300), m('2025-07', 3, 310)]).key, '2025-06');
+  assert.equal(worstMonth([m('2025-06', 3, 300), m('2025-07', 3, 300)]).key, '2025-06');
+  assert.equal(worstMonth([m('2025-06', 0, 300)]), null);
 });
 
 test('sectorBreakdown : les niches, nom corrigé, autres secteurs regroupés, non renseigné à part', () => {

@@ -95,7 +95,7 @@
 /* ── Au bout de quand ils résilient ── */
 .fa-dep-figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 18px; }
 .fa-dep-figures > div { display: grid; gap: 2px; padding: 12px 14px; border-radius: 18px; background: var(--card); }
-.fa-dep-figures b { font-size: 18px; font-weight: 500; letter-spacing: -.02em; color: var(--ink); }
+.fa-dep-figures b { font-size: 16px; font-weight: 500; letter-spacing: -.02em; color: var(--ink); }
 .fa-dep-figures span { font-size: 11.5px; color: var(--muted); }
 .fa-bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .fa-bars li { display: grid; grid-template-columns: 118px minmax(0, 1fr) 34px; align-items: center; gap: 12px; font-size: 12.5px; color: var(--ink-2); }
@@ -104,22 +104,27 @@
 .fa-bars-value { text-align: right; font-weight: 500; color: var(--ink); }
 
 /* ── Les résiliations, mois par mois ── */
-.fa-months-bars { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px; height: 170px; }
-.fa-root .fa-mbar { display: grid; grid-template-rows: minmax(0, 1fr) 22px; gap: 8px; height: 100%; padding: 0; }
-.fa-mbar-track { display: flex; align-items: flex-end; height: 100%; padding: 0 18%; border-radius: 14px; transition: background .18s var(--ease); }
+.fa-months-bars { display: grid; grid-template-columns: repeat(var(--n, 12), minmax(0, 1fr)); gap: 4px; height: 190px; }
+.fa-root .fa-mbar { display: grid; grid-template-rows: minmax(0, 1fr) 16px 14px; gap: 4px; height: 100%; padding: 0; min-width: 0; }
+.fa-mbar-track { display: flex; align-items: flex-end; height: 100%; padding: 20px 12% 0; border-radius: 10px; transition: background .18s var(--ease); }
 .fa-mbar:hover .fa-mbar-track { background: rgba(255, 255, 255, .7); }
-.fa-mbar-track i { display: block; width: 100%; border-radius: 8px 8px 4px 4px; background: var(--rail); transition: background .25s var(--ease); }
+.fa-mbar-track i { position: relative; display: block; width: 100%; border-radius: 6px 6px 3px 3px; background: var(--rail); transition: background .25s var(--ease); }
 .fa-mbar:hover .fa-mbar-track i { background: #b8b2a9; }
-.fa-mbar[aria-pressed="true"] .fa-mbar-track i { background: var(--charcoal); }
-.fa-mbar-label { font-size: 11.5px; color: var(--muted); text-transform: capitalize; }
+.fa-mbar[data-thin] .fa-mbar-track i { background: repeating-linear-gradient(135deg, var(--rail) 0 3px, transparent 3px 6px); }
+.fa-mbar[data-peak] .fa-mbar-track i { background: var(--red); opacity: .78; }
+.fa-mbar[aria-pressed="true"] .fa-mbar-track i { background: var(--charcoal); opacity: 1; }
+.fa-mbar-peak { position: absolute; left: 50%; bottom: 100%; transform: translate(-50%, -4px); font-style: normal; font-size: 11px; font-weight: 500; color: var(--red); white-space: nowrap; }
+.fa-mbar-label { font-size: 11px; color: var(--muted); text-transform: capitalize; white-space: nowrap; overflow: hidden; }
+.fa-mbar-year { font-size: 10.5px; color: var(--ink-2); font-weight: 500; text-align: left; white-space: nowrap; }
 .fa-mbar[aria-pressed="true"] .fa-mbar-label { color: var(--ink); font-weight: 500; }
+.fa-months-note { color: var(--muted); }
 .fa-months-detail { margin: 14px 0 0; font-size: 13px; color: var(--ink-2); }
 .fa-months-detail b { font-weight: 500; color: var(--ink); text-transform: capitalize; }
 .fa-months-detail b.fst-num { text-transform: none; }
 
 /* ── Les niches, en liste ── */
 .fa-niche-list { display: grid; }
-.fa-nl-head, .fa-nl-row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.3fr) 104px 74px; align-items: center; gap: 16px; }
+.fa-nl-head, .fa-nl-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 150px 64px; align-items: center; gap: 16px; }
 .fa-nl-head { padding: 0 12px 8px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .fa-nl-head span:nth-child(n + 3) { text-align: right; }
 .fa-root .fa-nl-row { width: 100%; padding: 11px 12px; border-radius: 14px; text-align: left; font-size: 13.5px; color: var(--ink); animation: faRise .45s var(--ease) both;
@@ -132,7 +137,7 @@
 .fa-nl-open em { font-style: normal; text-align: right; color: var(--ink-2); }
 .fa-nl-track { height: 8px; border-radius: 999px; background: var(--line-soft); overflow: hidden; }
 .fa-nl-track i { display: block; height: 100%; border-radius: inherit; background: var(--charcoal); }
-.fa-nl-num { text-align: right; color: var(--ink-2); }
+.fa-nl-num { text-align: right; color: var(--ink-2); white-space: nowrap; }
 @keyframes faRise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
 /* ── Formes juridiques ── */
@@ -176,8 +181,9 @@
 }
 @media (max-width: 760px) {
   .fa-kpis, .fa-dep-figures { grid-template-columns: minmax(0, 1fr); }
-  .fa-months-bars { gap: 3px; }
-  .fa-nl-head, .fa-nl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 70px; }
+  .fa-months-bars { gap: 1px; }
+  .fa-mbar-label, .fa-mbar-year[data-first] { visibility: hidden; }
+  .fa-nl-head, .fa-nl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 120px; }
   .fa-nl-head span:nth-child(4), .fa-nl-row > span:nth-child(4) { display: none; }
   .fa-lead { font-size: 21px; }
 }
