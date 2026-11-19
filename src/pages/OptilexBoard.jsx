@@ -12,6 +12,7 @@ import { Barcode, OnboardedPass, OnboardedSeal } from '../components/OnboardingP
 import WeatherCaseComposer, { WeatherQualification, WeatherScaleGuide } from '../components/WeatherCaseComposer';
 import { WEATHER, weatherPresentation, weatherFilter, weatherRatingLabel } from '../utils/weatherCase';
 import AppointmentConfirmation from "../components/booking/AppointmentConfirmation";
+import LaunchRescheduleModal from "../components/BoardLaunchReschedule";
 import BoardIntegrationSheet from "../components/BoardIntegrationSheet";
 import BoardContactsEditor from "../components/BoardContactsEditor";
 import { AlertCabinetButton, ConventionBar, ConventionGlyph, MailIcon } from "../components/CabinetAlertBlock";
@@ -635,6 +636,9 @@ const timeAgo = (iso) => {
   const j = Math.floor(h / 24); if (j < 30) return `il y a ${j} j`;
   return fmt(iso);
 };
+
+// Date d'un lancement fiscal / social : la réservation, qui suit Google, fait foi ; sinon la date saisie, sinon celle du lead.
+const launchDate = (row, kind) => row?.[`${kind}_rdv`]?.start || row?.[`rdv_${kind}_date_manual`] || row?.[`rdv_${kind}_date`];
 
 const inputStyle = { padding: "8px 10px", borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD, color: TEXT, fontSize: 13, fontFamily: "inherit", outline: "none", boxSizing: "border-box" };
 
@@ -3082,8 +3086,8 @@ function OnboardingCard({ row, holdCut = false, onStart, onManualDone, onResched
   const total = from && to ? Math.round((to.day - from.day) / 86400000) : null;
   const rdv = [
     ["Intégration Opti'Lex", row.rdv_lancement_date, row.rdv_lancement_done],
-    ["Lancement fiscal", row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done, "fiscal"],
-    ["Lancement social", row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done, "social"],
+    ["Lancement fiscal", launchDate(row, "fiscal"), row.rdv_fiscal_done, "fiscal"],
+    ["Lancement social", launchDate(row, "social"), row.rdv_social_done, "social"],
   ];
   const host = date && !done ? hostInfo?.host : null;
   // No show du rendez-vous prévu : déjà noté quand le dernier no show qualifié (champ `no_show` du board) est ce jour-là.
@@ -3919,7 +3923,7 @@ function TableDateEdit({ value, onSave, disabled }) {
 // Ligne RDV : date (planifiée ou saisie manuellement) + toggle "effectué" + lien (optionnel).
 // onDate présent -> crayon pour saisir/modifier la date à la main (antériorité).
 // `readOnly` (rôles en lecture seule) : bascule, crayon, « Reprogrammer » et « Annuler » visibles, désactivés.
-function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule, onCancel, readOnly = false }) {
+function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink, onReschedule, onCancel, launch = null, readOnly = false }) {
   const [editing, setEditing] = useState(false);
   const cancelRef = useRef(false);
   return (
@@ -3933,7 +3937,9 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
             style={{ ...inputStyle, width: 156, padding: "6px 9px", fontSize: 13, marginTop: 2 }} />
         ) : (
           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-            <div style={{ fontSize: 14, fontWeight: 500, color: date ? TEXT : "#d8d3cb" }}>{fmtDT(date) || "—"}</div>
+            <div style={{ fontSize: 14, fontWeight: 500, color: date ? TEXT : "#d8d3cb" }}>
+              {fmtDT(date) || "—"}{launch?.end ? <span style={{ color: MUTED, fontWeight: 400 }}> – {String(launch.end).slice(11, 13)}h{String(launch.end).slice(14, 16)}</span> : null}
+            </div>
             {onDate && (
               <button type="button" onClick={() => setEditing(true)} title="Saisir/modifier la date"
                 style={{ border: "none", background: "transparent", padding: 2, cursor: "pointer", color: MUTED, display: "inline-flex", lineHeight: 0 }}
@@ -3943,9 +3949,21 @@ function RdvRow({ label, date, done, editable, onToggle, link, onDate, meetLink,
             )}
           </div>
         )}
+        {/* Lancement (dev 19/11/2026) : le juriste réel du rendez-vous, tel que la réservation le suit dans Google. */}
+        {launch?.juriste && (
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 4, fontSize: 12, color: TEXT }}>
+            <HostFace name={launch.juriste} size={18} />
+            <span style={{ fontWeight: 500 }}>{launch.juriste}</span>
+            <span style={{ color: MUTED }}>· {launch.minutes} min</span>
+          </div>
+        )}
         {link && <RdvLink url={link} />}
-        {onReschedule && <button type="button" className="ob-detail-link" onClick={onReschedule} {...(readOnly ? READ_ONLY_PROPS : {})}>Reprogrammer ce rendez-vous</button>}
-        {onCancel && <button type="button" className="ob-detail-link" onClick={onCancel} style={{ color: CANCEL_RED }} {...(readOnly ? READ_ONLY_PROPS : {})}>Annuler ce rendez-vous</button>}
+        {(onReschedule || onCancel) && (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 8 }}>
+            {onReschedule && <button type="button" className="ob-rdv-action" onClick={onReschedule} {...(readOnly ? READ_ONLY_PROPS : {})}>Reprogrammer</button>}
+            {onCancel && <button type="button" className="ob-rdv-action is-danger" onClick={onCancel} {...(readOnly ? READ_ONLY_PROPS : {})}>Annuler</button>}
+          </div>
+        )}
         {meetLink && (
           <a href={meetLink} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}
             style={{ display: "inline-flex", alignItems: "center", gap: 5, marginTop: 6, padding: "4px 10px", borderRadius: 8, background: GREEN + "14", border: `1px solid ${GREEN}44`, color: GREEN, fontSize: 11.5, fontWeight: 500, textDecoration: "none" }}>
@@ -4392,8 +4410,8 @@ function ClientAgendaModal({ row, num, onClose }) {
     const std = [
       { key: "onb", label: "Onboarding Owner", type: "Owner", date: row.rdv_onboarding_date_manual || row.rdv_onboarding_date || row.rdv_onboarding_done_date, done: row.rdv_onboarding_done },
       { key: "int", label: "Intégration Opti'Lex", type: "Opti'Lex", date: row.rdv_lancement_date, done: row.rdv_lancement_done },
-      { key: "fis", label: "Lancement fiscal", type: "Opti'Lex", date: row.rdv_fiscal_date_manual || row.rdv_fiscal_date, done: row.rdv_fiscal_done },
-      { key: "soc", label: "Lancement social", type: "Opti'Lex", date: row.rdv_social_date_manual || row.rdv_social_date, done: row.rdv_social_done },
+      { key: "fis", label: "Lancement fiscal", type: "Opti'Lex", date: launchDate(row, "fiscal"), done: row.rdv_fiscal_done },
+      { key: "soc", label: "Lancement social", type: "Opti'Lex", date: launchDate(row, "social"), done: row.rdv_social_done },
     ].filter((x) => x.date).map((x) => ({ ...x, kind: "standard", when: String(x.date) }));
     const jur = ((data && data.rdv) || []).map((b, i) => ({
       key: `jur-${b.juriste_email || ""}-${b.slot_start || i}`,
@@ -4702,15 +4720,15 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
               )}
               <RdvRow label="Rendez-vous Intégration Opti'Lex" date={row.rdv_lancement_date} done={row.rdv_lancement_done} editable={!!num && !isFinanceTeam()} readOnly={readOnly} meetLink={row.lancement_meet_link}
                 onToggle={(v) => patch(num, { rdv_lancement_done: v })} />
-              <RdvRow label="Rendez-vous lancement fiscal" date={row.rdv_fiscal_date_manual || row.rdv_fiscal_date} done={row.rdv_fiscal_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!(row.rdv_fiscal_date_manual || row.rdv_fiscal_date)}
-                link={row.fiscal_url || null}
-                onReschedule={num && !isFinanceTeam() && (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) ? () => setReschedOpen("fiscal") : undefined}
-                onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_fiscal_date_manual || row.rdv_fiscal_date, row.rdv_fiscal_done) ? () => setCancelOpen("fiscal") : undefined}
+              <RdvRow label="Rendez-vous lancement fiscal" date={launchDate(row, "fiscal")} done={row.rdv_fiscal_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!launchDate(row, "fiscal")}
+                link={row.fiscal_url || null} launch={row.fiscal_rdv} meetLink={row.fiscal_rdv?.meet_link || null}
+                onReschedule={num && !isFinanceTeam() && launchDate(row, "fiscal") ? () => setReschedOpen("fiscal") : undefined}
+                onCancel={num && !isFinanceTeam() && launchCancellable(launchDate(row, "fiscal"), row.rdv_fiscal_done) ? () => setCancelOpen("fiscal") : undefined}
                 onToggle={(v) => patch(num, { rdv_fiscal_done: v })} />
-              <RdvRow label="Rendez-vous lancement social" date={row.rdv_social_date_manual || row.rdv_social_date} done={row.rdv_social_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!(row.rdv_social_date_manual || row.rdv_social_date)}
-                link={row.social_url || null}
-                onReschedule={num && !isFinanceTeam() && (row.rdv_social_date_manual || row.rdv_social_date) ? () => setReschedOpen("social") : undefined}
-                onCancel={num && !isFinanceTeam() && launchCancellable(row.rdv_social_date_manual || row.rdv_social_date, row.rdv_social_done) ? () => setCancelOpen("social") : undefined}
+              <RdvRow label="Rendez-vous lancement social" date={launchDate(row, "social")} done={row.rdv_social_done} readOnly={readOnly} editable={!!num && !isFinanceTeam() && !!launchDate(row, "social")}
+                link={row.social_url || null} launch={row.social_rdv} meetLink={row.social_rdv?.meet_link || null}
+                onReschedule={num && !isFinanceTeam() && launchDate(row, "social") ? () => setReschedOpen("social") : undefined}
+                onCancel={num && !isFinanceTeam() && launchCancellable(launchDate(row, "social"), row.rdv_social_done) ? () => setCancelOpen("social") : undefined}
                 onToggle={(v) => patch(num, { rdv_social_done: v })} />
             </div>
           )}
@@ -4869,7 +4887,13 @@ export function DetailPanel({ row, onClose, reload, reloadRatings, patch, change
             onRescheduleWithDate={() => setReschedOpen("onboarding")} onReschedule={(kind) => setReschedOpen(kind)}
             onCancel={!isFinanceTeam() ? (kind) => setCancelOpen(kind) : undefined}
             blocked={!!reschedOpen || !!cancelOpen} refreshKey={apptVersion} onChanged={() => { afterHistory(); reloadRatings?.(); }} />}
-          {reschedOpen && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
+          {reschedOpen === "onboarding" && <ReschedOnboardingModal kind={reschedOpen} row={row} num={num} onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />}
+          {(reschedOpen === "fiscal" || reschedOpen === "social") && (
+            // Lancements (dev 19/11/2026) : la semaine du juriste réel, telle que la réservation l'accepte.
+            <LaunchRescheduleModal kind={reschedOpen} num={num} label={ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num}
+              onClose={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }}
+              onDone={() => { setReschedOpen(false); setApptVersion((v) => v + 1); reload(); }} />
+          )}
           {transferTo && <TransferOnboardingModal row={row} num={num} target={transferTo} current={onboardingHost?.host} slot={onboardingHost?.slot}
             onClose={() => setTransferTo(null)} onDone={() => { setTransferTo(null); setApptVersion((v) => v + 1); reload(); }} />}
           {noShowOpen && <NoShowOnboardingModal row={row} num={num} day={String(row.rdv_onboarding_date_manual || row.rdv_onboarding_date || "").slice(0, 10)}
@@ -5063,10 +5087,9 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Créneaux du client : pour l'onboarding, ceux de son animateur (y compris un ancien relais) ou de l'animateur
-    // choisi par le responsable d'équipe ; pour le fiscal et le social, ceux du juriste de son rendez-vous, tels que
-    // la réservation les accepte (sans le client, le back ne propose plus rien, dev 19/11/2026).
-    const client = num ? `&numero_client=${encodeURIComponent(num)}` : "";
+    // Onboarding : créneaux de l'animateur du client (celui du rendez-vous, y compris un ancien relais),
+    // ou de l'animateur choisi par le responsable d'équipe.
+    const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
     const chosen = hostParam ? `&host=${encodeURIComponent(hostParam)}` : "";
     apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}${chosen}`)
       .then((r) => { if (alive) { setDays(r.days || []); setHostPhotos(r.host_photos || {}); setLoading(false); } })
@@ -5218,7 +5241,7 @@ function CancelLaunchModal({ row, num, kind, onClose, onDone }) {
   const [saving, setSaving] = useState(false);
   const [done, setDone] = useState(false);
   const [error, setError] = useState(null);
-  const date = kind === "fiscal" ? (row.rdv_fiscal_date_manual || row.rdv_fiscal_date) : (row.rdv_social_date_manual || row.rdv_social_date);
+  const date = launchDate(row, kind);
   const label = ov(row, "contact_name_ovr", "contact_name") || row.crm_societe || num;
 
   const confirm = async () => {
