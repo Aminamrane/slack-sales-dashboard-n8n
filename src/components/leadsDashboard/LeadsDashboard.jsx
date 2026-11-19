@@ -1,35 +1,46 @@
-// Dashboard Leads du CEO (dev 18/11/2026) : ce qui est entré aujourd'hui, ou sur une période, par canal ; le travail des
-// setters (cold call, anciens webinaires, Seconde chance) ; les appels ; Meta et ses campagnes ; les ventes par origine.
-// Même langage que les Statistiques de la page Finance (kit PageKit, classes fst-) ; ce qui manque au kit est en ld-.
+// Dashboard Leads du CEO (dev 18/11/2026) : ce qui est entré aujourd'hui, ou sur une période, par canal ; ce que coûtent
+// les ads Meta, créa par créa ; le travail des setters (RDV, anciens webinaires, Seconde chance) ; les appels ; les
+// ventes par origine. Mêmes briques que les Statistiques de la page Finance (parts.jsx, classes fst-) : cartes, chiffre
+// héros, barres jour par jour, barre empilée et lignes qui se déplient. Ce qui manque au kit est en ld-.
 // Le serveur compte (/api/v1/lead-statistics), la page présente. Chaque chiffre se compare à la période précédente.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { motion as Motion } from 'framer-motion';
-import { BadgeEuro, CalendarDays, History, Inbox, LifeBuoy, Megaphone, Phone, PhoneOutgoing, Presentation, Target,
-  Users } from 'lucide-react';
+import {
+  BadgeEuro, CalendarDays, ChevronRight, Inbox, LifeBuoy, Megaphone, Phone, PhoneOutgoing, Presentation, Target, Users,
+} from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { Card, Collapse, Page, Reveal, Segmented, TableBox, Th, Who } from '../../pages/TrackingSheetFinance/components/PageKit.jsx';
+import { useDrawn } from '../perfSales/motion.jsx';
+import { Avatar, Card, Collapse, Num, Page, Pill, Reveal, Segmented, TableBox, Th } from '../../pages/TrackingSheetFinance/components/PageKit.jsx';
+import { Fill } from '../../pages/TrackingSheetFinance/statistics/parts.jsx';
 import { PeriodPicker } from '../../pages/TrackingSheetFinance/statistics/PeriodPicker.jsx';
-import { dayRangeLabel } from '../../pages/TrackingSheetFinance/statistics/period.js';
-import { count, dayShort, eur, pct, plural } from '../../pages/TrackingSheetFinance/statistics/model.js';
-import { parisToday } from '../../utils/parisDates.js';
-import { byKey, canReadCalls, COMPARE_LABEL, comparisonFor, delta, groupChannels, heights, PRESETS, presetRange, signed,
-  weekdayShort } from './model.js';
+import { barHeights, count, dayShort, eur, originGroups, pct, plural } from '../../pages/TrackingSheetFinance/statistics/model.js';
+import { parisParts, parisToday } from '../../utils/parisDates.js';
+import {
+  byKey, canReadCalls, categoryColor, channelColor, compareWord, comparisonFor, dayLabel, delta, groupChannels,
+  presetRange, PRESETS, provenanceColor, signed, signedEur,
+} from './model.js';
 import './leads.css';
 
 const REFRESH_MS = 5 * 60 * 1000;
+const parisClock = () => { const t = parisParts(new Date()); return `${t.hour}:${t.minute}`; };
+const CREATIVES_SHOWN = 8;
+const whole = (n) => count(Math.round(n));      // un chiffre qui défile reste entier
+const euros = (n) => eur(Math.round(n));
+const cents = (n) => eur(n, 2);
 
-// Une lecture du serveur : la dernière demande seule compte, la précédente reste affichée pendant le rechargement.
-function useLeadStat(name, range) {
-  const [state, setState] = useState({ data: null, loading: Boolean(range), error: '' });
+// Une lecture du serveur : la dernière demande seule compte ; la précédente reste affichée, estompée, pendant le
+// rechargement. `fresh` : les chiffres affichés sont bien ceux de la période demandée. `until` (HH:MM) arrête le
+// dernier jour à cette heure.
+function useLeadStat(name, range, until = null) {
+  const key = range ? `${range.from}/${range.to}${until ? `/${until}` : ''}` : '';
+  const [state, setState] = useState({ data: null, dataKey: '', loading: Boolean(key), error: '' });
   const latest = useRef(0);
-  const key = range ? `${range.from}/${range.to}` : '';
   const load = useCallback(() => {
-    if (!key) { setState({ data: null, loading: false, error: '' }); return; }
+    if (!key) return;
     const id = ++latest.current;
-    const [from, to] = key.split('/');
+    const [from, to, cut] = key.split('/');
     setState((s) => ({ ...s, loading: true, error: '' }));
-    apiClient.get(`/api/v1/lead-statistics/${name}?date_from=${from}&date_to=${to}`)
-      .then((data) => { if (id === latest.current) setState({ data, loading: false, error: '' }); })
+    apiClient.get(`/api/v1/lead-statistics/${name}?date_from=${from}&date_to=${to}${cut ? `&until=${cut}` : ''}`)
+      .then((data) => { if (id === latest.current) setState({ data, dataKey: key, loading: false, error: '' }); })
       .catch((e) => {
         if (id !== latest.current) return;
         const detail = e?.data?.detail;
@@ -37,148 +48,250 @@ function useLeadStat(name, range) {
       });
   }, [name, key]);
   useEffect(() => { load(); }, [load]);
-  return { ...state, retry: load };
+  return { ...state, fresh: Boolean(key) && state.dataKey === key, retry: load };
 }
 
-// L'écart avec la période de comparaison, en pastille : vert en hausse, rouge en baisse.
-function Delta({ value, previous, label, invert = false }) {
+// L'écart avec la période de comparaison : vert quand c'est mieux, rouge quand c'est moins bien ; rien quand c'est pareil.
+function Change({ value, previous, label, invert = false, money = false }) {
   const d = delta(value, previous);
-  if (!d) return null;
-  const good = invert ? d.tone === 'down' : d.tone === 'up';
-  const tone = d.tone === 'flat' ? 'flat' : good ? 'good' : 'bad';
+  if (!d || !d.diff) return null;
+  const good = invert ? d.diff < 0 : d.diff > 0;
   return (
-    <span className="ld-delta" data-tone={tone} title={label ? `Comparé à ${label} : ${count(previous)}` : undefined}>
-      {d.tone === 'flat' ? '=' : signed(d.diff)}
-    </span>
+    <Pill plain tone={good ? 'green' : 'red'} title={label ? `${label} : ${money ? cents(previous) : count(previous)}` : undefined}>
+      {money ? signedEur(d.diff) : signed(d.diff)}
+    </Pill>
   );
 }
 
-// ── Leads par canal ───────────────────────────────────────────────────────────────────────────────
+const Fact = ({ label, value, format = whole, note }) => (
+  <div className="fst-fact">
+    <span className="fst-fact-label">{label}</span>
+    <Num className="fst-fact-value" value={value} format={format} />
+    {note && <span className="fst-fact-note">{note}</span>}
+  </div>
+);
 
-function DailyBars({ days, values, details, selected }) {
-  const h = heights(values);
+// Barres jour par jour, comme les mois de « Ce que paie un client » : les jours de la période sont pleins, les autres
+// estompés ; une barre peut s'empiler par canal. Un clic ouvre le jour.
+function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, short = false }) {
+  const drawn = useDrawn();
+  const h = barHeights(values.map((v) => v ?? 0));
   return (
-    <div className="fst-bars ld-bars" style={{ '--n': days.length }}>
+    <div className="fst-bars ld-days" data-short={short || undefined}>
       {days.map((day, i) => (
-        <div key={day} className="fst-bar" data-in={values[i] > 0 || undefined}>
-          <span className="fst-bar-value">{count(values[i])}</span>
-          <Motion.span className="fst-bar-fill" initial={{ scaleY: 0 }} animate={{ scaleY: 1 }}
-            transition={{ duration: 0.6, delay: Math.min(i * 0.02, 0.4), ease: [0.22, 1, 0.36, 1] }}
-            style={{ height: `${Math.max(h[i] * 100, values[i] ? 4 : 1)}%` }} />
-          <span className="fst-bar-label">{days.length > 16 ? (i % Math.ceil(days.length / 10) ? '' : dayShort(day)) : `${weekdayShort(day)} ${Number(day.slice(8))}`}</span>
-          <span className="fst-tip">
-            <b>{dayShort(day)}</b> · {plural(values[i], 'lead')}{selected ? ` ${selected}` : ''}
-            {(details[i] || []).map((d) => <span key={d.label}><br />{d.label} : {count(d.n)}</span>)}
+        <button key={day} type="button" className="fst-bar" data-in={inPeriod[i] || undefined} onClick={onPick ? () => onPick(day) : undefined}
+          aria-label={`${dayShort(day)} : ${values[i] == null ? '–' : format(values[i])}`}>
+          <span className="fst-tip" role="presentation">{tip(i)}</span>
+          <span className="fst-bar-value fst-num">{values[i] == null ? '' : format(values[i])}</span>
+          <span className="fst-bar-fill" data-stack={stacks ? true : undefined} style={{ height: `${drawn ? h[i] * 0.72 : 0}%`, transitionDelay: `${i * 22}ms` }}>
+            {stacks?.[i]?.map((s) => <i key={s.key} style={{ flexGrow: s.n, background: s.color }} />)}
           </span>
-        </div>
+          <span className="fst-bar-label">{dayLabel(day, i, days.length, short)}</span>
+        </button>
       ))}
     </div>
   );
 }
 
-function ChannelsCard({ state, prev, compareLabel }) {
-  const data = state.data;
-  const [selected, setSelected] = useState(null);
-  const before = byKey(prev?.channels);
-  const groups = useMemo(() => groupChannels(data?.channels, data?.groups)
-    .map((g) => ({ ...g, channels: g.channels.filter((c) => c.total || before[c.key]?.total) }))
-    .filter((g) => g.channels.length), [data, before]);
-  const silent = (data?.channels || []).filter((c) => !c.total && !before[c.key]?.total).map((c) => c.label);
-  const total = data?.total?.leads || 0;
-  const channel = selected ? data?.channels.find((c) => c.key === selected) : null;
-  const values = channel ? channel.by_day : data?.total?.by_day || [];
-  const details = (data?.days || []).map((_, i) => (channel ? [] : (data?.channels || [])
-    .filter((c) => c.by_day[i]).sort((a, b) => b.by_day[i] - a.by_day[i]).slice(0, 4).map((c) => ({ label: c.label, n: c.by_day[i] }))));
+// ── Leads reçus ───────────────────────────────────────────────────────────────────────────────────
+
+function LeadsCard({ state, prev, compareLabel, when, onPickDay }) {
+  const d = state.data;
+  const h = d?.history;
+  const channels = (d?.channels || []).filter((c) => h?.channels?.[c.key]);
+  const stacks = h ? h.days.map((_, i) => channels.map((c) => ({ key: c.key, n: h.channels[c.key][i], color: channelColor(c.key) })).filter((s) => s.n)) : null;
   return (
-    <Card title="Leads reçus par canal" Icon={Inbox} state={state} skeleton={420}
-      hint={`Fiches arrivées sur la période, une personne comptée une fois par canal et par jour${compareLabel ? `. Écarts comparés à ${compareLabel}` : ''}.`}>
-      {data && (
+    <Card title="Leads reçus" Icon={Inbox} state={state} skeleton={380}>
+      {d && (
         <>
-          {data.days.length > 1 && (
-            <div className="ld-chart">
-              <div className="ld-chart-head">
-                <span className="fst-micro">{channel ? channel.label : 'Tous les canaux'}, jour par jour</span>
-                {channel && <button type="button" className="ld-link" onClick={() => setSelected(null)}>Tous les canaux</button>}
-              </div>
-              <DailyBars days={data.days} values={values} details={details} selected={channel?.label} />
+          <div className="fst-hero">
+            <div>
+              <Num className="fst-big" value={d.total.leads} format={whole} duration={1100} />
+              <span className="fst-big-unit">{d.total.leads > 1 ? 'leads reçus' : 'lead reçu'} {when}</span>
             </div>
-          )}
-          {groups.map((g) => (
-            <div key={g.key} className="fst-group">
-              <div className="fst-group-head">
-                <span className="fst-group-name">{g.label}</span>
-                <span className="fst-group-count"><b>{count(g.total)}</b></span>
-              </div>
-              {g.channels.map((c) => (
-                <div key={c.key}>
-                  <button type="button" className="ld-row" aria-pressed={selected === c.key} disabled={data.days.length < 2 || !c.total}
-                    onClick={() => setSelected(selected === c.key ? null : c.key)}>
-                    <span className="ld-row-name">{c.label}</span>
-                    <span className="fst-track ld-row-track"><span className="fst-fill" style={{ width: `${total ? (c.total / total) * 100 : 0}%` }} /></span>
-                    <span className="ld-row-num">{count(c.total)}</span>
-                    <span className="ld-row-delta"><Delta value={c.total} previous={before[c.key]?.total} label={compareLabel} /></span>
-                  </button>
-                  {c.key === 'other' && c.origins?.length > 0 && (
-                    <div className="ld-origins">{c.origins.slice(0, 6).map((o) => `${o.label} (${count(o.count)})`).join(' · ')}</div>
-                  )}
-                </div>
-              ))}
+            <Change value={d.total.leads} previous={prev?.total?.leads} label={compareLabel} />
+          </div>
+          <div className="fst-chart">
+            <div className="fst-chart-title"><span>Jour par jour</span><span>{plural(h.days.length, 'jour')}</span></div>
+            <DayBars days={h.days} inPeriod={h.in_period} values={h.total} stacks={stacks} onPick={onPickDay}
+              tip={(i) => (
+                <>
+                  <b>{dayShort(h.days[i])}</b> · {plural(h.total[i], 'lead')}
+                  {channels.filter((c) => h.channels[c.key][i]).map((c) => <span key={c.key}><br />{c.label} · {h.channels[c.key][i]}</span>)}
+                </>
+              )} />
+            <div className="fst-keys">
+              {channels.map((c) => <span key={c.key}><span className="fst-dot" style={{ background: channelColor(c.key) }} />{c.label}</span>)}
             </div>
-          ))}
-          {silent.length > 0 && <p className="ld-silent">Aucun lead : {silent.join(', ')}.</p>}
+          </div>
         </>
       )}
     </Card>
   );
 }
 
-// ── Meta ──────────────────────────────────────────────────────────────────────────────────────────
+// ── Ads Meta ──────────────────────────────────────────────────────────────────────────────────────
 
-function MetaCard({ state, prev, compareLabel, onCampaigns, campaignsOpen }) {
-  const meta = state.data?.meta;
-  // Leads reçus : le canal « Ads Meta » des leads reçus, le même chiffre partout sur la page.
-  const received = byKey(state.data?.channels).meta_ads?.total;
-  const receivedBefore = byKey(prev?.channels).meta_ads?.total;
-  const before = prev?.meta?.status === 'ok' ? prev.meta : null;
+function AdsCard({ state, prev, compareLabel, campaignsOpen, onCampaigns }) {
+  const d = state.data;
+  const meta = d?.meta;
   const ads = meta?.excluding_webinar;
-  const cats = byKey((before?.categories || []).map((c) => ({ ...c, key: c.category })));
-  const max = Math.max(1, ...(meta?.categories || []).map((c) => c.leads));
+  const before = prev?.meta?.status === 'ok' ? prev.meta : null;
+  const cats = meta?.categories || [];
+  const catLeads = cats.reduce((sum, c) => sum + (c.leads || 0), 0);
+  const h = d?.history;
+  const byDay = Object.fromEntries((meta?.by_day || []).map((x) => [x.date, x]));
+  const values = (h?.days || []).map((day) => byDay[day]?.cpl_eur ?? null);
   return (
-    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={420} className="ld-ads"
-      hint="Leads reçus des publicités et ce qu'ils ont coûté, hors webinaire.">
-      {meta?.status !== 'ok' ? <div className="fst-empty is-box">Statistiques Meta pas encore synchronisées pour cette période.</div> : (
+    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={380}>
+      {meta?.status !== 'ok' ? <div className="fst-empty">Meta pas encore synchronisé sur cette période.</div> : (
         <>
-          <div className="ld-ads-hero">
-            <div className="ld-ads-main">
-              <strong>{count(received)}</strong>
-              <span>{received > 1 ? 'leads reçus' : 'lead reçu'}</span>
-              <Delta value={received} previous={receivedBefore} label={compareLabel} />
+          <div className="fst-hero">
+            <div>
+              <Num className="fst-big" value={ads?.cpl_eur} format={cents} duration={1100} />
+              <span className="fst-big-unit">par lead</span>
             </div>
-            <dl className="ld-ads-facts">
-              <div><dt>CPL</dt><dd>{eur(ads?.cpl_eur, 2)} <Delta value={ads?.cpl_eur} previous={before?.excluding_webinar?.cpl_eur} label={compareLabel} invert /></dd></div>
-              <div><dt>Dépensé</dt><dd>{eur(ads?.spend_eur)}</dd></div>
-            </dl>
+            <Change value={ads?.cpl_eur} previous={before?.excluding_webinar?.cpl_eur} label={compareLabel} invert money />
           </div>
-          <div className="ld-sub ld-ads-sub">Par catégorie, leads comptés par Meta</div>
-          <div className="ld-ads-cats">
-            {(meta.categories || []).map((c) => (
-              <div key={c.category} className="ld-ads-cat">
-                <span className="ld-row-name">{c.category}</span>
-                <span className="fst-track ld-row-track"><span className="fst-fill" style={{ width: `${(c.leads / max) * 100}%` }} /></span>
-                <span className="ld-ads-num">{count(c.leads)}</span>
-                <span className="ld-ads-cpl">{eur(c.cpl_eur, 2)}<Delta value={c.cpl_eur} previous={cats[c.category]?.cpl_eur} label={compareLabel} invert /></span>
+          <div className="fst-facts">
+            <Fact label="Leads Meta" value={ads?.leads} />
+            <Fact label="Reçus dans le CRM" value={byKey(d.channels).meta_ads?.total} />
+            <Fact label="Dépensé" value={ads?.spend_eur} format={euros} />
+          </div>
+          <div className="fst-chart">
+            <div className="fst-chart-title"><span>CPL jour par jour</span></div>
+            <DayBars short days={h.days} inPeriod={h.in_period} values={values} format={(n) => count(Math.round(n))}
+              tip={(i) => {
+                const x = byDay[h.days[i]];
+                return (
+                  <>
+                    <b>{dayShort(h.days[i])}</b>
+                    {x?.leads != null ? <><br />{cents(x.cpl_eur)} <span>par lead</span><br />{plural(x.leads, 'lead')} <span>· {euros(x.spend_eur)}</span></> : <><br /><span>Pas encore lu chez Meta</span></>}
+                  </>
+                );
+              }} />
+          </div>
+          {cats.length > 0 && (
+            <div className="fst-chart">
+              <div className="fst-chart-title"><span>Par catégorie</span><span>leads · CPL</span></div>
+              <div className="fst-dist">
+                {cats.map((c) => (
+                  <div key={c.category} className="fst-dist-row ld-cat" title={`${c.category} : ${plural(c.leads, 'lead')}, ${euros(c.spend_eur)} dépensés`}>
+                    <span>{c.category}</span>
+                    <Fill value={catLeads ? c.leads / catLeads : 0} color={categoryColor(c.category)} />
+                    <span className="fst-num">{count(c.leads)}</span>
+                    <span className="fst-num ld-cat-cpl">{cents(c.cpl_eur)}</span>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-          {meta.webinar && (
-            <p className="ld-ads-webinar">Webinaire : {plural(meta.webinar.leads, 'inscrit')}, CPL {eur(meta.webinar.cpl_eur, 2)}, {eur(meta.webinar.spend_eur)} dépensés.</p>
+            </div>
           )}
-          <div className="ld-ads-foot">
-            {!meta.complete ? <span className="ld-muted">Meta se lit chaque heure : un jour n'est pas encore à jour.</span> : <span />}
-            <button type="button" className="ld-link" aria-expanded={campaignsOpen} onClick={onCampaigns}>
-              {campaignsOpen ? 'Masquer les campagnes' : 'Voir les campagnes'}
-            </button>
-          </div>
+          {meta.webinar && (
+            <dl className="fst-kv">
+              <dt>Webinaire</dt><dd className="fst-num">{plural(meta.webinar.leads, 'inscrit')} · {cents(meta.webinar.cpl_eur)} · {euros(meta.webinar.spend_eur)}</dd>
+            </dl>
+          )}
+          <button type="button" className="fst-link" aria-expanded={campaignsOpen} onClick={onCampaigns}>
+            {campaignsOpen ? 'Masquer les campagnes' : 'Voir les campagnes'}<ChevronRight size={13} />
+          </button>
+        </>
+      )}
+    </Card>
+  );
+}
+
+// ── D'où viennent les leads ───────────────────────────────────────────────────────────────────────
+
+function Creatives({ rows }) {
+  const [all, setAll] = useState(false);
+  const shown = all ? rows : rows.slice(0, CREATIVES_SHOWN);
+  if (!rows.length) return <div className="fst-sub-row ld-muted"><span>Aucune créa lue chez Meta sur cette période.</span></div>;
+  return (
+    <>
+      <table className="fst-months ld-creatives">
+        <thead><tr><th>Créa</th><th>Leads</th><th>Reçus</th><th>Dépensé</th><th>CPL</th></tr></thead>
+        <tbody>
+          {shown.map((r) => (
+            <tr key={`${r.name}-${r.category}`} data-idle={!r.leads && !r.received ? true : undefined}>
+              <td><span className="ld-creative">{r.name}</span>{r.category && <span className="ld-creative-cat"><span className="fst-dot" style={{ background: categoryColor(r.category) }} />{r.category}</span>}</td>
+              <td className="fst-num is-strong">{r.leads == null ? '–' : count(r.leads)}</td>
+              <td className="fst-num">{count(r.received)}</td>
+              <td className="fst-num">{r.spend_eur == null ? '–' : euros(r.spend_eur)}</td>
+              <td className="fst-num is-strong">{r.cpl_eur == null ? '–' : cents(r.cpl_eur)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {rows.length > CREATIVES_SHOWN && (
+        <button type="button" className="fst-link" onClick={() => setAll(!all)}>{all ? 'Réduire' : `Voir les ${rows.length} créas`}</button>
+      )}
+    </>
+  );
+}
+
+function ChannelRow({ channel: c, before, word, open, onToggle, onHover, creatives }) {
+  const d = before ? delta(c.total, before.total) : null;
+  const can = c.total > 0 && Boolean(creatives || c.details?.length);
+  return (
+    <div onMouseEnter={() => onHover(c.key)} onMouseLeave={() => onHover(null)}>
+      <button type="button" className="fst-row" aria-expanded={can ? open : undefined} disabled={!can} data-zero={!c.total || undefined} onClick={onToggle}>
+        <span className="fst-row-ico"><span className="fst-dot" style={{ background: c.color }} /></span>
+        <span className="fst-row-name">{c.label}
+          {before && (
+            <small>
+              {d?.diff ? <span className={d.diff > 0 ? 'ld-up' : 'ld-down'}>{signed(d.diff)}</span> : null}
+              {d?.diff ? ' · ' : ''}{word} : {count(before.total)}
+            </small>
+          )}
+        </span>
+        <Fill value={c.share} color={c.color} />
+        <span className="fst-row-num fst-num">{count(c.total)}<small>{pct(c.share, 0)}</small></span>
+        {can ? <ChevronRight size={14} className="fst-chev" /> : <span />}
+      </button>
+      <Collapse open={open && can}>
+        <div className="fst-sub-list">
+          {creatives ? <Creatives rows={creatives} /> : c.details.map((x) => (
+            <div key={x.label} className="fst-sub-row"><span title={x.label}>{x.label}</span><span /><b className="fst-num">{count(x.count)}</b></div>
+          ))}
+        </div>
+      </Collapse>
+    </div>
+  );
+}
+
+function ChannelsCard({ state, prev, word }) {
+  const drawn = useDrawn();
+  const d = state.data;
+  const [open, setOpen] = useState(null);
+  const [hover, setHover] = useState(null);
+  const groups = useMemo(() => groupChannels(d?.channels, d?.groups), [d]);
+  const before = prev ? byKey(prev.channels) : null;
+  const total = d?.total?.leads || 0;
+  return (
+    <Card title="D'où viennent les leads" Icon={Target} state={state} skeleton={420}>
+      {d && (
+        <>
+          {total > 0 && (
+            <div className="fst-stack" data-focus={hover || open || undefined} aria-hidden="true">
+              {groups.flatMap((g) => g.channels).filter((c) => c.total).map((c) => (
+                <i key={c.key} data-on={c.key === (hover || open) || undefined} title={`${c.label} : ${c.total}`}
+                  style={{ flexGrow: drawn ? c.total : 0, flexBasis: 0, background: c.color }} />
+              ))}
+            </div>
+          )}
+          {groups.map((g) => (
+            <div key={g.key} className="fst-group">
+              <div className="fst-group-head">
+                <span className="fst-group-name">{g.label}</span>
+                <span className="fst-group-chip fst-num">{pct(g.share, 0)}</span>
+                <span className="fst-group-count fst-num"><b>{count(g.total)}</b><i>/</i>{count(total)}</span>
+              </div>
+              {g.channels.map((c) => (
+                <ChannelRow key={c.key} channel={c} before={before?.[c.key]} word={word} open={open === c.key} onHover={setHover}
+                  onToggle={() => setOpen(open === c.key ? null : c.key)} creatives={c.key === 'meta_ads' ? d.meta?.creatives || [] : null} />
+              ))}
+            </div>
+          ))}
         </>
       )}
     </Card>
@@ -190,21 +303,21 @@ function CampaignsCard({ state }) {
   const [all, setAll] = useState(false);
   const shown = all ? rows : rows.slice(0, 12);
   return (
-    <Card title="Campagnes Meta" Icon={Target} state={state} skeleton={320}
-      hint="Coût, clics et leads de chaque campagne ; ventes signées sur la période venues de ses leads, chiffre d'affaires annuel et retour sur dépense.">
-      {!rows.length ? <div className="fst-empty is-box">Aucune campagne sur cette période.</div> : (
+    <Card title="Campagnes Meta" Icon={Megaphone} state={state} skeleton={320}>
+      {!rows.length ? <div className="fst-empty">Aucune campagne sur cette période.</div> : (
         <TableBox minWidth={980} free={false} after={rows.length > 12 && (
-          <button type="button" className="fst-more" onClick={() => setAll(!all)}>{all ? 'Réduire' : `Voir les ${rows.length} campagnes`}</button>)}>
+          <button type="button" className="fst-link" onClick={() => setAll(!all)}>{all ? 'Réduire' : `Voir les ${rows.length} campagnes`}</button>)}>
           <thead><tr><Th>Campagne</Th><Th>Catégorie</Th><Th num>Dépense</Th><Th num>Impressions</Th><Th num>Clics</Th><Th num>CTR</Th>
             <Th num>Leads Meta</Th><Th num>Reçus</Th><Th num>CPL</Th><Th num>Ventes</Th><Th num>CA</Th><Th num>ROAS</Th></tr></thead>
           <tbody>
             {shown.map((r) => (
               <tr key={r.campaign}>
-                <td className="is-wrap">{r.campaign}{!r.in_meta && <span className="ld-muted"> · sans dépense sur la période</span>}</td>
-                <td>{r.category}</td><td className="is-num">{eur(r.spend_eur)}</td><td className="is-num">{count(r.impressions)}</td>
+                <td className="is-wrap">{r.campaign}</td>
+                <td><span className="ld-creative-cat"><span className="fst-dot" style={{ background: categoryColor(r.category) }} />{r.category}</span></td>
+                <td className="is-num">{euros(r.spend_eur)}</td><td className="is-num">{count(r.impressions)}</td>
                 <td className="is-num">{count(r.clicks)}</td><td className="is-num">{pct(r.ctr, 2)}</td><td className="is-num">{count(r.leads_meta)}</td>
-                <td className="is-num">{count(r.received_in_crm)}</td><td className="is-num">{eur(r.cpl_eur, 2)}</td>
-                <td className="is-num">{count(r.sales)}</td><td className="is-num">{eur(r.revenue_eur)}</td>
+                <td className="is-num">{count(r.received_in_crm)}</td><td className="is-num">{cents(r.cpl_eur)}</td>
+                <td className="is-num">{count(r.sales)}</td><td className="is-num">{euros(r.revenue_eur)}</td>
                 <td className="is-num">{r.roas == null ? '–' : `${r.roas.toLocaleString('fr-FR')}×`}</td>
               </tr>
             ))}
@@ -217,76 +330,126 @@ function CampaignsCard({ state }) {
 
 // ── Setters ───────────────────────────────────────────────────────────────────────────────────────
 
-function People({ rows, value, one, many }) {
-  if (!rows?.length) return <div className="fst-empty">Personne sur cette période.</div>;
+// Une barre par personne, découpée par part (comme « Par sales ») ; le détail au survol.
+function PeopleBars({ rows, parts, colorOf, labelOf, total = (r) => r.total, tip }) {
+  const drawn = useDrawn();
+  const largest = Math.max(1, ...rows.map(total));
+  const present = [...new Set(rows.flatMap((r) => parts(r).map((p) => p.key)))];
+  if (!rows.length) return <div className="fst-empty">Personne sur cette période.</div>;
   return (
-    <div className="ld-people">
+    <>
       {rows.map((r) => (
-        <div key={r.name} className="ld-person"><Who name={r.name} /><span>{plural(value(r), one, many)}</span></div>
+        <div key={r.name} className="fst-hbar">
+          <span className="fst-tip" role="presentation">{tip(r)}</span>
+          <Avatar name={r.name} />
+          <span className="fst-hbar-name">{r.name}</span>
+          <span className="fst-hbar-track" style={{ width: `${(total(r) / largest) * 100}%` }}>
+            {parts(r).filter((p) => p.n).map((p) => <i key={p.key} style={{ width: `${drawn && total(r) ? (p.n / total(r)) * 100 : 0}%`, background: colorOf(p.key) }} />)}
+          </span>
+          <span className="fst-hbar-num fst-num">{count(total(r))}</span>
+        </div>
       ))}
-    </div>
+      {labelOf && present.length > 1 && (
+        <div className="fst-keys">{present.map((k) => <span key={k}><span className="fst-dot" style={{ background: colorOf(k) }} />{labelOf(k)}</span>)}</div>
+      )}
+    </>
   );
 }
 
 function SettersCard({ state, prev, compareLabel }) {
+  const drawn = useDrawn();
   const s = state.data?.setters;
-  const before = byKey(prev?.setters?.by_provenance);
-  const rows = (s?.by_provenance || []).filter((p) => p.rdv_placed || before[p.key]?.rdv_placed);
+  const rows = (s?.by_provenance || []).filter((p) => p.rdv_placed);
+  const held = (s?.by_provenance || []).reduce((sum, p) => sum + p.rdv_qualified, 0);
   return (
-    <Card title="RDV posés par les setters" Icon={PhoneOutgoing} state={state} skeleton={360}
-      hint="Par provenance du lead, règle du classement des setters : un RDV compte le jour où il est posé.">
+    <Card title="RDV posés par les setters" Icon={PhoneOutgoing} state={state} skeleton={360}>
       {s && (
         <>
-          <div className="ld-hero is-two">
-            <div><span className="fst-micro">RDV posés</span><strong>{count(s.rdv_placed)}</strong>
-              <Delta value={s.rdv_placed} previous={prev?.setters?.rdv_placed} label={compareLabel} /></div>
-            <div><span className="fst-micro">Honorés à ce jour</span><strong>{count(rows.reduce((sum, p) => sum + p.rdv_qualified, 0))}</strong></div>
+          <div className="fst-hero">
+            <div><Num className="fst-big" value={s.rdv_placed} format={whole} duration={1100} /><span className="fst-big-unit">RDV posés</span></div>
+            <Change value={s.rdv_placed} previous={prev?.setters?.rdv_placed} label={compareLabel} />
           </div>
-          {!rows.length ? <div className="fst-empty">Aucun RDV posé sur cette période.</div> : rows.map((p) => (
-            <div key={p.key} className="ld-row is-static">
-              <span className="ld-row-name">{p.label}</span>
-              <span className="fst-track ld-row-track"><span className="fst-fill" style={{ width: `${s.rdv_placed ? (p.rdv_placed / s.rdv_placed) * 100 : 0}%` }} /></span>
-              <span className="ld-row-num">{count(p.rdv_placed)}</span>
-              <span className="ld-row-delta"><Delta value={p.rdv_placed} previous={before[p.key]?.rdv_placed} label={compareLabel} /></span>
-            </div>
-          ))}
-          <div className="ld-sub">Par setter</div>
-          <People rows={s.setters} value={(r) => r.rdv_placed} one="RDV" many="RDV" />
+          <div className="fst-facts"><Fact label="Honorés à ce jour" value={held} /></div>
+          {rows.length > 0 && (
+            <>
+              <div className="fst-split" aria-hidden="true">
+                {rows.map((p) => <i key={p.key} style={{ flexGrow: drawn ? p.rdv_placed : 0, flexBasis: 0, background: provenanceColor(p.key) }} />)}
+              </div>
+              <div className="fst-legend">
+                {rows.map((p) => (
+                  <div key={p.key} className="fst-legend-row">
+                    <span className="fst-dot" style={{ background: provenanceColor(p.key) }} />{p.label}
+                    <b className="fst-num">{count(p.rdv_placed)}</b>
+                    <small className="fst-num">{pct(s.rdv_placed ? p.rdv_placed / s.rdv_placed : 0, 0)}</small>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </>
       )}
     </Card>
   );
 }
 
-function RecallsCard({ state, prev, compareLabel }) {
+function SetterPeopleCard({ state }) {
+  const s = state.data?.setters;
+  const labels = Object.fromEntries((s?.by_provenance || []).map((p) => [p.key, p.label]));
+  const rows = (s?.setters || []).map((r) => ({ ...r, total: r.rdv_placed }));
+  return (
+    <Card title="Par setter" Icon={Users} state={state} skeleton={360}>
+      {s && (
+        <PeopleBars rows={rows} colorOf={provenanceColor} labelOf={(k) => labels[k] || k}
+          parts={(r) => Object.entries(r.by_provenance).map(([key, n]) => ({ key, n }))}
+          tip={(r) => (
+            <>
+              <b>{r.name}</b>
+              {Object.entries(r.by_provenance).map(([k, n]) => <span key={k}><br />{labels[k] || k} · {n}</span>)}
+            </>
+          )} />
+      )}
+    </Card>
+  );
+}
+
+function OldWebinarCard({ state, prev, compareLabel }) {
   const old = state.data?.old_webinar;
+  return (
+    <Card title="Anciens webinaires" Icon={Presentation} state={state} skeleton={300}>
+      {old && (
+        <>
+          <div className="fst-hero">
+            <div><Num className="fst-big" value={old.worked} format={whole} duration={1100} /><span className="fst-big-unit">fiches rappelées</span></div>
+            <Change value={old.worked} previous={prev?.old_webinar?.worked} label={compareLabel} />
+          </div>
+          <div className="fst-facts"><Fact label="RDV posés" value={old.rdv_placed} /></div>
+          <div className="fst-chart">
+            <PeopleBars rows={(old.setters || []).map((r) => ({ ...r, total: r.worked }))} colorOf={() => provenanceColor('webinar_recall')}
+              parts={(r) => [{ key: 'worked', n: r.worked }]} tip={(r) => <><b>{r.name}</b><br />{plural(r.worked, 'fiche rappelée', 'fiches rappelées')}</>} />
+          </div>
+        </>
+      )}
+    </Card>
+  );
+}
+
+function SecondChanceCard({ state, prev, compareLabel }) {
   const sc = state.data?.second_chance;
   return (
-    <Card title="Relances des setters" Icon={History} state={state} skeleton={360}
-      hint="Anciens inscrits aux webinaires rappelés, et leads perdus repris en Seconde chance.">
-      {old && sc && (
-        <div className="ld-split">
-          <section>
-            <h4 className="ld-h"><Presentation size={14} />Anciens webinaires</h4>
-            <div className="ld-hero is-two">
-              <div><span className="fst-micro">Fiches rappelées</span><strong>{count(old.worked)}</strong>
-                <Delta value={old.worked} previous={prev?.old_webinar?.worked} label={compareLabel} /></div>
-              <div><span className="fst-micro">RDV posés</span><strong>{count(old.rdv_placed)}</strong>
-                <Delta value={old.rdv_placed} previous={prev?.old_webinar?.rdv_placed} label={compareLabel} /></div>
-            </div>
-            <People rows={old.setters} value={(r) => r.worked} one="fiche" many="fiches" />
-          </section>
-          <section>
-            <h4 className="ld-h"><LifeBuoy size={14} />Seconde chance</h4>
-            <div className="ld-hero is-two">
-              <div><span className="fst-micro">Leads repris</span><strong>{count(sc.claimed)}</strong>
-                <Delta value={sc.claimed} previous={prev?.second_chance?.claimed} label={compareLabel} /></div>
-              <div><span className="fst-micro">RDV reposés</span><strong>{count(sc.booked)}</strong>
-                <Delta value={sc.booked} previous={prev?.second_chance?.booked} label={compareLabel} /></div>
-            </div>
-            <People rows={sc.setters} value={(r) => r.claimed} one="repris" many="repris" />
-          </section>
-        </div>
+    <Card title="Seconde chance" Icon={LifeBuoy} state={state} skeleton={300}>
+      {sc && (
+        <>
+          <div className="fst-hero">
+            <div><Num className="fst-big" value={sc.claimed} format={whole} duration={1100} /><span className="fst-big-unit">leads repris</span></div>
+            <Change value={sc.claimed} previous={prev?.second_chance?.claimed} label={compareLabel} />
+          </div>
+          <div className="fst-facts"><Fact label="RDV reposés" value={sc.booked} /></div>
+          <div className="fst-chart">
+            <PeopleBars rows={(sc.setters || []).map((r) => ({ ...r, total: r.claimed }))} colorOf={(k) => (k === 'booked' ? provenanceColor('second_chance') : '#e5e1db')}
+              parts={(r) => [{ key: 'booked', n: r.booked }, { key: 'open', n: r.claimed - r.booked }]}
+              tip={(r) => <><b>{r.name}</b><br />{plural(r.claimed, 'lead repris', 'leads repris')}<br /><span>{plural(r.booked, 'RDV reposé', 'RDV reposés')}</span></>} />
+          </div>
+        </>
       )}
     </Card>
   );
@@ -297,33 +460,26 @@ function RecallsCard({ state, prev, compareLabel }) {
 function CallsCard({ state, tooLong }) {
   const [team, setTeam] = useState('setters');
   const block = state.data?.[team];
+  const people = (block?.people || []).filter((p) => p.status === 'ok').map((p) => ({ ...p, total: p.total.calls }));
   return (
     <Card title="Appels" Icon={Phone} state={tooLong ? null : state} skeleton={360}
-      hint="Appels passés et reçus dans Allo ; décroché = une personne a répondu (un répondeur ne compte pas)."
-      actions={<Segmented small value={team} onChange={setTeam} label="Équipe"
-        options={[{ key: 'setters', label: 'Setters' }, { key: 'sales', label: 'Sales' }]} />}>
-      {tooLong ? <div className="fst-empty is-box">Les appels se lisent sur 31 jours au plus : choisissez une période plus courte.</div> : block && (
+      actions={<Segmented small value={team} onChange={setTeam} label="Équipe" options={[{ key: 'setters', label: 'Setters' }, { key: 'sales', label: 'Sales' }]} />}>
+      {tooLong ? <div className="fst-empty">Les appels se lisent sur 31 jours au plus.</div> : block && (
         <>
-          <div className="ld-hero">
-            <div><span className="fst-micro">Appels</span><strong>{count(block.team.calls)}</strong></div>
-            <div><span className="fst-micro">Sortants</span><strong>{count(block.team.outbound)}</strong></div>
-            <div><span className="fst-micro">Décrochés</span><strong>{count(block.team.answered)}</strong></div>
-            <div><span className="fst-micro">Taux de décroché</span><strong>{pct(block.team.outbound ? block.team.answered / block.team.outbound : null, 0)}</strong></div>
+          <div className="fst-hero">
+            <div><Num className="fst-big" value={block.team.calls} format={whole} duration={1100} /><span className="fst-big-unit">appels</span></div>
           </div>
-          <TableBox>
-            <thead><tr><Th Icon={Users}>Personne</Th><Th num>Appels</Th><Th num>Décrochés</Th><Th num>Temps</Th></tr></thead>
-            <tbody>
-              {block.people.map((p) => (
-                <tr key={p.name}>
-                  <td><Who name={p.name} /></td>
-                  {p.status === 'ok' ? (
-                    <><td className="is-num">{count(p.total.calls)}</td><td className="is-num">{count(p.total.answered)}</td>
-                      <td className="is-num">{Math.round((p.total.duration_seconds || 0) / 60)} min</td></>
-                  ) : <td colSpan={3} className="ld-muted">{p.status === 'no_allo_account' ? 'Pas de compte Allo à son nom' : 'Allo indisponible'}</td>}
-                </tr>
-              ))}
-            </tbody>
-          </TableBox>
+          <div className="fst-facts">
+            <Fact label="Sortants" value={block.team.outbound} />
+            <Fact label="Décrochés" value={block.team.answered} />
+            <Fact label="Taux de décroché" value={block.team.outbound ? block.team.answered / block.team.outbound : null} format={(n) => pct(n, 0)} />
+          </div>
+          <div className="fst-chart">
+            <PeopleBars rows={people} colorOf={(k) => (k === 'answered' ? 'var(--charcoal)' : '#e5e1db')} labelOf={(k) => (k === 'answered' ? 'Décrochés' : 'Sans réponse')}
+              parts={(p) => [{ key: 'answered', n: p.total.answered || 0 }, { key: 'other', n: Math.max(0, (p.total.calls || 0) - (p.total.answered || 0)) }]}
+              tip={(p) => <><b>{p.name}</b><br />{plural(p.total.calls, 'appel')} · {plural(p.total.answered, 'décroché')}<br /><span>{Math.round((p.total.duration_seconds || 0) / 60)} min au téléphone</span></>} />
+          </div>
+          {block.team.missing?.length > 0 && <dl className="fst-kv"><dt>Sans compte Allo</dt><dd>{block.team.missing.join(', ')}</dd></dl>}
         </>
       )}
     </Card>
@@ -333,27 +489,47 @@ function CallsCard({ state, tooLong }) {
 // ── Ventes ────────────────────────────────────────────────────────────────────────────────────────
 
 function SalesCard({ state, prev, compareLabel }) {
+  const drawn = useDrawn();
   const sales = state.data?.sales;
-  const before = byKey(prev?.sales?.by_origin);
-  const rows = (sales?.by_origin || []).filter((o) => o.sales || before[o.key]?.sales);
+  const groups = useMemo(() => originGroups(sales?.by_origin), [sales]);
+  const total = sales?.totals?.sales || 0;
   return (
-    <Card title="Ventes par origine" Icon={BadgeEuro} state={state} skeleton={360}
-      hint="Ventes signées sur la période, rangées par origine du client (règle du Suivi des ventes).">
+    <Card title="Ventes signées" Icon={BadgeEuro} state={state} skeleton={360}>
       {sales && (
         <>
-          <div className="ld-hero is-two">
-            <div><span className="fst-micro">Ventes</span><strong>{count(sales.totals.sales)}</strong>
-              <Delta value={sales.totals.sales} previous={prev?.sales?.totals?.sales} label={compareLabel} /></div>
-            <div><span className="fst-micro">Valeur annuelle</span><strong>{eur(sales.totals.revenue_eur)}</strong></div>
+          <div className="fst-hero">
+            <div><Num className="fst-big" value={total} format={whole} duration={1100} /><span className="fst-big-unit">{total > 1 ? 'ventes' : 'vente'}</span></div>
+            <Change value={total} previous={prev?.sales?.totals?.sales} label={compareLabel} />
           </div>
-          {!rows.length ? <div className="fst-empty">Aucune vente sur cette période.</div> : rows.map((o) => (
-            <div key={o.key} className="ld-row is-static" title={o.definition}>
-              <span className="ld-row-name">{o.label}</span>
-              <span className="fst-track ld-row-track"><span className="fst-fill" style={{ width: `${sales.totals.sales ? (o.sales / sales.totals.sales) * 100 : 0}%` }} /></span>
-              <span className="ld-row-num">{count(o.sales)}</span>
-              <span className="ld-row-delta"><Delta value={o.sales} previous={before[o.key]?.sales} label={compareLabel} /></span>
+          <div className="fst-facts">
+            <Fact label="Contrats signés, annuel HT" value={sales.totals.revenue_eur} format={euros} />
+            <Fact label="Cash à la signature" value={sales.totals.cash_eur} format={euros} />
+          </div>
+          {total > 0 && (
+            <div className="fst-chart">
+              <div className="fst-stack" aria-hidden="true">
+                {groups.flatMap((g) => g.items).map((o) => <i key={o.key} style={{ flexGrow: drawn ? o.sales : 0, flexBasis: 0, background: o.color }} />)}
+              </div>
+              {groups.map((g) => (
+                <div key={g.key} className="fst-group">
+                  <div className="fst-group-head">
+                    <span className="fst-group-name">{g.label}</span>
+                    <span className="fst-group-chip fst-num">{pct(g.share, 0)}</span>
+                    <span className="fst-group-count fst-num"><b>{count(g.sales)}</b><i>/</i>{count(total)}</span>
+                  </div>
+                  {g.items.map((o) => (
+                    <div key={o.key} className="fst-row ld-static" title={o.definition}>
+                      <span className="fst-row-ico"><span className="fst-dot" style={{ background: o.color }} /></span>
+                      <span className="fst-row-name">{o.label}<small>{euros(o.revenue_eur)} annuel HT</small></span>
+                      <Fill value={o.share} color={o.color} />
+                      <span className="fst-row-num fst-num">{count(o.sales)}<small>{pct(o.share, 0)}</small></span>
+                      <span />
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
-          ))}
+          )}
         </>
       )}
     </Card>
@@ -362,98 +538,94 @@ function SalesCard({ state, prev, compareLabel }) {
 
 // ── Page ──────────────────────────────────────────────────────────────────────────────────────────
 
+const TABS = [{ key: 'leads', label: 'Canaux et ads' }, { key: 'setters', label: 'Setters' }, { key: 'calls', label: 'Appels' }, { key: 'sales', label: 'Ventes' }];
+
 export default function LeadsDashboard() {
   const today = parisToday();
   const [preset, setPreset] = useState('today');
   const [custom, setCustom] = useState(null);
   const [compare, setCompare] = useState(true);
+  const [tab, setTab] = useState('leads');
   const [campaignsOpen, setCampaignsOpen] = useState(false);
   const range = useMemo(() => (custom ? { from: custom.from, to: custom.to } : presetRange(preset, today)), [custom, preset, today]);
   const compareKey = custom ? 'custom' : preset;
   const prevRange = useMemo(() => comparisonFor(compareKey, range), [compareKey, range]);
-  const compareLabel = compare ? `${COMPARE_LABEL[compareKey]} (${dayRangeLabel(prevRange)})` : null;
+  // Une période qui finit aujourd'hui se compare à la même heure : hier jusqu'à 10 h 30 face à aujourd'hui à 10 h 30.
+  const [clock, setClock] = useState(parisClock);
+  const until = range.to === today ? clock : null;
+  const word = compareWord(compareKey, range);
+  const compareLabel = compare
+    ? `${word.charAt(0).toUpperCase()}${word.slice(1)} (${dayShort(prevRange.from)}${prevRange.from === prevRange.to ? '' : ` – ${dayShort(prevRange.to)}`}${until ? `, jusqu'à ${until.replace(':', ' h ')}` : ''})`
+    : null;
 
   const current = useLeadStat('overview', range);
-  const previous = useLeadStat('overview', compare ? prevRange : null);
+  const previous = useLeadStat('overview', compare ? prevRange : null, until);
   const tooLong = !canReadCalls(range);
-  const calls = useLeadStat('calls', tooLong ? null : range);
-  const campaigns = useLeadStat('campaigns', campaignsOpen ? range : null);
+  const calls = useLeadStat('calls', tab === 'calls' && !tooLong ? range : null);
+  const campaigns = useLeadStat('campaigns', tab === 'leads' && campaignsOpen ? range : null);
 
   // Le jour en cours se met à jour tout seul, toutes les cinq minutes.
   const { retry } = current;
   useEffect(() => {
     if (range.to !== today) return undefined;
-    const timer = setInterval(() => { if (!document.hidden) retry(); }, REFRESH_MS);
+    const timer = setInterval(() => { if (!document.hidden) { setClock(parisClock()); retry(); } }, REFRESH_MS);
     return () => clearInterval(timer);
   }, [range.to, today, retry]);
 
-  const d = current.data;
-  const p = compare ? previous.data : null;
-  const ads = d?.meta?.status === 'ok' ? d.meta.excluding_webinar : null;
-  const [tab, setTab] = useState('leads');
-  const when = range.from === range.to ? (range.to === today ? "aujourd'hui" : `le ${dayShort(range.to)}`)
-    : `du ${dayShort(range.from)} au ${dayShort(range.to)}`;
+  const d = current.fresh ? current.data : null;
+  const p = compare && current.fresh && previous.fresh ? previous.data : null;
+  const shownRange = current.data?.period ? { from: current.data.period.from, to: current.data.period.to } : range;
+  const when = shownRange.from === shownRange.to
+    ? (shownRange.to === today ? "aujourd'hui" : `le ${dayShort(shownRange.to)}`)
+    : `du ${dayShort(shownRange.from)} au ${dayShort(shownRange.to)}`;
+  const choose = useCallback((next) => { setClock(parisClock()); setCustom(next); }, []);
+  const pickDay = useCallback((day) => choose({ from: day, to: day }), [choose]);
 
   return (
-    <Page title="Leads" sub="Ce qui entre, d'où ça vient, et ce que coûtent les ads."
+    <Page title="Leads"
       actions={(
         <div className="ld-actions">
           <Segmented small value={custom ? null : preset} label="Période"
-            onChange={(key) => { setCustom(null); setPreset(key); }} options={PRESETS} />
-          <PeriodPicker value={custom} onChange={setCustom} label="Autre période" />
+            onChange={(key) => { choose(null); setPreset(key); }} options={PRESETS} />
+          <PeriodPicker value={custom} onChange={choose} label="Autre période" />
           <button type="button" className="fst-btn is-small" aria-pressed={compare} onClick={() => setCompare(!compare)}>
-            <CalendarDays size={14} />{compare ? `Comparé à ${COMPARE_LABEL[compareKey]}` : 'Sans comparaison'}
+            <CalendarDays size={14} />{compare ? `Comparé à ${word}${until ? ' à la même heure' : ''}` : 'Sans comparaison'}
           </button>
         </div>
       )}>
-      {current.error && !d && (
-        <div className="fst-error" role="alert">{current.error}<button type="button" onClick={current.retry}>Réessayer</button></div>
-      )}
-      <Motion.section className="ld-answer" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-        data-stale={(current.loading && Boolean(d)) || undefined}>
-        {d ? (
-          <>
-            <p className="ld-answer-main">
-              <strong>{count(d.total.leads)}</strong> {d.total.leads > 1 ? 'leads reçus' : 'lead reçu'} {when}
-              {compare && <Delta value={d.total.leads} previous={p?.total?.leads} label={compareLabel} />}
-            </p>
-            {ads && (
-              <p className="ld-answer-sub">
-                dont <b>{count(byKey(d.channels).meta_ads?.total)}</b> par les ads Meta, à <b>{eur(ads.cpl_eur, 2)}</b> le lead, pour <b>{eur(ads.spend_eur)}</b> dépensés.
-              </p>
-            )}
-          </>
-        ) : <p className="ld-answer-main is-wait">Lecture des leads…</p>}
-      </Motion.section>
-
-      <div className="ld-tabs">
-        <Segmented value={tab} onChange={setTab} label="Vue" options={[
-          { key: 'leads', label: 'Canaux et ads' }, { key: 'setters', label: 'Setters' },
-          { key: 'calls', label: 'Appels' }, { key: 'sales', label: 'Ventes' }]} />
-      </div>
+      <div className="ld-tabs"><Segmented value={tab} onChange={setTab} label="Vue" options={TABS} /></div>
 
       {tab === 'leads' && (
         <>
           <Reveal className="fst-grid">
-            <ChannelsCard state={current} prev={p} compareLabel={compareLabel} />
-            <MetaCard state={current} prev={p} compareLabel={compareLabel} campaignsOpen={campaignsOpen}
-              onCampaigns={() => setCampaignsOpen(!campaignsOpen)} />
+            <LeadsCard state={current} prev={p} compareLabel={compareLabel} when={when} onPickDay={pickDay} />
+            <AdsCard state={current} prev={p} compareLabel={compareLabel} campaignsOpen={campaignsOpen} onCampaigns={() => setCampaignsOpen(!campaignsOpen)} />
           </Reveal>
           <Collapse open={campaignsOpen}>
             <Reveal className="ld-gap"><CampaignsCard state={campaigns} /></Reveal>
           </Collapse>
+          <Reveal className="ld-gap"><ChannelsCard state={current} prev={p} word={word} /></Reveal>
         </>
       )}
       {tab === 'setters' && (
-        <Reveal className="fst-grid is-even">
-          <SettersCard state={current} prev={p} compareLabel={compareLabel} />
-          <RecallsCard state={current} prev={p} compareLabel={compareLabel} />
-        </Reveal>
+        <>
+          <Reveal className="fst-grid is-even">
+            <SettersCard state={current} prev={p} compareLabel={compareLabel} />
+            <SetterPeopleCard state={current} />
+          </Reveal>
+          <Reveal className="fst-grid is-even ld-gap">
+            <OldWebinarCard state={current} prev={p} compareLabel={compareLabel} />
+            <SecondChanceCard state={current} prev={p} compareLabel={compareLabel} />
+          </Reveal>
+        </>
       )}
       {tab === 'calls' && <Reveal><CallsCard state={calls} tooLong={tooLong} /></Reveal>}
       {tab === 'sales' && <Reveal><SalesCard state={current} prev={p} compareLabel={compareLabel} /></Reveal>}
-      {d && <p className="ld-source">Calculé à {d.period.generated_at.slice(11, 16)}{d.meta?.synced_at ? ` · Meta lu à ${d.meta.synced_at.slice(11, 16)}` : ''}
-        {range.to === today ? ' · mis à jour toutes les cinq minutes' : ''}</p>}
+      {d && (
+        <p className="ld-source">
+          Calculé à {d.period.generated_at.slice(11, 16).replace(':', ' h ')}{d.meta?.synced_at ? ` · Meta lu à ${d.meta.synced_at.slice(11, 16).replace(':', ' h ')}` : ''}
+        </p>
+      )}
     </Page>
   );
 }

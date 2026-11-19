@@ -46,19 +46,54 @@ export const COMPARE_LABEL = {
 // Écart avec la période de comparaison : null quand il n'y en a pas.
 export function delta(current, previous) {
   if (previous == null || current == null) return null;
-  const diff = Number(current) - Number(previous);
+  const diff = Math.round((Number(current) - Number(previous)) * 100) / 100;
   return { diff, rate: Number(previous) ? diff / Number(previous) : null, tone: diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat' };
 }
 
 export const signed = (n) => (n > 0 ? `+${n.toLocaleString('fr-FR')}` : n.toLocaleString('fr-FR').replace('-', '−'));
 
-// Les canaux rangés par famille, dans l'ordre du serveur ; une famille vide reste visible (zéro, pas d'absence).
+// Teinte de chaque canal, reprise des Statistiques Finance pour les mêmes familles (ads en bleu, cold call setter en
+// jaune, parrainage en pêche, LinkedIn en rouge, webinaire en vert tendre).
+export const CHANNEL_COLOR = {
+  meta_ads: '#8fbdf3', google_ads: '#7fd3df', chatgpt_ads: '#aaa5ee', partners: '#f1b76a', webinar: '#b9dc8a',
+  ccs: '#ecd36a', cold_call: '#cfc8bd', referral: '#f4b183', linkedin: '#f2a0a0', web: '#86d3a6', other: '#dedad3',
+};
+export const channelColor = (key) => CHANNEL_COLOR[key] || CHANNEL_COLOR.other;
+
+// Provenance d'un RDV posé par un setter (règle du classement des setters).
+const PROVENANCE_COLOR = {
+  second_chance: '#aaa5ee', ccs: '#ecd36a', webinar_pre: '#d4ebb5', webinar_live: '#b9dc8a', webinar_post: '#93c46a',
+  webinar_recall: '#7fd3df', ads: '#8fbdf3', cold_call: '#cfc8bd', linkedin: '#f2a0a0',
+};
+export const provenanceColor = (key) => PROVENANCE_COLOR[key] || '#dedad3';
+
+// Catégorie d'une campagne Meta.
+const CATEGORY_COLOR = { BROAD: '#8fbdf3', BTP: '#f1b76a', RESTAURANTS: '#f2a0a0' };
+export const categoryColor = (name) => CATEGORY_COLOR[name] || '#cfc8bd';
+
+// Les canaux rangés par famille, dans l'ordre du serveur, avec leur teinte et leur part du total ; une famille vide
+// reste visible (zéro, pas d'absence).
 export function groupChannels(channels = [], groups = []) {
+  const all = channels.reduce((sum, c) => sum + c.total, 0);
+  const share = (n) => (all ? n / all : 0);
   return groups.map((g) => {
-    const rows = channels.filter((c) => c.group === g.key);
-    return { ...g, total: rows.reduce((sum, c) => sum + c.total, 0), channels: rows };
+    const rows = channels.filter((c) => c.group === g.key).map((c) => ({ ...c, color: channelColor(c.key), share: share(c.total) }));
+    const total = rows.reduce((sum, c) => sum + c.total, 0);
+    return { ...g, total, share: share(total), channels: rows };
   });
 }
+
+// À quoi la période se compare, en mots : un jour choisi à la main se compare à la veille.
+export const compareWord = (key, range) => (key === 'custom' && spanDays(range) === 1 ? 'la veille' : COMPARE_LABEL[key]);
+
+// Étiquette d'une barre jour par jour : « lun. 16 » quand il y a la place, le seul quantième sinon (un sur deux au-delà
+// de 20 jours).
+export function dayLabel(day, i, n, short = false) {
+  if (n > 20 && i % 2) return '';
+  return short || n > 16 ? String(Number(day.slice(8, 10))) : `${weekdayShort(day)} ${Number(day.slice(8, 10))}`;
+}
+
+export const signedEur = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 // Valeur d'un canal ou d'une provenance dans la réponse de comparaison.
 export const byKey = (rows = []) => Object.fromEntries(rows.map((r) => [r.key, r]));

@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canReadCalls, comparisonFor, delta, groupChannels, heights, presetRange, signed, spanDays } from './model.js';
+import { canReadCalls, compareWord, comparisonFor, dayLabel, delta, groupChannels, heights, presetRange, signed, signedEur, spanDays } from './model.js';
 
 const TODAY = '2026-11-18'; // un mercredi
 
@@ -36,6 +36,20 @@ test('canaux par famille et limite des appels', () => {
     [{ key: 'ads', label: 'Publicité' }, { key: 'webinar', label: 'Webinaire' }, { key: 'prospection', label: 'Prospection' }],
   );
   assert.deepEqual(groups.map((g) => [g.key, g.total, g.channels.length]), [['ads', 5, 2], ['webinar', 0, 0], ['prospection', 2, 1]]);
+  assert.equal(groups[0].channels[0].share, 4 / 7);
+  assert.equal(groups[0].channels[0].color, '#8fbdf3');
   assert.equal(canReadCalls({ from: '2026-10-19', to: TODAY }), true);
   assert.equal(canReadCalls({ from: '2026-10-01', to: TODAY }), false);
+});
+
+test('comparaison en mots, étiquettes des jours, écarts en euros', () => {
+  assert.equal(compareWord('custom', { from: TODAY, to: TODAY }), 'la veille');
+  assert.equal(compareWord('custom', { from: '2026-11-10', to: TODAY }), 'la période précédente');
+  assert.equal(compareWord('today', { from: TODAY, to: TODAY }), 'hier');
+  assert.equal(dayLabel(TODAY, 0, 14), 'mer. 18');
+  assert.equal(dayLabel(TODAY, 0, 14, true), '18');
+  assert.equal(dayLabel(TODAY, 1, 31), '');
+  assert.equal(delta(52.94, 43.08).diff, 9.86);
+  assert.equal(signedEur(9.86), '+9,86 €');
+  assert.equal(signedEur(-5.4), '−5,40 €');
 });
