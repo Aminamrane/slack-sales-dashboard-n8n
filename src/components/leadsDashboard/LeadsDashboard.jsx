@@ -194,10 +194,9 @@ function AdsCheck({ meta, channels }) {
 function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const d = state.data;
   const meta = d?.meta;
-  const rc = meta?.recap || { categories: meta?.categories, webinar: meta?.webinar, total: meta?.total };
-  const total = rc.total;
-  const before = prev?.meta?.status === 'ok' ? (prev.meta.recap?.total || prev.meta.total) : null;
-  const rows = [...(rc.categories || []), ...(rc.webinar ? [{ category: 'WEBINAIRE', ...rc.webinar }] : [])];
+  const total = meta?.total;
+  const before = prev?.meta?.status === 'ok' ? prev.meta.total : null;
+  const rows = [...(meta?.categories || []), ...(meta?.webinar ? [{ category: 'WEBINAIRE', ...meta.webinar }] : [])];
   const h = useMemo(() => (d?.history ? byWeek(d.history, meta?.by_day) : null), [d, meta]);
   const byDay = Object.fromEntries((h?.meta || []).map((x) => [x.date, x]));
   const values = (h?.days || []).map((day) => byDay[day]?.cpl_eur ?? null);
