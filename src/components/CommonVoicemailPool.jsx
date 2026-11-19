@@ -655,6 +655,8 @@ export default function CommonVoicemailPool({ leads = [], loading = false, claim
         traitement: d.traitement.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
         reactivite: d.reactivite.map((l) => l.id === id ? { ...l, pool_calls: r.pool_calls, pool_last_call_at: r.pool_last_call_at, my_calls: r.my_calls, my_last_call_at: r.my_last_call_at } : l),
       });
+      // 6e appel : le lead disparaît 2 h ; 7e : il est archivé. La carte part tout de suite, sans attendre le sondage.
+      if (r.pool_hidden) fetchPools();
     } catch {
       // Un clic perdu SANS feedback = un appel jamais compté et un sales qui
       // croit avoir noté (cas Voratovic/Gomis pendant le gel API du 02/09).
