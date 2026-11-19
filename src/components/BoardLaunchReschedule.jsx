@@ -179,7 +179,10 @@ export default function LaunchRescheduleModal({ kind, num, label, onClose, onDon
                     <div className="blr-closed">{CLOSED[col.closed]}</div>
                   ) : (
                     <div className="blr-slots">
-                      {(col.slots || []).map((s) => {
+                      {col.closed && <div className="blr-closed is-note">{CLOSED[col.closed]}</div>}
+                      {/* Seuls les créneaux libres sont montrés (dev 19/11/2026 : « que les créneaux dispo »), plus le
+                          rendez-vous actuel pour se repérer. */}
+                      {(col.slots || []).filter((s) => s.free || (current && current.date === col.date && current.slot === s.t)).map((s) => {
                         const isCurrent = current && current.date === col.date && current.slot === s.t;
                         const on = sel && sel.date === col.date && sel.slot === s.t;
                         const free = s.free && !isCurrent;
