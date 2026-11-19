@@ -171,3 +171,14 @@ test("n°565, octobre en retard alors que le serveur l'a déjà imputé d'avance
   // Un mois dû sans avance n'a rien à expliquer.
   assert.equal(explainExpectedMonth(row('2026-06', { attendu: 169.4, status: 'late' }), period('2026-06', { expected_owner: '169.40' }), ctx()).text, null);
 });
+
+test('un mois offert pour parrainage le dit, payé ou non', () => {
+  const op = { kind: 'discount', label: 'a appliqué la réduction « Mois offert (parrainage) » (−100 %)',
+    created_at: '2026-11-19T18:00:00Z', author_name: 'Direction Finance' };
+  const unpaid = explainExpectedMonth({ attendu: 0, recu: 0, status: 'none', manual: true }, {}, { monthOps: { last: op } });
+  assert.equal(unpaid.label, 'Mois offert');
+  assert.match(unpaid.text, /Offert pour parrainage le 19\/11\/2026 par Direction Finance/);
+  const paid = explainExpectedMonth({ attendu: 0, recu: 294, status: 'paid', manual: true }, {}, { monthOps: { last: op } });
+  assert.equal(paid.label, 'Mois offert');
+  assert.match(paid.text, /294,00 € payés ce mois/);
+});

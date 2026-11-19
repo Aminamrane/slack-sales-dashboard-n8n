@@ -12,6 +12,7 @@ import { X, Gift } from 'lucide-react';
 
 import { formatEUR, formatMonthLabel } from '../constants.js';
 import { freeMonthBody, freeMonthChoices } from '../freeMonth.js';
+import apiClient from '../../../services/apiClient.js';
 
 const N = {
   text: '#1c1b19',
@@ -23,15 +24,35 @@ const N = {
   red: '#c5221f',
 };
 
-export default function FreeMonthDialog({ open, client, periods, clientMode, onClose, onSubmit }) {
-  const choices = useMemo(() => freeMonthChoices(periods, { clientMode }), [periods, clientMode]);
+export default function FreeMonthDialog({ open, clientId, client, periods, clientMode, optilexMode, onClose, onSubmit }) {
+  // Les mois qui ont déjà une demande en attente (équipe → direction) ne sont pas proposés une deuxième fois.
+  const [pendingMonths, setPendingMonths] = useState([]);
+  useEffect(() => {
+    if (!open || !clientId) return undefined;
+    let alive = true;
+    apiClient.get(`/api/v1/finance-periods/client/${clientId}/requests?status=all&limit=50`)
+      .then((r) => {
+        if (!alive) return;
+        const list = Array.isArray(r?.items) ? r.items : [];
+        setPendingMonths(list.filter((q) => q.status === 'pending').flatMap((q) => (q.periods || []).map((m) => String(m).slice(0, 7))));
+      })
+      .catch(() => { if (alive) setPendingMonths([]); });
+    return () => { alive = false; };
+  }, [open, clientId]);
+  const choices = useMemo(() => freeMonthChoices(periods, { clientMode, optilexMode, pendingMonths }),
+    [periods, clientMode, optilexMode, pendingMonths]);
   const [month, setMonth] = useState('');
+  const [settle, setSettle] = useState('advance');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (open) { setMonth(choices[0]?.key || ''); setError(null); setBusy(false); }
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (open) { setSettle('advance'); setError(null); setBusy(false); }
+  }, [open]);
+  // La prochaine échéance par défaut, et un mois devenu indisponible (demande en attente) est remplacé.
+  useEffect(() => {
+    if (open && !choices.some((c) => c.key === month)) setMonth(choices[0]?.key || '');
+  }, [open, choices, month]);
 
   const picked = choices.find((c) => c.key === month) || null;
   const ready = !!picked;
@@ -41,7 +62,7 @@ export default function FreeMonthDialog({ open, client, periods, clientMode, onC
     setBusy(true);
     setError(null);
     try {
-      await onSubmit(freeMonthBody(picked.key), picked);
+      await onSubmit(freeMonthBody(picked.key, picked.paid > 0 ? settle : 'advance'), picked);
     } catch (e) {
       setError(e?.data?.detail || e?.message || 'Enregistrement impossible');
       setBusy(false);
@@ -126,12 +147,42 @@ export default function FreeMonthDialog({ open, client, periods, clientMode, onC
                 </select>
                 {picked && (
                   <span style={{ fontSize: 12, color: N.textMuted }}>
-                    Owner {formatEUR(picked.owner)} · Opti&apos;Lex {formatEUR(picked.optilex)}
+                    Owner {formatEUR(picked.owner)}{picked.optilexMonthly ? <> · Opti&apos;Lex {formatEUR(picked.optilex)}</> : null}
                   </span>
                 )}
               </div>
             )}
           </section>
+
+          {picked && picked.paid > 0 && (
+            <section style={{ padding: '14px 20px 4px' }}>
+              <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 8 }}>
+                Déjà payé : {formatEUR(picked.paid)}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }} role="radiogroup" aria-label="Ce qui a déjà été payé">
+                {[{ key: 'advance', label: 'Avance' }, { key: 'refund', label: 'Remboursement' }].map((o) => {
+                  const actif = settle === o.key;
+                  return (
+                    <button
+                      key={o.key}
+                      type="button"
+                      role="radio"
+                      aria-checked={actif}
+                      onClick={() => setSettle(o.key)}
+                      style={{
+                        height: 30, padding: '0 12px', borderRadius: 999, cursor: 'pointer',
+                        border: `1px solid ${actif ? N.text : N.border}`,
+                        background: actif ? N.text : '#fff', color: actif ? '#fff' : N.text,
+                        fontFamily: 'inherit', fontSize: 12.5, fontWeight: actif ? 600 : 500,
+                      }}
+                    >
+                      {o.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
 
           {error && (
             <div style={{ margin: '8px 20px 0', fontSize: 12, color: N.red }}>{error}</div>

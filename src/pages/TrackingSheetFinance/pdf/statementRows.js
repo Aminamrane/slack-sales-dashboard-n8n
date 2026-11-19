@@ -1,3 +1,4 @@
+import { FREE_MONTH_LABEL } from '../freeMonth.js';
 import { scopedPeriodAmounts, formatMonthLabel, toNumber, splitClientIdentity } from '../constants.js';
 
 const monthKey = value => String(value || '').slice(0, 7);
@@ -100,7 +101,9 @@ export function statementAllocationRows({ periods = [], entity, month, splits = 
 // `statement` : le relevé du serveur pour l'entité (timeline.statement[entity]). Avec lui, le PDF dit le même solde
 // que le tableau (dev 2026-11-18) : chaque mois facture ce qu'il ajoute vraiment au solde (0 en pause, reports et
 // corrections rattachés compris), et les corrections hors encaissement (alignement, reste dû, perte) ont leur ligne.
-export function statementRows({ periods = [], entity, month, offer = '', structure = null, splits = [], refunds = [], priorDebts = [], statement = null }) {
+export function statementRows({ periods = [], entity, month, offer = '', structure = null, splits = [], refunds = [], priorDebts = [], statement = null, freeMonths = null }) {
+  // Mois offerts pour parrainage (dev 2026-11-19) : la ligne reste, même à 0 €, et dit pourquoi rien n'est facturé.
+  const free = new Set(freeMonths || []);
   const byMonth = new Map();
   if (structure) {
     for (const split of splits) {
@@ -120,7 +123,7 @@ export function statementRows({ periods = [], entity, month, offer = '', structu
       if (!included(key, month)) continue;
       const billed = toNumber(m.charged);
       const paid = toNumber(m.received) + toNumber(m.received_overdue);
-      if (billed !== 0 || paid !== 0) byMonth.set(key, { billed, paid });
+      if (billed !== 0 || paid !== 0 || (free.has(key) && billed === 0)) byMonth.set(key, { billed, paid });
     }
   } else {
     for (const period of periods) {
@@ -128,11 +131,11 @@ export function statementRows({ periods = [], entity, month, offer = '', structu
       if (!/^\d{4}-\d{2}$/.test(key) || key > month) continue;
       const amounts = scopedPeriodAmounts(period, entity);
       const paid = amounts.received + amounts.receivedOverdue;
-      if (amounts.expected === 0 && paid === 0) continue;
+      if (amounts.expected === 0 && paid === 0 && !free.has(key)) continue;
       byMonth.set(key, { billed: amounts.expected, paid });
     }
   }
-  const rows = [...byMonth.entries()].map(([key, value]) => ({ month: key, billed: structure ? 0 : value.billed, paid: structure ? value : value.paid, refund: false }));
+  const rows = [...byMonth.entries()].map(([key, value]) => ({ month: key, billed: structure ? 0 : value.billed, paid: structure ? value : value.paid, refund: false, free: !structure && free.has(key) && value.billed === 0 }));
   if (!structure) {
     for (const debt of priorDebts) {
       const key = String(debt.period || '').slice(0, 7);
@@ -161,7 +164,7 @@ export function statementRows({ periods = [], entity, month, offer = '', structu
   return rows.sort((a, b) => a.month.localeCompare(b.month) || Number(!!b.prior) - Number(!!a.prior) || Number(!!a.refund) - Number(!!b.refund)).map(r => ({
     periodLabel: formatMonthLabel(r.month),
     offre: r.prior ? `Solde antérieur${r.reason ? ` — ${r.reason}` : ''}` : r.refund ? `Remboursement de trop-perçu${r.reason ? ` — ${r.reason}` : ''}`
-      : r.correction ? 'Correction de solde' : offer,
+      : r.correction ? 'Correction de solde' : r.free ? FREE_MONTH_LABEL : offer,
     billed: r.billed, paid: r.paid,
   }));
 }

@@ -16,6 +16,7 @@
 // de laisser un tiret.
 
 import { advanceLinks, formatDateFR, formatEUR, formatMonthLabel, scopedAdvance } from './constants.js';
+import { FREE_MONTH_LABEL } from './freeMonth.js';
 
 // Préfixe posé par le serveur sur le motif d'une pause « rien dû ».
 const WAIVED = 'Rien dû pendant la pause';
@@ -29,6 +30,7 @@ const DIRECT_KINDS = new Set(['expected', 'discount', 'defer']);
 
 // Au-delà, la liste des opérations peut être tronquée : on ne peut plus
 // affirmer qu'un mois n'a « aucun geste enregistré ».
+
 export const EXPLAIN_OPS_LIMIT = 200;
 
 const day = (iso) => {
@@ -131,6 +133,21 @@ export const explainExpectedMonth = (row, period, ctx = {}) => {
   const none = { label: null, tone: null, text: null, quiet: false };
   const zero = row.status === 'none';
   const pause = pauseFacts(period);
+
+  // ── Mois offert pour parrainage (dev 2026-11-19), payé ou non ─────
+  const lastOp = monthOps?.last;
+  if (lastOp?.kind === 'discount' && String(lastOp.label || '').includes(FREE_MONTH_LABEL) && row.attendu === 0) {
+    const when = day(lastOp.created_at);
+    return {
+      ...none,
+      label: 'Mois offert',
+      tone: 'manual',
+      text: sentence([
+        `Offert pour parrainage${when ? ` le ${when}` : ''}${lastOp.author_name ? ` par ${lastOp.author_name}` : ''}`,
+        row.recu > 0 ? `${formatEUR(row.recu)} payés ce mois` : null,
+      ]),
+    };
+  }
 
   // ── Pause en cours ────────────────────────────────────────────────
   if (pause.active) {

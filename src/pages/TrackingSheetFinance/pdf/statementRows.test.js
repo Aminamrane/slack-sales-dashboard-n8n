@@ -141,3 +141,15 @@ test('le PDF suit le relevé du serveur : ce que le mois ajoute, et une ligne pa
   assert.equal(total, 1800 + 1800 - 1800 - 300);
   assert.deepEqual(rows.filter(r => r.offre === 'Correction de solde').map(r => r.billed), [-500]);
 });
+
+test('un mois offert reste sur l’état de compte, à 0 €, sous son nom', () => {
+  const periods = [
+    { period: '2026-10-01', expected_owner: 198, received_owner: 198 },
+    { period: '2026-11-01', expected_owner: 0, received_owner: 0, expected_manual: true },
+  ];
+  const rows = statementRows({ entity: 'owner', month: '2026-11', offer: '1-2 salariés', periods, freeMonths: ['2026-11'] });
+  assert.deepEqual(rows.map((r) => [r.periodLabel, r.offre, r.billed, r.paid]), [
+    ['Octobre 2026', '1-2 salariés', 198, 198],
+    ['Novembre 2026', 'Mois offert (parrainage)', 0, 0],
+  ]);
+});
