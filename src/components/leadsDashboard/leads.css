@@ -95,3 +95,30 @@
 .ld-recap .is-strong { font-weight: 500; color: var(--ink); }
 .ld-recap tfoot td { font-weight: 600; color: var(--ink); border-top: 1px solid var(--line); padding-top: 12px; }
 .ld-recap tr[data-idle] .ld-recap-cpl { color: var(--red); font-weight: 500; }
+
+/* Écart avec la période de comparaison, dans la ligne du chiffre. */
+.ld-vs { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.ld-vs b { display: inline-flex; align-items: center; gap: 2px; font-weight: 500; }
+.ld-vs[data-tone="good"] b { color: var(--green); }
+.ld-vs[data-tone="bad"] b { color: var(--red); }
+.ld-vs[data-tone="flat"] b { color: var(--muted); font-weight: 400; }
+.ld-vs[data-table] { gap: 10px; justify-content: flex-end; width: 100%; color: var(--ink-2); }
+.ld-vs[data-table] b { font-size: 12.5px; min-width: 44px; justify-content: flex-end; }
+.ld-trio-item .ld-vs { flex-wrap: wrap; row-gap: 2px; white-space: normal; }
+.fst-hero .ld-vs { margin-bottom: 8px; }
+
+/* Tableaux de la page : une ligne se déplie au clic. */
+.ld-table { margin-top: 4px; }
+.ld-table td, .ld-table th { padding-top: 10px; padding-bottom: 10px; }
+.ld-table th:last-child, .ld-table td:last-child { width: 24px; padding-left: 0; }
+.ld-table .is-strong { font-weight: 500; color: var(--ink); }
+.ld-table tfoot td { font-weight: 600; color: var(--ink); border-top: 1px solid var(--line); padding-top: 12px; }
+.ld-family td { padding: 16px 8px 6px !important; font-size: 11.5px; font-weight: 450; color: var(--muted); text-transform: uppercase; letter-spacing: .07em; border-bottom: 0 !important; }
+.ld-family:hover { background: transparent !important; }
+.ld-line[data-can] { cursor: pointer; }
+.ld-line[data-open] { background: var(--hover); }
+.ld-line[data-open] .fst-chev { transform: rotate(90deg); color: var(--ink); }
+.ld-line-detail:hover { background: transparent !important; }
+.ld-line-detail > td { text-align: left !important; padding: 2px 8px 12px !important; }
+.ld-line-unit { display: block; font-size: 12px; color: var(--muted); margin: 2px 0 0 14px; }
+.ld-silent { margin: 12px 8px 0; font-size: 12.5px; color: var(--muted); }

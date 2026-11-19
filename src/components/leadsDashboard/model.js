@@ -108,18 +108,6 @@ export function revenueText(v) {
   return /^\d+([.,]\d+)?$/.test(raw) ? `CA ${amount(raw.replace(',', '.'))}` : `CA ${tidy(raw)}`;
 }
 
-// Un écart en mots : « 7 de plus qu'hier », « 23,33 € de moins que la semaine précédente », « autant qu'hier ».
-const que = (word) => (/^[aeiouhéèê]/i.test(word) ? `qu'${word}` : `que ${word}`);
-export function changeWords(diff, word, money = false) {
-  if (!diff) return `autant ${que(word)}`;
-  const n = Math.abs(diff);
-  const digits = money === 'whole' ? 0 : 2;
-  const amount = money ? `${n.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} €` : n.toLocaleString('fr-FR');
-  return `${amount} de ${diff > 0 ? 'plus' : 'moins'} ${que(word)}`;
-}
-
-// « le CPL d'hier », « le CPL de la semaine précédente ».
-export const ofWord = (word) => (/^[aeiouhéèê]/i.test(word) ? `d'${word}` : `de ${word}`);
 
 // Au-delà d'un mois, le graphique passe à la semaine (du lundi) : leads additionnés, CPL Meta recalculé sur la semaine
 // (dépense ÷ leads). `metaDays` : le CPL Meta jour par jour du serveur.

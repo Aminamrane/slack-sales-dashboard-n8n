@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { byWeek, canReadCalls, changeWords, ofWord, headcountText, revenueText, compareWord, comparisonFor, dayLabel, delta, groupChannels, heights, presetRange, signed, signedEur, spanDays } from './model.js';
+import { byWeek, canReadCalls, headcountText, revenueText, compareWord, comparisonFor, dayLabel, delta, groupChannels, heights, presetRange, signed, signedEur, spanDays } from './model.js';
 
 const TODAY = '2026-11-18'; // un mercredi
 
@@ -54,14 +54,6 @@ test('comparaison en mots, étiquettes des jours, écarts en euros', () => {
   assert.equal(signedEur(-5.4), '−5,40 €');
 });
 
-test('les écarts se disent en mots', () => {
-  assert.equal(changeWords(7, 'hier'), "7 de plus qu'hier");
-  assert.equal(changeWords(-1, 'hier'), "1 de moins qu'hier");
-  assert.equal(changeWords(-50, 'la semaine précédente'), '50 de moins que la semaine précédente');
-  assert.equal(changeWords(-23.33, 'hier', true), "23,33 € de moins qu'hier");
-  assert.equal(changeWords(0, 'la veille'), 'autant que la veille');
-});
-
 test('effectif et CA des formulaires, en français', () => {
   assert.equal(headcountText('1_-_2'), '1 à 2 salariés');
   assert.equal(headcountText('11_-_19'), '11 à 19 salariés');
@@ -74,7 +66,7 @@ test('effectif et CA des formulaires, en français', () => {
   assert.equal(revenueText(null), null);
 });
 
-test('au-delà d’un mois, des semaines ; « le CPL d’hier »', () => {
+test('au-delà d’un mois, des semaines', () => {
   const days = Array.from({ length: 35 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`).map((d, i) => (i < 31 ? d : `2026-11-0${i - 30}`));
   const h = byWeek({ days, in_period: days.map(() => true), total: days.map(() => 1), channels: { cold_call: days.map(() => 1) } },
     [{ date: '2026-10-05', leads: 2, spend_eur: 50 }, { date: '2026-10-06', leads: 3, spend_eur: 25 }]);
@@ -83,6 +75,4 @@ test('au-delà d’un mois, des semaines ; « le CPL d’hier »', () => {
   assert.equal(h.total[0], 4);                       // 1er au 4 octobre
   assert.deepEqual(h.meta[1], { date: '2026-10-05', leads: 5, spend_eur: 75, cpl_eur: 15 });
   assert.equal(byWeek({ days: ['2026-11-18'], in_period: [true], total: [1], channels: {} }).weeks, false);
-  assert.equal(ofWord('hier'), "d'hier");
-  assert.equal(ofWord('la semaine précédente'), 'de la semaine précédente');
 });
