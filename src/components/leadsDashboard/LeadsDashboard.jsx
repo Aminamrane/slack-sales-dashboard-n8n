@@ -124,6 +124,7 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
           <div className="fst-facts">
             <Fact label="R1 placés" value={d.total.r1} note={d.total.leads ? pct(d.total.r1 / d.total.leads, 0) : null} />
             <Fact label="R2 placés" value={d.total.r2} note={d.total.leads ? pct(d.total.r2 / d.total.leads, 0) : null} />
+            <Fact label="Doublons écartés" value={d.total.duplicates} note={`sur ${plural(d.total.raw, 'fiche')}`} />
           </div>
           <div className="fst-chart">
             <div className="fst-chart-title"><span>{h.weeks ? 'Semaine par semaine' : 'Jour par jour'}</span><span>{h.weeks ? plural(h.days.length, 'semaine') : plural(h.days.length, 'jour')}</span></div>
@@ -154,6 +155,38 @@ function Trio({ label, value, format, previous, cmp, invert, money }) {
       <span className="fst-fact-label">{label}</span>
       <Num className="ld-trio-value" value={value} format={format} duration={1100} />
       <Versus value={value} previous={previous} cmp={cmp} invert={invert} money={money} />
+    </div>
+  );
+}
+
+// Pour rapprocher les chiffres de l'équipe ads : chaque compte des deux portefeuilles Owner, et ce qui est arrivé chez
+// nous (fiches brutes, doublons écartés).
+function AdsCheck({ meta, channels }) {
+  const accounts = meta?.accounts || [];
+  const by = byKey(channels);
+  const ads = by.meta_ads || { raw: 0, duplicates: 0 };
+  const web = by.webinar || { raw: 0, duplicates: 0, details: [] };
+  const direct = (web.details || []).flatMap((x) => x.children).filter((x) => x.label === "Page d'inscription").reduce((sum, x) => sum + x.count, 0);
+  const dups = ads.duplicates + web.duplicates;
+  return (
+    <div className="ld-check">
+      <Branch label="Par compte et doublons" note={`${plural(accounts.length, 'compte')} · ${dups ? plural(dups, 'doublon') : 'aucun doublon'}`}>
+        <table className="fst-months ld-table">
+          <thead><tr><th>Compte publicitaire</th><th>Leads Meta</th><th>Dépensé</th></tr></thead>
+          <tbody>
+            {accounts.map((a) => (
+              <tr key={a.account_id}>
+                <td><span className="is-strong">{a.portfolio}</span><span className="ld-line-unit">compte {a.account_id}</span></td>
+                <td className="fst-num">{count(a.leads)}</td><td className="fst-num">{euros(a.spend_eur)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <dl className="fst-kv">
+          <dt>Fiches des ads reçues chez nous</dt><dd className="fst-num">{count(ads.raw)} · {ads.duplicates ? plural(ads.duplicates, 'doublon') : 'aucun doublon'}</dd>
+          <dt>Inscrits au webinaire (landing)</dt><dd className="fst-num">{count(web.raw)}{direct ? `, dont ${count(direct)} en direct` : ''} · {web.duplicates ? plural(web.duplicates, 'doublon') : 'aucun doublon'}</dd>
+        </dl>
+      </Branch>
     </div>
   );
 }
@@ -196,6 +229,7 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
               <tr><td>Total</td><td className="fst-num">{count(total?.leads)}</td><td className="fst-num">{cents(total?.cpl_eur)}</td><td className="fst-num">{euros(total?.spend_eur)}</td></tr>
             </tfoot>
           </table>
+          <AdsCheck meta={meta} channels={d.channels} />
           <div className="fst-chart">
             <div className="fst-chart-title"><span>{h.weeks ? 'CPL semaine par semaine' : 'CPL jour par jour'}</span></div>
             <DayBars short days={h.days} inPeriod={h.in_period} values={values} format={(n) => count(Math.round(n))} weeks={h.weeks}
