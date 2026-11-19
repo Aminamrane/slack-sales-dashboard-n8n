@@ -17,7 +17,8 @@ import LeadsDashboard from "../components/leadsDashboard/LeadsDashboard.jsx";
 // Le kit de la page Finance ne porte pas le mode sombre : cette feuille le lui donne sous `.ab-root`.
 import "../components/automationBoard/automation.css";
 
-const ALLOWED_ROLES = new Set(["admin", "ceo"]);
+// Le CEO, les admins et la tête de l'acquisition (dev 19/11/2026), comme Meta Ads et Gestion des leads.
+const ALLOWED_ROLES = new Set(["admin", "ceo", "head_of_acquisition"]);
 const TAB_ID = "leads_dashboard";
 
 // Routes propres aux onglets de la barre ; les autres passent par navigateBackToDashboard.

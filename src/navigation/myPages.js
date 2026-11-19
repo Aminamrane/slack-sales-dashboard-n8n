@@ -6,7 +6,7 @@
 // vraie) ; ici la règle est celle de la page et de l'API (META_ADS_ALLOWED_ROLES).
 import { createElement } from "react";
 import {
-  BarChart3, Building2, Calculator, Clock3, Crown, Eye, Filter, Gauge, HeartHandshake, LayoutDashboard, LineChart,
+  BarChart3, Building2, Calculator, Clock3, Crown, Eye, Filter, Gauge, HeartHandshake, Inbox, LayoutDashboard, LineChart,
   Megaphone, MonitorDot, NotebookPen, PhoneCall, Sheet, Shuffle, Target, Trophy, UsersRound, Wallet,
 } from "lucide-react";
 import apiClient from "../services/apiClient";
@@ -32,6 +32,7 @@ export const MY_PAGES = [
   { id: "page:finance", tab: "dispatch", label: "Finance", path: "/tracking-finance", icon: I(Wallet), visible: roleIn("admin", "ceo", "finance_director", "finance_team") },
   { id: "page:dialer", label: "Power Dialer", path: "/dialer", icon: I(MonitorDot), visible: roleIn("admin", "ceo", "finance_director", "finance_team") },
   { id: "page:optilex-board", tab: "optilex_board", label: "Board Owner", path: "/optilex-board", icon: I(Building2), visible: roleIn("admin", "optilex", "finance_team") },
+  { id: "page:leads-dashboard", tab: "leads_dashboard", label: "Leads", path: "/ceo/leads", icon: I(Inbox), visible: roleIn("admin", "ceo", "head_of_acquisition") },
   { id: "page:meta-ads", tab: "meta_ads", label: "Meta Ads", path: "/meta-ads", icon: I(BarChart3), visible: roleIn("ceo", "admin", "finance_director", "acquisition_director", "head_of_acquisition", "marketing", "hr") },
   { id: "page:variables", tab: "variables", label: "Calcul des variables", path: "/ceo/variables", icon: I(Calculator), visible: roleIn("admin", "ceo") },
   { id: "page:variables-setters", label: "Contribution des setters", path: "/variables/setters", icon: I(HeartHandshake), visible: roleIn("admin", "ceo") },
