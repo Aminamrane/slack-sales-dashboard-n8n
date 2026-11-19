@@ -18,7 +18,9 @@ import { formatDateFR } from './constants.js';
 /** Nombre d'échanges gardés par client (le plus récent d'abord). */
 export const EXCHANGES_PER_CLIENT = 3;
 /** Lectures simultanées : assez pour finir vite, assez peu pour ne pas saturer l'API. */
-export const READ_CONCURRENCY = 6;
+export const READ_CONCURRENCY = 8;
+/** Pause avant de relire une source en panne (une seule relecture) ; la concurrence est alors divisée par deux. */
+export const RETRY_DELAY_MS = 400;
 // Une cellule Excel accepte 32 767 caractères ; 500 par échange gardent la feuille lisible.
 const BODY_MAX = 500;
 
@@ -112,14 +114,24 @@ export function promiseLabel(promise) {
 }
 
 /**
- * Les marqueurs d'un client, dans l'ordre de l'écran.
+ * Les marqueurs d'un client : tous ceux que le tableau montre en pastilles, dans l'ordre de l'écran.
  * @param {object} row   ligne du tableau
  * @param {{label?: string, score?: number}|null} [meteo]  météo du board (déjà calculée par la page)
+ * @param {{departure?: string|null, noShow?: {label: string, value?: string}|null, recovered?: {day?: string, toRestore?: boolean}|null, pending?: boolean}} [board]
+ *        ce que la page calcule du board (jamais recalculé ici) : départ en cours ou acté (rétractation, résiliation…),
+ *        no show / recalé d'onboarding, « Récupéré », contrat en attente d'Opti'Lex
  */
-export function tagsOf(row, meteo = null) {
+export function tagsOf(row, meteo = null, board = {}) {
   const c = row?.client || {};
   const tags = [];
   if (c.do_not_call) tags.push('À ne pas rappeler');
+  if (board.pending) tags.push("Attente Opti'Lex");
+  if (board.departure) tags.push(board.departure);
+  if (board.noShow?.label) tags.push(`${board.noShow.label} ${board.noShow.value || ''}`.trim());
+  if (board.recovered) {
+    tags.push(`Récupéré${board.recovered.day ? ` le ${board.recovered.day}` : ''}${board.recovered.toRestore ? ' (facturation à rétablir)' : ''}`);
+  }
+  if (c.sale_undeclared) tags.push('Vente non déclarée');
   if (c.payment_promise) tags.push(promiseLabel(c.payment_promise));
   if (c.is_loss) tags.push('Perte actée');
   if (meteo?.label) tags.push(`Météo ${meteo.label}${meteo.score != null ? ` (${meteo.score}/5)` : ''}`);
@@ -136,39 +148,54 @@ const listOf = (data) => (Array.isArray(data?.comments) ? data.comments : Array.
  * @param {object} opts
  * @param {(url: string) => Promise<any>} opts.get   lecture HTTP (ex. `apiClient.get`) ; lève une erreur portant `status`
  * @param {(done: number, total: number) => void} [opts.onProgress]
+ * @param {(row: object) => number|null|undefined} [opts.sharedCountOf]  nombre de messages du fil commun du client, s'il est connu
+ *        (le board le fournit : `comment_count`) ; 0 = rien à lire, la lecture du fil commun est sautée. Inconnu = lu.
  * @returns {Promise<Map<string, {items: object[], failed: boolean}>>}  clé = `exchangeKey(row)` ;
  *          `failed` = une source n'a pas pu être lue (réseau / serveur) : l'export le dit au lieu de laisser croire « aucun échange ».
  */
-export async function loadExchanges(rows, { get, onProgress, concurrency = READ_CONCURRENCY, limit = EXCHANGES_PER_CLIENT } = {}) {
+export async function loadExchanges(rows, {
+  get, onProgress, sharedCountOf, concurrency = READ_CONCURRENCY, limit = EXCHANGES_PER_CLIENT, retryDelay = RETRY_DELAY_MS,
+} = {}) {
   const wanted = new Map();
   for (const r of rows || []) {
     const key = exchangeKey(r);
-    if (key && !wanted.has(key)) wanted.set(key, { numero: r.client?.numero_client || null, clientId: r.client_id ?? null });
+    if (key && !wanted.has(key)) {
+      wanted.set(key, { numero: r.client?.numero_client || null, clientId: r.client_id ?? null, sharedCount: sharedCountOf?.(r) ?? null });
+    }
   }
   const entries = [...wanted.entries()];
   const result = new Map();
   const denied = { shared: false, notes: false };
+  // Lecteurs actifs : divisé par deux (jamais sous 2) dès qu'une lecture échoue, pour ne pas charger une API qui peine.
+  let active = Math.max(1, concurrency);
+  const slowDown = () => { active = Math.max(Math.min(2, active), Math.floor(active / 2)); };
+  const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const read = async (url, source) => {
     if (!url || denied[source]) return { ok: true, list: [] };
-    try {
-      return { ok: true, list: listOf(await get(url)) };
-    } catch (e) {
-      if (e?.status === 401 || e?.status === 403) { denied[source] = true; return { ok: true, list: [] }; }
-      if (e?.status === 404) return { ok: true, list: [] };
-      return { ok: false, list: [] };
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return { ok: true, list: listOf(await get(url)) };
+      } catch (e) {
+        if (e?.status === 401 || e?.status === 403) { denied[source] = true; return { ok: true, list: [] }; }
+        if (e?.status === 404) return { ok: true, list: [] };
+        slowDown();
+        if (attempt >= 1) return { ok: false, list: [] };       // une seule relecture, puis « non lu » (dit dans le fichier)
+        await sleep(retryDelay);
+      }
     }
   };
 
   let cursor = 0;
   let done = 0;
-  const worker = async () => {
+  const worker = async (index) => {
     for (;;) {
+      if (index >= active) return;                               // ralenti : ce lecteur s'efface
       const i = cursor; cursor += 1;
       if (i >= entries.length) return;
-      const [key, { numero, clientId }] = entries[i];
+      const [key, { numero, clientId, sharedCount }] = entries[i];
       const [shared, notes] = await Promise.all([
-        read(numero ? `/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}` : null, 'shared'),
+        read(numero && sharedCount !== 0 ? `/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}` : null, 'shared'),
         read(clientId != null ? `/api/v1/finance-periods/client/${encodeURIComponent(clientId)}/comments` : null, 'notes'),
       ]);
       result.set(key, { items: latestExchanges(shared.list, notes.list, limit), failed: !(shared.ok && notes.ok) });
@@ -176,6 +203,6 @@ export async function loadExchanges(rows, { get, onProgress, concurrency = READ_
       onProgress?.(done, entries.length);
     }
   };
-  await Promise.all(Array.from({ length: Math.min(Math.max(1, concurrency), entries.length) }, worker));
+  await Promise.all(Array.from({ length: Math.min(active, entries.length) }, (_, n) => worker(n)));
   return result;
 }

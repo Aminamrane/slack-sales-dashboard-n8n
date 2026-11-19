@@ -63,7 +63,6 @@ import {
   RefundIcon, CalendarCheckIcon, CalendarClockIcon, MeteoFilterIcon, ContractPendingIcon, BankOffIcon, ExitIcon, ExportIcon, ContactIcon,
   PauseIcon, LiquidationIcon, RecoveredIcon, NoShowIcon,
 } from './components/FinanceIcons.jsx';
-import { exportFinanceXlsx } from './exportExcel.js';
 import { loadExchanges } from './exportExchanges.js';
 import { parisToday } from '../../utils/parisDates.js';
 import {
@@ -78,7 +77,7 @@ import DetailPanel from './DetailPanel.jsx';
 // `displayEtat` : l'état affiché sur le board Owner/Opti'Lex, calculé par le
 // back (`etat_affiche`) — la même valeur que le board, jamais recalculée ici.
 import { matchesLateOnboarding, matchesAnnualRenewal, isRetractedEtat } from './followupFilters.js';
-import { displayEtat, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
+import { displayEtat, ETAT_STYLE, MeteoIcon, METEO_BANDS, meteoBandOf } from '../OptilexBoard.jsx';
 import {
   ALLOWED_ROLES,
   formatEUR,
@@ -102,7 +101,8 @@ import {
   PENDING_OPTILEX_LABEL, pendingFinanceRow,
   canUseGlobalScope,
 } from './constants.js';
-import { noShowOf } from './boardFollow.js';
+import { departureOf, noShowInfo, noShowOf } from './boardFollow.js';
+import { recoveredInfo } from './recovered.js';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Palette de la page : toile grège chaude, cartes blanches, encre presque noire,
@@ -1025,16 +1025,43 @@ export default function TrackingSheetFinance() {
     try {
       const total = exportedRows.length;
       showToast(`Lecture des échanges de ${total} client${total > 1 ? 's' : ''}…`, 'info');
+      // Le moteur Excel (≈ 425 Ko) n'est chargé qu'ici, en parallèle de la lecture : la page n'en porte pas le poids.
+      const excelModule = import('./exportExcel.js');
+      excelModule.catch(() => {});
+      // Nombre de messages du fil commun par client, relu à l'instant (le board de la page date du chargement) :
+      // 0 = rien à lire. Si la relecture échoue, aucun compteur n'est utilisé et tout est lu.
+      const sharedCounts = new Map();
+      try {
+        const fresh = await apiClient.get('/api/v1/optilex/board');
+        for (const br of fresh?.clients || []) {
+          if (br.numero_client && Number.isInteger(br.comment_count)) sharedCounts.set(br.numero_client, br.comment_count);
+        }
+      } catch (e) { console.error('[export xlsx] compteurs de messages non relus', e); }
       const exchanges = await loadExchanges(exportedRows, {
         get: (url) => apiClient.get(url),
+        sharedCountOf: (r) => sharedCounts.get(r.client?.numero_client),
         onProgress: (done, all) => { if (done < all && done % 10 === 0) showToast(`Lecture des échanges… ${done}/${all}`, 'info'); },
       });
       const meteoOf = (r) => {
         const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
         const score = br?.meteo_score ?? null;
-        return score != null ? { label: METEO_BANDS[meteoBandOf(score)]?.label, score } : null;
+        const band = score != null ? METEO_BANDS[meteoBandOf(score)] : null;
+        return band ? { label: band.label, score, bg: band.bg, fg: band.color } : null;
       };
-      const n = exportFinanceXlsx({ rows: exportedRows, scope, period, etatOf: boardEtatOf, meteoOf, exchanges });
+      // Les mêmes pastilles que le tableau : départ, no show / recalé, récupéré, attente Opti'Lex (règles de la page, non recalculées).
+      const boardOf = (r) => {
+        const br = (r.client?.numero_client && boardMap) ? boardMap.get(r.client.numero_client) : null;
+        if (!br) return {};
+        const etat = displayEtat(br);
+        return {
+          pending: etat === PENDING_OPTILEX_LABEL,
+          departure: departureOf(etat),
+          noShow: noShowInfo(noShowOf(br, undefined, etat)),
+          recovered: recoveredInfo(br.recupere),
+        };
+      };
+      const { exportFinanceXlsx } = await excelModule;
+      const n = exportFinanceXlsx({ rows: exportedRows, scope, period, etatOf: boardEtatOf, etatToneOf: (etat) => ETAT_STYLE[etat] || null, meteoOf, boardOf, exchanges });
       const unread = [...exchanges.values()].filter((x) => x.failed).length;
       showToast(`${n} client${n > 1 ? 's' : ''} exporté${n > 1 ? 's' : ''}${unread ? ` · échanges non lus pour ${unread}` : ''}`, unread ? 'info' : 'success');
     } catch (e) {
