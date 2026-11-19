@@ -113,8 +113,39 @@ const que = (word) => (/^[aeiouhéèê]/i.test(word) ? `qu'${word}` : `que ${wor
 export function changeWords(diff, word, money = false) {
   if (!diff) return `autant ${que(word)}`;
   const n = Math.abs(diff);
-  const amount = money ? `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : n.toLocaleString('fr-FR');
+  const digits = money === 'whole' ? 0 : 2;
+  const amount = money ? `${n.toLocaleString('fr-FR', { minimumFractionDigits: digits, maximumFractionDigits: digits })} €` : n.toLocaleString('fr-FR');
   return `${amount} de ${diff > 0 ? 'plus' : 'moins'} ${que(word)}`;
+}
+
+// « le CPL d'hier », « le CPL de la semaine précédente ».
+export const ofWord = (word) => (/^[aeiouhéèê]/i.test(word) ? `d'${word}` : `de ${word}`);
+
+// Au-delà d'un mois, le graphique passe à la semaine (du lundi) : leads additionnés, CPL Meta recalculé sur la semaine
+// (dépense ÷ leads). `metaDays` : le CPL Meta jour par jour du serveur.
+export function byWeek(history, metaDays = []) {
+  if (!history || history.days.length <= 31) return history && { ...history, weeks: false, meta: metaDays };
+  const starts = [];
+  const index = history.days.map((day) => {
+    const start = weekStart(day);
+    if (starts[starts.length - 1] !== start) starts.push(start);
+    return starts.length - 1;
+  });
+  const sum = (values) => starts.map((_, w) => values.reduce((acc, v, i) => (index[i] === w ? acc + (v || 0) : acc), 0));
+  const meta = Object.fromEntries((metaDays || []).map((x) => [x.date, x]));
+  return {
+    weeks: true, days: starts,
+    in_period: starts.map((_, w) => history.in_period.some((on, i) => on && index[i] === w)),
+    total: sum(history.total),
+    channels: Object.fromEntries(Object.entries(history.channels).map(([k, v]) => [k, sum(v)])),
+    meta: starts.map((start, w) => {
+      const days = history.days.filter((_, i) => index[i] === w).map((d) => meta[d]).filter((x) => x && x.leads != null);
+      if (!days.length) return { date: start, leads: null };
+      const leads = days.reduce((a, x) => a + x.leads, 0);
+      const spend = days.reduce((a, x) => a + (x.spend_eur || 0), 0);
+      return { date: start, leads, spend_eur: Math.round(spend * 100) / 100, cpl_eur: leads ? Math.round((spend / leads) * 100) / 100 : null };
+    }),
+  };
 }
 
 export const signedEur = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;

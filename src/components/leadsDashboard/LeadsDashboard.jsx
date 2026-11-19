@@ -18,7 +18,7 @@ import { barHeights, count, dayShort, eur, originGroups, pct, plural } from '../
 import { parisParts, parisToday } from '../../utils/parisDates.js';
 import {
   byKey, canReadCalls, categoryColor, channelColor, compareWord, comparisonFor, dayLabel, delta, groupChannels,
-  changeWords, headcountText, presetRange, PRESETS, provenanceColor, revenueText,
+  byWeek, changeWords, headcountText, ofWord, presetRange, PRESETS, provenanceColor, revenueText,
 } from './model.js';
 import './leads.css';
 
@@ -60,8 +60,8 @@ function Change({ value, previous, cmp, invert = false, money = false }) {
   if (!cmp || !d || !d.diff) return null;
   const good = invert ? d.diff < 0 : d.diff > 0;
   return (
-    <Pill plain tone={good ? 'green' : 'red'} title={`${cmp.label} : ${money ? cents(previous) : count(previous)}`}>
-      {changeWords(d.diff, cmp.word, money)}
+    <Pill plain tone={good ? 'green' : 'red'} title={`${cmp.label} : ${money === 'whole' ? euros(previous) : money ? cents(previous) : count(previous)}`}>
+      {changeWords(money === 'whole' ? Math.round(d.diff) : d.diff, cmp.word, money)} ({money === 'whole' ? euros(previous) : money ? cents(previous) : count(previous)})
     </Pill>
   );
 }
@@ -76,11 +76,11 @@ const Fact = ({ label, value, format = whole, note }) => (
 
 // Barres jour par jour, comme les mois de « Ce que paie un client » : les jours de la période sont pleins, les autres
 // estompés ; une barre peut s'empiler par canal. Un clic ouvre le jour.
-function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, short = false }) {
+function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, short = false, weeks = false }) {
   const drawn = useDrawn();
   const h = barHeights(values.map((v) => v ?? 0));
   return (
-    <div className="fst-bars ld-days" data-short={short || undefined}>
+    <div className="fst-bars ld-days" data-short={short || undefined} data-dense={days.length > 16 || undefined}>
       {days.map((day, i) => (
         <button key={day} type="button" className="fst-bar" data-in={inPeriod[i] || undefined} onClick={onPick ? () => onPick(day) : undefined}
           aria-label={`${dayShort(day)} : ${values[i] == null ? '–' : format(values[i])}`}>
@@ -89,7 +89,7 @@ function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, 
           <span className="fst-bar-fill" data-stack={stacks ? true : undefined} style={{ height: `${drawn ? h[i] * 0.72 : 0}%`, transitionDelay: `${i * 22}ms` }}>
             {stacks?.[i]?.map((s) => <i key={s.key} style={{ flexGrow: s.n, background: s.color }} />)}
           </span>
-          <span className="fst-bar-label">{dayLabel(day, i, days.length, short)}</span>
+          <span className="fst-bar-label">{weeks ? (i % Math.ceil(days.length / 7) ? '' : dayShort(day)) : dayLabel(day, i, days.length, short)}</span>
         </button>
       ))}
     </div>
@@ -100,7 +100,7 @@ function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, 
 
 function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
   const d = state.data;
-  const h = d?.history;
+  const h = useMemo(() => (d?.history ? byWeek(d.history) : null), [d]);
   const channels = (d?.channels || []).filter((c) => h?.channels?.[c.key]);
   const stacks = h ? h.days.map((_, i) => channels.map((c) => ({ key: c.key, n: h.channels[c.key][i], color: channelColor(c.key) })).filter((s) => s.n)) : null;
   return (
@@ -120,11 +120,11 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
             <Fact label="R2 placés" value={d.total.r2} note={d.total.leads ? pct(d.total.r2 / d.total.leads, 0) : null} />
           </div>
           <div className="fst-chart">
-            <div className="fst-chart-title"><span>Jour par jour</span><span>{plural(h.days.length, 'jour')}</span></div>
-            <DayBars days={h.days} inPeriod={h.in_period} values={h.total} stacks={stacks} onPick={onPickDay}
+            <div className="fst-chart-title"><span>{h.weeks ? 'Semaine par semaine' : 'Jour par jour'}</span><span>{h.weeks ? plural(h.days.length, 'semaine') : plural(h.days.length, 'jour')}</span></div>
+            <DayBars days={h.days} inPeriod={h.in_period} values={h.total} stacks={stacks} onPick={h.weeks ? undefined : onPickDay} weeks={h.weeks}
               tip={(i) => (
                 <>
-                  <b>{dayShort(h.days[i])}</b> · {plural(h.total[i], 'lead')}
+                  <b>{h.weeks ? `Semaine du ${dayShort(h.days[i])}` : dayShort(h.days[i])}</b> · {plural(h.total[i], 'lead')}
                   {channels.filter((c) => h.channels[c.key][i]).map((c) => <span key={c.key}><br />{c.label} · {h.channels[c.key][i]}</span>)}
                 </>
               )} />
@@ -140,65 +140,69 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
 
 // ── Ads Meta ──────────────────────────────────────────────────────────────────────────────────────
 
+// Le récap des ads, comme celui que l'équipe ads envoie chaque jour : par catégorie, les leads comptés par Meta, le CPL
+// et la dépense ; puis le total, webinaire compris. Une catégorie qui dépense sans lead ressort en rouge.
+function Trio({ label, value, format, previous, cmp, invert, money }) {
+  return (
+    <div className="ld-trio-item">
+      <span className="fst-fact-label">{label}</span>
+      <Num className="ld-trio-value" value={value} format={format} duration={1100} />
+      <Change value={value} previous={previous} cmp={cmp} invert={invert} money={money} />
+    </div>
+  );
+}
+
 function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const d = state.data;
   const meta = d?.meta;
-  const ads = meta?.excluding_webinar;
-  const before = prev?.meta?.status === 'ok' ? prev.meta : null;
-  const cats = meta?.categories || [];
-  const catLeads = cats.reduce((sum, c) => sum + (c.leads || 0), 0);
-  const h = d?.history;
-  const byDay = Object.fromEntries((meta?.by_day || []).map((x) => [x.date, x]));
+  const total = meta?.total;
+  const before = prev?.meta?.status === 'ok' ? prev.meta.total : null;
+  const rows = [...(meta?.categories || []), ...(meta?.webinar ? [{ category: 'WEBINAIRE', ...meta.webinar }] : [])];
+  const h = useMemo(() => (d?.history ? byWeek(d.history, meta?.by_day) : null), [d, meta]);
+  const byDay = Object.fromEntries((h?.meta || []).map((x) => [x.date, x]));
   const values = (h?.days || []).map((day) => byDay[day]?.cpl_eur ?? null);
+  const cplCmp = cmp && { ...cmp, word: `le CPL ${ofWord(cmp.word)}` };
   return (
-    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={380}>
+    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={420}
+      actions={meta?.synced_at && (
+        <span className="ld-synced">Meta lu {meta.synced_at.slice(0, 10) === parisToday() ? '' : `le ${dayShort(meta.synced_at)} `}à {meta.synced_at.slice(11, 16).replace(':', ' h ')}</span>
+      )}>
       {meta?.status !== 'ok' ? <div className="fst-empty">Meta pas encore synchronisé sur cette période.</div> : (
         <>
-          <div className="fst-hero">
-            <div>
-              <Num className="fst-big" value={ads?.cpl_eur} format={cents} duration={1100} />
-              <span className="fst-big-unit">par lead</span>
-            </div>
-            <Change value={ads?.cpl_eur} previous={before?.excluding_webinar?.cpl_eur} cmp={cmp} invert money />
+          <div className="ld-trio">
+            <Trio label="Leads Meta" value={total?.leads} format={whole} previous={before?.leads} cmp={cmp} />
+            <Trio label="CPL" value={total?.cpl_eur} format={cents} previous={before?.cpl_eur} cmp={cplCmp} invert money />
+            <Trio label="Dépensé" value={total?.spend_eur} format={euros} previous={before?.spend_eur && Math.round(before.spend_eur)} cmp={cmp} money="whole" />
           </div>
-          <div className="fst-facts">
-            <Fact label="Leads Meta" value={ads?.leads} />
-            <Fact label="Reçus dans le CRM" value={byKey(d.channels).meta_ads?.total} />
-            <Fact label="Dépensé" value={ads?.spend_eur} format={euros} />
-          </div>
+          <table className="fst-months ld-recap">
+            <thead><tr><th>Catégorie</th><th>Leads</th><th>CPL</th><th>Dépensé</th></tr></thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.category} data-idle={!c.leads || undefined}>
+                  <td><span className="ld-creative-cat is-strong"><span className="fst-dot" style={{ background: c.category === 'WEBINAIRE' ? channelColor('webinar') : categoryColor(c.category) }} />{c.category}</span></td>
+                  <td className="fst-num is-strong">{count(c.leads)}</td>
+                  <td className="fst-num ld-recap-cpl">{c.leads ? cents(c.cpl_eur) : 'aucun lead'}</td>
+                  <td className="fst-num">{euros(c.spend_eur)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr><td>Total</td><td className="fst-num">{count(total?.leads)}</td><td className="fst-num">{cents(total?.cpl_eur)}</td><td className="fst-num">{euros(total?.spend_eur)}</td></tr>
+            </tfoot>
+          </table>
           <div className="fst-chart">
-            <div className="fst-chart-title"><span>CPL jour par jour</span></div>
-            <DayBars short days={h.days} inPeriod={h.in_period} values={values} format={(n) => count(Math.round(n))}
+            <div className="fst-chart-title"><span>{h.weeks ? 'CPL semaine par semaine' : 'CPL jour par jour'}</span></div>
+            <DayBars short days={h.days} inPeriod={h.in_period} values={values} format={(n) => count(Math.round(n))} weeks={h.weeks}
               tip={(i) => {
                 const x = byDay[h.days[i]];
                 return (
                   <>
-                    <b>{dayShort(h.days[i])}</b>
-                    {x?.leads != null ? <><br />{cents(x.cpl_eur)} <span>par lead</span><br />{plural(x.leads, 'lead')} <span>· {euros(x.spend_eur)}</span></> : <><br /><span>Pas encore lu chez Meta</span></>}
+                    <b>{h.weeks ? `Semaine du ${dayShort(h.days[i])}` : dayShort(h.days[i])}</b>
+                    {x?.leads != null ? <><br />{x.cpl_eur == null ? 'Aucun lead' : <>CPL {cents(x.cpl_eur)}</>}<br />{plural(x.leads, 'lead Meta', 'leads Meta')} <span>· {euros(x.spend_eur)}</span></> : <><br /><span>Pas encore lu chez Meta</span></>}
                   </>
                 );
               }} />
           </div>
-          {cats.length > 0 && (
-            <div className="fst-chart">
-              <div className="fst-chart-title"><span>Par catégorie</span><span>CPL</span></div>
-              <div className="fst-dist">
-                {cats.map((c) => (
-                  <div key={c.category} className="fst-dist-row ld-cat" title={`${c.category} : ${plural(c.leads, 'lead')}, ${euros(c.spend_eur)} dépensés`}>
-                    <span>{c.category}</span>
-                    <Fill value={catLeads ? c.leads / catLeads : 0} color={categoryColor(c.category)} />
-                    <span className="fst-num">{count(c.leads)}</span>
-                    <span className="fst-num ld-cat-cpl">{cents(c.cpl_eur)}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-          {meta.webinar && (
-            <dl className="fst-kv">
-              <dt>Webinaire</dt><dd className="fst-num">{plural(meta.webinar.leads, 'lead Meta', 'leads Meta')} · CPL {cents(meta.webinar.cpl_eur)} · {euros(meta.webinar.spend_eur)}</dd>
-            </dl>
-          )}
           <button type="button" className="fst-link" aria-expanded={campaignsOpen} onClick={onCampaigns}>
             {campaignsOpen ? 'Masquer les campagnes' : 'Voir les campagnes'}<ChevronRight size={13} />
           </button>
@@ -237,6 +241,53 @@ function Creatives({ rows }) {
   );
 }
 
+// Une branche du détail : son nombre, et ce qu'elle contient au clic.
+function Branch({ label, n, note, tone, children }) {
+  const [open, setOpen] = useState(false);
+  const can = Boolean(children);
+  return (
+    <div className="ld-branch">
+      <button type="button" className="ld-branch-row" aria-expanded={can ? open : undefined} disabled={!can} data-tone={tone} onClick={() => setOpen(!open)}>
+        {can ? <ChevronRight size={13} className="fst-chev" /> : <span />}
+        <span className="ld-branch-label" title={label}>{label}</span>
+        <span className="ld-branch-note">{note}</span>
+        <b className="fst-num">{n == null ? '' : count(n)}</b>
+      </button>
+      {can && <Collapse open={open}><div className="ld-branch-body">{children}</div></Collapse>}
+    </div>
+  );
+}
+
+// Le détail d'un canal : d'abord où le lead est arrivé chez nous, puis ce qui le précise. Les ads Meta : l'origine de la
+// fiche, puis ses créas ; à part, les créas qui ont dépensé sans amener de lead.
+function ChannelDetails({ channel: c, creatives }) {
+  if (c.key === 'meta_ads') {
+    const known = Object.fromEntries((creatives || []).map((r) => [r.key, r]));
+    const idle = (creatives || []).filter((r) => !r.received && (r.spend_eur || 0) >= 1);
+    return (
+      <>
+        {c.details.map((o) => (
+          <Branch key={o.label} label={o.label} n={o.count} note={plural(o.children.length, 'créa')}>
+            <Creatives rows={o.children.map((ch) => ({ ...(known[ch.label] || { key: ch.label, name: 'Sans créa connue' }), received: ch.count }))} />
+          </Branch>
+        ))}
+        {idle.length > 0 && (
+          <Branch label="Créas actives sans lead reçu" tone="bad" note={`${plural(idle.length, 'créa')} · ${euros(idle.reduce((sum, r) => sum + (r.spend_eur || 0), 0))} dépensés`}>
+            <Creatives rows={idle} />
+          </Branch>
+        )}
+      </>
+    );
+  }
+  return c.details.map((x) => (
+    <Branch key={x.label} label={x.label} n={x.count}>
+      {x.children.length ? x.children.map((ch) => (
+        <div key={ch.label} className="fst-sub-row"><span title={ch.label}>{ch.label}</span><span /><b className="fst-num">{count(ch.count)}</b></div>
+      )) : null}
+    </Branch>
+  ));
+}
+
 function ChannelRow({ channel: c, before, cmp, open, onToggle, onHover, creatives, onSeeLeads }) {
   const d = before ? delta(c.total, before.total) : null;
   const can = c.total > 0 && Boolean(creatives || c.details?.length);
@@ -247,20 +298,18 @@ function ChannelRow({ channel: c, before, cmp, open, onToggle, onHover, creative
         <span className="fst-row-name">{c.label}
           {before && cmp && (c.total || before.total) ? (
             <small title={`${cmp.label} : ${count(before.total)}`}>
-              {d?.diff ? <span className={d.diff > 0 ? 'ld-up' : 'ld-down'}>{changeWords(d.diff, cmp.word)}</span> : changeWords(0, cmp.word)}
+              {d?.diff ? <span className={d.diff > 0 ? 'ld-up' : 'ld-down'}>{changeWords(d.diff, cmp.word)}</span> : changeWords(0, cmp.word)} ({count(before.total)})
             </small>
           ) : null}
         </span>
-        <Fill value={c.share} color={c.color} />
-        <span className="fst-row-num fst-num">{count(c.total)}<small>{pct(c.share, 0)}</small></span>
+        {c.share == null ? <span /> : <Fill value={c.share} color={c.color} />}
+        <span className="fst-row-num fst-num">{count(c.total)}{c.share != null && <small>{pct(c.share, 0)}</small>}</span>
         {can ? <ChevronRight size={14} className="fst-chev" /> : <span />}
       </button>
       <Collapse open={open && can}>
         <div className="fst-sub-list">
-          {creatives ? <Creatives rows={creatives} /> : c.details.map((x) => (
-            <div key={x.label} className="fst-sub-row"><span title={x.label}>{x.label}</span><span /><b className="fst-num">{count(x.count)}</b></div>
-          ))}
-          <button type="button" className="fst-link" onClick={() => onSeeLeads(c.key)}>Voir {c.total > 1 ? `ces ${count(c.total)} leads` : 'ce lead'}<ArrowDown size={13} style={{ rotate: '-90deg' }} /></button>
+          <ChannelDetails channel={c} creatives={creatives} />
+          {onSeeLeads && <button type="button" className="fst-link" onClick={() => onSeeLeads(c.key)}>Voir {c.total > 1 ? `ces ${count(c.total)} leads` : 'ce lead'}<ArrowDown size={13} style={{ rotate: '-90deg' }} /></button>}
         </div>
       </Collapse>
     </div>
@@ -288,7 +337,7 @@ function ChannelsCard({ state, prev, cmp, onSeeLeads }) {
             </div>
           )}
           {groups.map((g) => (
-            <div key={g.key} className="fst-group">
+            <div key={g.key} className="fst-group" data-group={g.key}>
               <div className="fst-group-head">
                 <span className="fst-group-name">{g.label}</span>
                 <span className="fst-group-chip fst-num">{pct(g.share, 0)}</span>
@@ -300,6 +349,21 @@ function ChannelsCard({ state, prev, cmp, onSeeLeads }) {
               ))}
             </div>
           ))}
+          <div className="fst-group ld-relaunch">
+            <div className="fst-group-head">
+              <span className="fst-group-name">Relances des setters</span>
+              <span className="fst-group-chip">hors leads reçus</span>
+            </div>
+            {[
+              { key: 'second_chance', label: 'Seconde chance · leads repris', total: d.second_chance?.claimed || 0, before: prev?.second_chance && { total: prev.second_chance.claimed },
+                people: (d.second_chance?.setters || []).map((x) => ({ label: x.name, count: x.claimed, children: [] })) },
+              { key: 'webinar_recall', label: 'Anciens webinaires · fiches rappelées', total: d.old_webinar?.worked || 0, before: prev?.old_webinar && { total: prev.old_webinar.worked },
+                people: (d.old_webinar?.setters || []).map((x) => ({ label: x.name, count: x.worked, children: [] })) },
+            ].map((r) => (
+              <ChannelRow key={r.key} channel={{ key: r.key, label: r.label, total: r.total, share: null, color: provenanceColor(r.key), details: r.people }}
+                before={r.before} cmp={cmp} open={open === r.key} onHover={setHover} onToggle={() => setOpen(open === r.key ? null : r.key)} />
+            ))}
+          </div>
         </>
       )}
     </Card>
@@ -380,6 +444,9 @@ function LeadsDrawer({ open, range, channel, onChannel, onClose, when }) {
   const shown = rows.filter((r) => (!channel || r.channel === channel)
     && (!needle || [r.name, r.company, r.sector, r.sales, r.setter, r.detail, r.creative].some((x) => String(x || '').toLowerCase().includes(needle))));
   const many = range.from !== range.to;
+  const [limit, setLimit] = useState({ key: '', n: 60 });
+  const listKey = `${range.from}/${range.to}/${channel || ''}/${needle}`;
+  const n = limit.key === listKey ? limit.n : 60;
   useEffect(() => {
     if (!open) return undefined;
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -419,8 +486,11 @@ function LeadsDrawer({ open, range, channel, onChannel, onClose, when }) {
             <div className="ld-drawer-body">
               {!state.fresh && !state.error && <div className="fst-skel" style={{ height: 240 }} />}
               {state.error && <div className="fst-error" role="alert">{state.error}<button type="button" onClick={state.retry}>Réessayer</button></div>}
-              {state.fresh && shown.map((lead) => <LeadLine key={`${lead.id}-${lead.channel}`} lead={lead} many={many} />)}
+              {state.fresh && shown.slice(0, n).map((lead) => <LeadLine key={`${lead.id}-${lead.channel}`} lead={lead} many={many} />)}
               {state.fresh && !shown.length && <div className="fst-empty">Aucun lead.</div>}
+              {state.fresh && shown.length > n && (
+                <div className="fst-more"><button type="button" onClick={() => setLimit({ key: listKey, n: n + 120 })}>Afficher les {count(Math.min(120, shown.length - n))} suivants</button></div>
+              )}
             </div>
           </Motion.aside>
         </>
@@ -561,9 +631,9 @@ function SecondChanceCard({ state, prev, cmp }) {
 function CallsCard({ state, tooLong }) {
   const [team, setTeam] = useState('setters');
   const block = state.data?.[team];
-  const people = (block?.people || []).filter((p) => p.status === 'ok').map((p) => ({ ...p, total: p.total.calls }));
+  const people = (block?.people || []).filter((p) => p.status === 'ok').map((p) => ({ ...p, stats: p.total, total: p.total.calls }));
   return (
-    <Card title="Appels" Icon={Phone} state={tooLong ? null : state} skeleton={360}
+    <Card title="Appels" Icon={Phone} state={tooLong ? null : state} skeleton={360} hint={!tooLong && !state.data ? 'Lecture des appels chez Allo…' : null}
       actions={<Segmented small value={team} onChange={setTeam} label="Équipe" options={[{ key: 'setters', label: 'Setters' }, { key: 'sales', label: 'Sales' }]} />}>
       {tooLong ? <div className="fst-empty">Les appels se lisent sur 31 jours au plus.</div> : block && (
         <>
@@ -577,8 +647,8 @@ function CallsCard({ state, tooLong }) {
           </div>
           <div className="fst-chart">
             <PeopleBars rows={people} colorOf={(k) => (k === 'answered' ? 'var(--charcoal)' : '#e5e1db')} labelOf={(k) => (k === 'answered' ? 'Décrochés' : 'Sans réponse')}
-              parts={(p) => [{ key: 'answered', n: p.total.answered || 0 }, { key: 'other', n: Math.max(0, (p.total.calls || 0) - (p.total.answered || 0)) }]}
-              tip={(p) => <><b>{p.name}</b><br />{plural(p.total.calls, 'appel')} · {plural(p.total.answered, 'décroché')}<br /><span>{Math.round((p.total.duration_seconds || 0) / 60)} min au téléphone</span></>} />
+              parts={(p) => [{ key: 'answered', n: p.stats.answered || 0 }, { key: 'other', n: Math.max(0, (p.stats.calls || 0) - (p.stats.answered || 0)) }]}
+              tip={(p) => <><b>{p.name}</b><br />{plural(p.stats.calls, 'appel')} · {plural(p.stats.answered, 'décroché')}<br /><span>{plural(p.stats.outbound, 'sortant')} · {Math.round((p.stats.duration_seconds || 0) / 60)} min au téléphone</span></>} />
           </div>
           {block.team.missing?.length > 0 && <dl className="fst-kv"><dt>Sans compte Allo</dt><dd>{block.team.missing.join(', ')}</dd></dl>}
         </>
@@ -666,7 +736,9 @@ export default function LeadsDashboard() {
   const current = useLeadStat('overview', range);
   const previous = useLeadStat('overview', compare ? prevRange : null, until);
   const tooLong = !canReadCalls(range);
-  const calls = useLeadStat('calls', tab === 'calls' && !tooLong ? range : null);
+  // Les appels se lisent chez Allo (lent la première fois) : demandés dès que les leads sont là, pour être prêts à
+  // l'ouverture de l'onglet.
+  const calls = useLeadStat('calls', !tooLong && current.fresh ? range : null);
   const campaigns = useLeadStat('campaigns', tab === 'leads' && campaignsOpen ? range : null);
 
   // Le jour en cours se met à jour tout seul, toutes les cinq minutes.
