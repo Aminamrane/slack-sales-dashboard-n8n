@@ -10,9 +10,9 @@ import {
   Users, X,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { EASE, useDrawn } from '../perfSales/motion.jsx';
+import { EASE, useCountUp, useDrawn, useRevealed } from '../perfSales/motion.jsx';
 import { Avatar, Card, Collapse, Num, Page, Pill, Reveal, Segmented, TableBox, Th } from '../../pages/TrackingSheetFinance/components/PageKit.jsx';
-import { Fill } from '../../pages/TrackingSheetFinance/statistics/parts.jsx';
+import { Fill, ProgressRing } from '../../pages/TrackingSheetFinance/statistics/parts.jsx';
 import { PeriodPicker } from '../../pages/TrackingSheetFinance/statistics/PeriodPicker.jsx';
 import { barHeights, count, dayShort, eur, originGroups, pct, plural } from '../../pages/TrackingSheetFinance/statistics/model.js';
 import { parisParts, parisToday } from '../../utils/parisDates.js';
@@ -57,20 +57,83 @@ function useLeadStat(name, range, until = null) {
 // mieux, rouge quand c'est moins bien), puis la valeur comparée. Dans un tableau : la valeur d'abord, l'écart ensuite.
 // `cmp` : { word, label } de la comparaison, null sans comparaison.
 const capital = (w) => `${w.charAt(0).toUpperCase()}${w.slice(1)}`;
-function Versus({ value, previous, cmp, invert = false, money = false, inTable = false }) {
+function Versus({ value, previous, cmp, invert = false, money = false, inTable = false, bare = false }) {
   const d = delta(value, previous);
   if (!cmp || !d) return null;
   const fmt = money === 'whole' ? euros : money ? cents : count;
   const diff = money === 'whole' ? Math.round(d.diff) : d.diff;
   const tone = !diff ? 'flat' : (invert ? diff < 0 : diff > 0) ? 'good' : 'bad';
   const Arrow = diff > 0 ? ArrowUpRight : ArrowDownRight;
-  const gap = diff ? <b><Arrow size={13} strokeWidth={2.4} />{fmt(Math.abs(diff))}</b> : <b>autant</b>;
+  if (inTable) {
+    return (
+      <span className="ld-vs" data-tone={tone} data-table title={`${cmp.label} : ${fmt(previous)}`}>
+        <span>{fmt(previous)}</span>{diff ? <b><Arrow size={13} strokeWidth={2.4} />{bare ? null : fmt(Math.abs(diff))}</b> : null}
+      </span>
+    );
+  }
   return (
-    <span className="ld-vs" data-tone={tone} data-table={inTable || undefined} title={`${cmp.label} : ${fmt(previous)}`}>
-      {inTable ? <><span>{fmt(previous)}</span>{diff ? gap : null}</> : <>{gap}<span>{fmt(previous)} {cmp.word}</span></>}
+    <span className="ld-vs" title={cmp.label}>
+      <span className="ld-chip" data-tone={tone}>{diff ? <><Arrow size={14} strokeWidth={2.4} />{fmt(Math.abs(diff))}</> : 'autant'}</span>
+      <span className="ld-vs-ref">{fmt(previous)} {cmp.word}</span>
     </span>
   );
 }
+
+// Un grand chiffre qui défile jusqu'à sa valeur ; en euros, les centimes s'estompent.
+function BigNumber({ value, money = false }) {
+  const revealed = useRevealed();
+  const known = value != null && Number.isFinite(Number(value));
+  const shown = useCountUp(revealed && known ? Number(value) : 0, { duration: 1100 });
+  if (!known) return <span className="ld-big">–</span>;
+  if (money === 'cents') {
+    const [units, decimals] = cents(shown).split(',');
+    return <span className="ld-big fst-num">{units}<span className="ld-big-soft">,{decimals}</span></span>;
+  }
+  return <span className="ld-big fst-num">{money ? euros(shown) : whole(shown)}</span>;
+}
+
+// Un anneau partagé entre plusieurs parts (une teinte chacune), tracé depuis midi.
+function Donut({ parts, size = 132, stroke = 12, label, children }) {
+  const drawn = useDrawn();
+  const total = parts.reduce((sum, p) => sum + (p.value || 0), 0);
+  const radius = (size - stroke) / 2;
+  const shown = parts.filter((p) => p.value > 0);
+  const gap = shown.length > 1 ? 1.4 : 0;
+  let offset = 0;
+  return (
+    <div className="fst-ring" style={{ width: size, height: size }} role="img" aria-label={label}>
+      <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size}>
+        <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--track)" strokeWidth={stroke} />
+        {shown.map((p) => {
+          const length = total ? (p.value / total) * 100 : 0;
+          const start = offset;
+          offset += length;
+          return (
+            <circle key={p.key} cx={size / 2} cy={size / 2} r={radius} fill="none" stroke={p.color} strokeWidth={stroke} pathLength="100"
+              strokeDasharray={`${drawn ? Math.max(0.5, length - gap) : 0} 100`} strokeDashoffset={-start}
+              transform={`rotate(-90 ${size / 2} ${size / 2})`} style={{ transition: 'stroke-dasharray 1100ms cubic-bezier(.22,1,.36,1)' }} />
+          );
+        })}
+      </svg>
+      <div className="fst-ring-center">{children}</div>
+    </div>
+  );
+}
+
+// Une stat en pastille, avec son petit anneau (la part qu'elle représente).
+const StatChip = ({ value, label, share, sub, color }) => (
+  <div className="ld-stat">
+    <ProgressRing value={share || 0} size={34} stroke={4} color={color} label={label}><span /></ProgressRing>
+    <div className="ld-stat-text"><b className="fst-num">{count(value)} <span>{label}</span></b><small>{sub}</small></div>
+  </div>
+);
+
+// La légende d'un graphique : une pastille teintée par canal.
+const Keys = ({ items }) => (
+  <div className="ld-keys">
+    {items.map((x) => <span key={x.key} style={{ background: `${x.color}2e` }}><i style={{ background: x.color }} />{x.label}</span>)}
+  </div>
+);
 
 const Fact = ({ label, value, format = whole, note }) => (
   <div className="fst-fact">
@@ -114,17 +177,22 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
       actions={d && <button type="button" className="fst-btn is-small" onClick={() => onSeeLeads(null)}><List size={14} />Voir les leads</button>}>
       {d && (
         <>
-          <div className="fst-hero">
+          <div className="ld-hero">
             <button type="button" className="ld-hero-btn" onClick={() => onSeeLeads(null)} title="Voir les leads">
-              <Num className="fst-big" value={d.total.leads} format={whole} duration={1100} />
-              <span className="fst-big-unit">{d.total.leads > 1 ? 'leads reçus' : 'lead reçu'} {when}</span>
+              <BigNumber value={d.total.leads} />
             </button>
-            <Versus value={d.total.leads} previous={prev?.total?.leads} cmp={cmp} />
+            <div className="ld-hero-sub">
+              <span>{d.total.leads > 1 ? 'leads reçus' : 'lead reçu'} {when}</span>
+              <Versus value={d.total.leads} previous={prev?.total?.leads} cmp={cmp} />
+            </div>
           </div>
-          <div className="fst-facts">
-            <Fact label="R1 placés" value={d.total.r1} note={d.total.leads ? pct(d.total.r1 / d.total.leads, 0) : null} />
-            <Fact label="R2 placés" value={d.total.r2} note={d.total.leads ? pct(d.total.r2 / d.total.leads, 0) : null} />
-            <Fact label="Doublons écartés" value={d.total.duplicates} note={`sur ${plural(d.total.raw, 'fiche')}`} />
+          <div className="ld-stats">
+            <StatChip value={d.total.r1} label={d.total.r1 > 1 ? 'R1 placés' : 'R1 placé'} share={d.total.leads ? d.total.r1 / d.total.leads : 0}
+              sub={`${pct(d.total.leads ? d.total.r1 / d.total.leads : 0, 0)} des leads`} color="var(--green)" />
+            <StatChip value={d.total.r2} label={d.total.r2 > 1 ? 'R2 placés' : 'R2 placé'} share={d.total.leads ? d.total.r2 / d.total.leads : 0}
+              sub={`${pct(d.total.leads ? d.total.r2 / d.total.leads : 0, 0)} des leads`} color="var(--blue)" />
+            <StatChip value={d.total.duplicates} label={d.total.duplicates > 1 ? 'doublons écartés' : 'doublon écarté'}
+              share={d.total.raw ? d.total.duplicates / d.total.raw : 0} sub={`sur ${plural(d.total.raw, 'fiche')}`} color="var(--orange)" />
           </div>
           <div className="fst-chart">
             <div className="fst-chart-title"><span>{h.weeks ? 'Semaine par semaine' : 'Jour par jour'}</span><span>{h.weeks ? plural(h.days.length, 'semaine') : plural(h.days.length, 'jour')}</span></div>
@@ -135,9 +203,7 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
                   {channels.filter((c) => h.channels[c.key][i]).map((c) => <span key={c.key}><br />{c.label} · {h.channels[c.key][i]}</span>)}
                 </>
               )} />
-            <div className="fst-keys">
-              {channels.map((c) => <span key={c.key}><span className="fst-dot" style={{ background: channelColor(c.key) }} />{c.label}</span>)}
-            </div>
+            <Keys items={channels.map((c) => ({ key: c.key, label: c.label, color: channelColor(c.key) }))} />
           </div>
         </>
       )}
@@ -146,18 +212,6 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
 }
 
 // ── Ads Meta ──────────────────────────────────────────────────────────────────────────────────────
-
-// Le récap des ads, comme celui que l'équipe ads envoie chaque jour : par catégorie, les leads comptés par Meta, le CPL
-// et la dépense ; puis le total, webinaire compris. Une catégorie qui dépense sans lead ressort en rouge.
-function Trio({ label, value, format, previous, cmp, invert, money }) {
-  return (
-    <div className="ld-trio-item">
-      <span className="fst-fact-label">{label}</span>
-      <Num className="ld-trio-value" value={value} format={format} duration={1100} />
-      <Versus value={value} previous={previous} cmp={cmp} invert={invert} money={money} />
-    </div>
-  );
-}
 
 // Pour rapprocher les chiffres de l'équipe ads : chaque compte des deux portefeuilles Owner, et ce qui est arrivé chez
 // nous (fiches brutes, doublons écartés).
@@ -191,6 +245,11 @@ function AdsCheck({ meta, channels }) {
   );
 }
 
+// Le récap des ads, comme celui que l'équipe ads envoie chaque jour : le coût par lead en grand, l'anneau des leads Meta
+// par catégorie, puis le tableau par catégorie (leads, CPL, dépense), le total webinaire compris et la ligne de la
+// période comparée. Une catégorie qui dépense sans lead ressort en rouge.
+const colorOfCategory = (category) => (category === 'WEBINAIRE' ? channelColor('webinar') : categoryColor(category));
+
 function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const d = state.data;
   const meta = d?.meta;
@@ -207,17 +266,26 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
       )}>
       {meta?.status !== 'ok' ? <div className="fst-empty">Meta pas encore synchronisé sur cette période.</div> : (
         <>
-          <div className="ld-trio">
-            <Trio label="Leads Meta" value={total?.leads} format={whole} previous={before?.leads} cmp={cmp} />
-            <Trio label="CPL" value={total?.cpl_eur} format={cents} previous={before?.cpl_eur} cmp={cmp} invert money />
-            <Trio label="Dépensé" value={total?.spend_eur} format={euros} previous={before?.spend_eur && Math.round(before.spend_eur)} cmp={cmp} money="whole" />
+          <div className="ld-ads-top">
+            <div className="ld-hero">
+              <span className="ld-eyebrow">Coût par lead</span>
+              <BigNumber value={total?.cpl_eur} money="cents" />
+              <div className="ld-hero-sub">
+                <span>{euros(total?.spend_eur || 0)} dépensés pour {plural(total?.leads || 0, 'lead Meta', 'leads Meta')}</span>
+              </div>
+              <Versus value={total?.cpl_eur} previous={before?.cpl_eur} cmp={cmp} invert money />
+            </div>
+            <Donut parts={rows.map((c) => ({ key: c.category, value: c.leads, color: colorOfCategory(c.category) }))}
+              label={`${plural(total?.leads || 0, 'lead Meta', 'leads Meta')} par catégorie`}>
+              <b className="ld-donut-num fst-num">{count(total?.leads)}</b><small className="ld-donut-sub">leads Meta</small>
+            </Donut>
           </div>
           <table className="fst-months ld-recap">
             <thead><tr><th>Catégorie</th><th>Leads</th><th>CPL</th><th>Dépensé</th></tr></thead>
             <tbody>
               {rows.map((c) => (
                 <tr key={c.category} data-idle={!c.leads || undefined}>
-                  <td><span className="ld-creative-cat is-strong"><span className="fst-dot" style={{ background: c.category === 'WEBINAIRE' ? channelColor('webinar') : categoryColor(c.category) }} />{c.category}</span></td>
+                  <td><span className="ld-mark-label"><i className="ld-mark" style={{ background: colorOfCategory(c.category) }} />{c.category}</span></td>
                   <td className="fst-num is-strong">{count(c.leads)}</td>
                   <td className="fst-num ld-recap-cpl">{c.leads ? cents(c.cpl_eur) : 'aucun lead'}</td>
                   <td className="fst-num">{euros(c.spend_eur)}</td>
@@ -226,6 +294,14 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
             </tbody>
             <tfoot>
               <tr><td>Total</td><td className="fst-num">{count(total?.leads)}</td><td className="fst-num">{cents(total?.cpl_eur)}</td><td className="fst-num">{euros(total?.spend_eur)}</td></tr>
+              {cmp && before && (
+                <tr className="ld-recap-vs">
+                  <td>{capital(cmp.word)}</td>
+                  <td><Versus value={total?.leads} previous={before.leads} cmp={cmp} inTable bare /></td>
+                  <td><Versus value={total?.cpl_eur} previous={before.cpl_eur} cmp={cmp} invert money inTable bare /></td>
+                  <td><Versus value={total?.spend_eur} previous={before.spend_eur} cmp={cmp} money="whole" inTable bare /></td>
+                </tr>
+              )}
             </tfoot>
           </table>
           <AdsCheck meta={meta} channels={d.channels} />
@@ -368,7 +444,7 @@ function ChannelsCard({ state, prev, cmp, onSeeLeads }) {
                     <Fragment key={c.key}>
                       <tr className="ld-line" data-can={can || undefined} data-open={isOpen || undefined} aria-expanded={can ? isOpen : undefined}
                         onClick={can ? () => setOpen(isOpen ? null : c.key) : undefined} onMouseEnter={() => setHover(c.key)} onMouseLeave={() => setHover(null)}>
-                        <td><span className="ld-creative-cat is-strong"><span className="fst-dot" style={{ background: c.color }} />{c.label}</span></td>
+                        <td><span className="ld-mark-label"><i className="ld-mark" style={{ background: c.color }} />{c.label}</span></td>
                         <td className="fst-num is-strong">{count(c.total)}</td>
                         <td className="fst-num">{pct(c.share, 0)}</td>
                         <td className="fst-num">{count(c.r1)}</td>
