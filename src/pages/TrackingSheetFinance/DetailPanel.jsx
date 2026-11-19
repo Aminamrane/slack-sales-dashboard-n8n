@@ -54,7 +54,7 @@ import {
   Calendar, History, Lock, FileSignature,
   Pencil, Download, Plus, Check, Phone,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
-  SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
+  SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange, Gift,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -105,6 +105,7 @@ import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import FreeMonthDialog from './components/FreeMonthDialog.jsx';
 import StateReview from './components/StateReview.jsx';
 import { CalendarClockIcon, NoShowIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
 import { noShowInfo, noShowOf } from './boardFollow.js';
@@ -212,6 +213,8 @@ export default function DetailPanel({
   // Poste de pilotage des attendus (direction) : modifier, réduire, reporter,
   // mettre en pause. Distinct d'une perte — rien n'est abandonné ici.
   const [expectedOpen, setExpectedOpen] = useState(false);
+  // Mois offert au client qui a parrainé (dev 2026-11-19) : une échéance à 0 €, Owner et Opti'Lex.
+  const [freeMonthOpen, setFreeMonthOpen] = useState(false);
   // Structures payantes et ventilation — servent l'état de compte par société.
   const [structures, setStructures] = useState([]);
   const [structureSplits, setStructureSplits] = useState([]);
@@ -859,6 +862,7 @@ export default function DetailPanel({
               promise={!!focusedRow?.client?.payment_promise}
               onTogglePromise={() => { setActionsOpen(false); togglePromise(); }}
               onOpenExpected={() => { setActionsOpen(false); setExpectedOpen(true); }}
+              onOpenFreeMonth={() => { setActionsOpen(false); setFreeMonthOpen(true); }}
               exitDue={exitDue}
               onOpenExit={() => { setActionsOpen(false); openExit(null); }}
             />
@@ -1140,6 +1144,20 @@ export default function DetailPanel({
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
+          />
+
+          <FreeMonthDialog
+            open={freeMonthOpen && (canEditMoney || canProposeMoney)}
+            client={client}
+            periods={periods}
+            clientMode={focusedRow?.payment_mode || client?.payment_mode}
+            onClose={() => setFreeMonthOpen(false)}
+            onSubmit={async (body, month) => {
+              const r = await apiClient.post(`/api/v1/finance-periods/client/${clientId}/expected`, body);
+              setFreeMonthOpen(false);
+              onShowToast?.(r?.pending ? 'Demande envoyée à la direction' : `${formatMonthLabel(month.key)} offert`, 'success');
+              reloadAfterExit();
+            }}
           />
 
           <BillingStopDialog
@@ -3487,7 +3505,7 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
 // sortie client (direction). Le bouton de sortie passe en avant quand elle
 // est DUE : fin de relation avec des créances antérieures non soldées.
 function ActionsBar({
-  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit, compact = false,
+  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, onOpenFreeMonth, exitDue, onOpenExit, compact = false,
 }) {
   const items = [];
   if (canManageMoney || canProposeMoney) {
@@ -3497,6 +3515,12 @@ function ActionsBar({
         ? 'Modifier, réduire, reporter ou mettre en pause les attendus, corriger un reste dû'
         : 'Proposer une modification des attendus, du reçu ou du reste dû : la direction valide',
     });
+    if (onOpenFreeMonth) {
+      items.push({
+        key: 'free-month', Icon: Gift, label: 'Offrir un mois (parrainage)', onClick: onOpenFreeMonth,
+        title: canManageMoney ? 'Une échéance Owner et Opti’Lex à 0 €' : 'Proposer une échéance offerte : la direction valide',
+      });
+    }
   }
   if (canEdit) {
     items.push({
