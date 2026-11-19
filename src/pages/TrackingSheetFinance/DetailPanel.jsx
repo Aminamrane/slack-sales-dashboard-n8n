@@ -54,7 +54,7 @@ import {
   Calendar, History, Lock, FileSignature,
   Pencil, Download, Plus, Check, Phone,
   Scale, CalendarClock, CalendarCheck2, Handshake, TriangleAlert, LogOut,
-  SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange,
+  SlidersHorizontal, ChevronDown, ChevronUp, CalendarRange, Gift,
 } from 'lucide-react';
 
 import apiClient from '../../services/apiClient.js';
@@ -105,6 +105,8 @@ import ResponsibleSelect from './components/ResponsibleSelect.jsx';
 import { ETAT_STYLE, displayEtat } from '../OptilexBoard.jsx';
 import BoardEtatCell from './components/BoardEtatCell.jsx';
 import ExitClientDialog from './components/ExitClientDialog.jsx';
+import FreeMonthDialog from './components/FreeMonthDialog.jsx';
+import { freeMonthsFromOps } from './freeMonth.js';
 import StateReview from './components/StateReview.jsx';
 import { CalendarClockIcon, NoShowIcon, RecoveredIcon } from './components/FinanceIcons.jsx';
 import { noShowInfo, noShowOf } from './boardFollow.js';
@@ -212,6 +214,8 @@ export default function DetailPanel({
   // Poste de pilotage des attendus (direction) : modifier, réduire, reporter,
   // mettre en pause. Distinct d'une perte — rien n'est abandonné ici.
   const [expectedOpen, setExpectedOpen] = useState(false);
+  // Mois offert au client qui a parrainé (dev 2026-11-19) : une échéance à 0 €, Owner et Opti'Lex.
+  const [freeMonthOpen, setFreeMonthOpen] = useState(false);
   // Structures payantes et ventilation — servent l'état de compte par société.
   const [structures, setStructures] = useState([]);
   const [structureSplits, setStructureSplits] = useState([]);
@@ -499,6 +503,9 @@ export default function DetailPanel({
   // qui reçoit dit d'où vient ce qu'il porte en plus.
   const reported = useMemo(() => reportsByMonth(profile?.reports, scope), [profile?.reports, scope]);
 
+  // Mois offerts pour parrainage (dev 2026-11-19) : lus dans le journal des gestes.
+  const freeMonths = useMemo(() => freeMonthsFromOps(clientOps), [clientOps]);
+
   const installments = useMemo(() => {
     const nowMonth = currentPeriod();
     // `visiblePeriods` : une échéance ne peut pas précéder la signature.
@@ -511,13 +518,16 @@ export default function DetailPanel({
       const deferredIn = deferred[month]?.in || 0;
       const reportedTo = reported[month]?.to || [];
       const reportedFrom = reported[month]?.from || [];
-      if (a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active && !reportedTo.length) continue;
+      // Un mois offert reste dans l'échéancier, même à 0 € : il dit pourquoi rien n'est demandé.
+      const free = freeMonths.has(month) && a.expected <= 0;
+      if (!free && a.expected <= 0 && a.received <= 0 && deferredIn <= 0 && !p.expected_pause_active && !reportedTo.length) continue;
       const due = a.expected + deferredIn - deferredOut;
       // Un trop-perçu antérieur paie déjà le mois, en partie ou en totalité
       // (dev 2026-11-06) : l'échéance est réglée sans encaissement ce mois-ci.
       const settled = a.received + scopedAdvance(p, scope);
       let status;
-      if (reportedTo.length && a.expected <= 0 && a.received <= 0) status = 'deferred';
+      if (free) status = 'free';
+      else if (reportedTo.length && a.expected <= 0 && a.received <= 0) status = 'deferred';
       else if (settled >= due && settled > 0) status = 'paid';
       else if (settled > 0) status = 'partial';
       else if (deferredOut > 0 && due <= 0) status = 'deferred';
@@ -530,7 +540,7 @@ export default function DetailPanel({
         const d = deferralsByMonth(profile?.deferrals, entity)[month];
         return [entity, (d?.in || 0) - (d?.out || 0)];
       }));
-      if (reviewedInstallment(p, scope, profile?.installment_followups, extraDue)) status = 'regularized';
+      if (!free && reviewedInstallment(p, scope, profile?.installment_followups, extraDue)) status = 'regularized';
       list.push({
         id: p.id, n: list.length + 1, month, status, ...a,
         settled, advance: advanceNote(p, scope), surplus: surplusNote(p, scope),
@@ -541,7 +551,7 @@ export default function DetailPanel({
       });
     }
     return list;
-  }, [visiblePeriods, scope, deferred, reported, profile?.installment_followups, profile?.deferrals]);
+  }, [visiblePeriods, scope, deferred, reported, profile?.installment_followups, profile?.deferrals, freeMonths]);
 
   // (Le forfait mensuel dérivé des échéances a été retiré avec le « N × … »
   // de la modalité — 2026-08-25. La Formule affiche la tranche seule.)
@@ -598,7 +608,8 @@ export default function DetailPanel({
 
       const rows = statementRows({ periods: statementPeriods, entity, month: nowMonth, offer: offre,
         structure: selectedStructure, splits: statementSplits, refunds: statementProfile?.refunds || [],
-        priorDebts: statementProfile?.prior_debts || [], statement: statementTimeline.statement?.[entity] || null });
+        priorDebts: statementProfile?.prior_debts || [], statement: statementTimeline.statement?.[entity] || null,
+        freeMonths: [...freeMonths] });
       const allocations = !selectedStructure && (statementStructures.length > 1 || statementSplits.length > 0)
         ? statementAllocationRows({ periods: statementPeriods, entity, month: nowMonth,
           splits: statementSplits, structures: statementStructures }) : [];
@@ -629,7 +640,7 @@ export default function DetailPanel({
     } finally {
       setPdfGenerating(null);
     }
-  }, [pdfGenerating, clientId, focusedRow, client, onShowToast]);
+  }, [pdfGenerating, clientId, focusedRow, client, onShowToast, freeMonths]);
 
   // Promesse de règlement. Noter ouvre une fenêtre (date promise +
   // commentaire obligatoire, dev 2026-09-28) ; retirer est immédiat. La ligne
@@ -859,6 +870,7 @@ export default function DetailPanel({
               promise={!!focusedRow?.client?.payment_promise}
               onTogglePromise={() => { setActionsOpen(false); togglePromise(); }}
               onOpenExpected={() => { setActionsOpen(false); setExpectedOpen(true); }}
+              onOpenFreeMonth={() => { setActionsOpen(false); setFreeMonthOpen(true); }}
               exitDue={exitDue}
               onOpenExit={() => { setActionsOpen(false); openExit(null); }}
             />
@@ -1140,6 +1152,26 @@ export default function DetailPanel({
             scope={scope}
             onDone={reloadAfterExit}
             onShowToast={onShowToast}
+          />
+
+          <FreeMonthDialog
+            open={freeMonthOpen && (canEditMoney || canProposeMoney)}
+            client={client}
+            clientId={clientId}
+            periods={periods}
+            clientMode={focusedRow?.payment_mode || client?.payment_mode}
+            optilexMode={focusedRow?.payment_mode_optilex || client?.payment_mode_optilex}
+            onClose={() => setFreeMonthOpen(false)}
+            onSubmit={async (body, month) => {
+              const r = await apiClient.post(`/api/v1/finance-periods/client/${clientId}/free-month`, body);
+              setFreeMonthOpen(false);
+              const refunded = Object.values(r?.refunds || {}).reduce((a, b) => a + Number(b || 0), 0);
+              const settled = refunded ? ` · ${formatEUR(refunded)} remboursés`
+                : body.settle === 'refund' ? ' · rien à rembourser' : '';
+              onShowToast?.(r?.pending ? 'Demande envoyée à la direction'
+                : `${formatMonthLabel(month.key)} offert${settled}`, 'success');
+              reloadAfterExit();
+            }}
           />
 
           <BillingStopDialog
@@ -2286,6 +2318,7 @@ const INSTALLMENT_BADGES = {
   upcoming: { label: 'À venir',   bg: '#fbf5d9', fg: '#7a5a05' },
   paused:   { label: 'En pause',  bg: '#f1eee9', fg: '#6f6a63' },
   deferred: { label: 'Reportée',  bg: '#e4f0fd', fg: '#1b6fd0' },
+  free:     { label: 'Offerte',   bg: '#efeafc', fg: '#5b3cc4' },
 };
 
 // Échéancier : TOUT l'historique visible d'emblée (retour dev 2026-09-03 —
@@ -3487,7 +3520,7 @@ function FactsRow({ stateReview, profile, boardRow, loss = null, promise = false
 // sortie client (direction). Le bouton de sortie passe en avant quand elle
 // est DUE : fin de relation avec des créances antérieures non soldées.
 function ActionsBar({
-  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, exitDue, onOpenExit, compact = false,
+  canManageMoney, canProposeMoney = false, canEdit, promise, onTogglePromise, onOpenExpected, onOpenFreeMonth, exitDue, onOpenExit, compact = false,
 }) {
   const items = [];
   if (canManageMoney || canProposeMoney) {
@@ -3497,6 +3530,12 @@ function ActionsBar({
         ? 'Modifier, réduire, reporter ou mettre en pause les attendus, corriger un reste dû'
         : 'Proposer une modification des attendus, du reçu ou du reste dû : la direction valide',
     });
+    if (onOpenFreeMonth) {
+      items.push({
+        key: 'free-month', Icon: Gift, label: 'Offrir un mois (parrainage)', onClick: onOpenFreeMonth,
+        title: canManageMoney ? 'Une échéance Owner et Opti’Lex à 0 €' : 'Proposer une échéance offerte : la direction valide',
+      });
+    }
   }
   if (canEdit) {
     items.push({
