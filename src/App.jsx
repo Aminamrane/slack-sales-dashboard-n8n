@@ -391,7 +391,7 @@ function App() {
         <Route
           path="/ceo/leads"
           element={
-            <ProtectedRoute allowedRoles={['admin', 'ceo']}>
+            <ProtectedRoute allowedRoles={['admin', 'ceo', 'head_of_acquisition']}>
               <CeoLeadsDashboardView />
             </ProtectedRoute>
           }
