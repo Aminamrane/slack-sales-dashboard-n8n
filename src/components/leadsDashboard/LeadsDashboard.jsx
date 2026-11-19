@@ -6,7 +6,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import {
-  ArrowDown, ArrowDownRight, ArrowUpRight, BadgeEuro, Briefcase, CalendarCheck, CalendarClock, CalendarDays, ChevronRight, CircleDot, CopyX, Gift,
+  ArrowDown, ArrowDownRight, ArrowUpRight, BadgeEuro, Briefcase, Calculator, CalendarCheck, CalendarClock, CalendarDays, ChevronRight, CircleDot, CopyX, Gift,
   Globe, Handshake, History, Inbox, LifeBuoy, List, Megaphone, Phone, PhoneOutgoing, Presentation, Search, Sparkles, Target, TrendingDown, TrendingUp,
   Users, X,
 } from 'lucide-react';
@@ -133,7 +133,7 @@ const StatChip = ({ value, label, share, sub, color, icon }) => (
 // Étiquette pastel d'un canal (charte Owner) : son icône dans un petit carré teinté, son nom à l'encre du ton.
 const CHANNEL_ICON = {
   meta_ads: Megaphone, google_ads: Search, chatgpt_ads: Sparkles, partners: Handshake, webinar: Presentation, ccs: PhoneOutgoing,
-  cold_call: Phone, referral: Gift, linkedin: Briefcase, web: Globe, other: CircleDot,
+  cold_call: Phone, referral: Gift, linkedin: Briefcase, web: Globe, simulator: Calculator, other: CircleDot,
 };
 function ChannelTag({ channel, label }) {
   const Icon = CHANNEL_ICON[channel] || CircleDot;
@@ -259,7 +259,8 @@ function AdsCheck({ meta, channels }) {
 const colorOfCategory = (category) => (category === 'WEBINAIRE' ? channelColor('webinar') : categoryColor(category));
 
 // Ce qui est arrivé chez nous par les ads Meta (fiches des ads et inscrits venus du formulaire Meta), à côté des leads
-// comptés par Meta ; les inscrits en direct sur la page du webinaire n'en font pas partie.
+// comptés par Meta ; les inscrits en direct sur la LP du webinaire n'en font pas partie, ni le simulateur du site
+// (organique).
 function arrivedFromAds(channels) {
   const by = byKey(channels);
   const children = (by.webinar?.details || []).flatMap((x) => x.children || []);
@@ -290,7 +291,7 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
               <BigNumber value={total?.cpl_eur} money="cents" />
               <div className="ld-hero-sub"><span>{euros(total?.spend_eur || 0)} dépensés · {plural(total?.leads || 0, 'lead Meta', 'leads Meta')}</span></div>
               <div className="ld-hero-sub ld-arrived">
-                <span>Reçus chez nous : <b className="fst-num">{count(arrived.meta)}</b> par Meta{arrived.direct ? <> + <b className="fst-num">{count(arrived.direct)}</b> en direct sur la page du webinaire</> : null}</span>
+                <span>Reçus chez nous : <b className="fst-num">{count(arrived.meta)}</b> par Meta{arrived.direct ? <> + <b className="fst-num">{count(arrived.direct)}</b> via la LP du webinaire</> : null}</span>
               </div>
               <div className="ld-hero-sub"><Versus value={total?.cpl_eur} previous={before?.cpl_eur} cmp={cmp} invert money /></div>
             </div>
