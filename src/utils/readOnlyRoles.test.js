@@ -58,7 +58,7 @@ test('le style grisé vise l\'attribut posé par readOnlyProps et est chargé pa
 const SECTIONS = [
   { key: 'recent', items: ['dashboard', 'my_tracking_sheet'] },
   { key: 'human', items: ['conges', 'variables', 'work_hours'] },
-  { key: 'acquisition', items: ['perf_sales', 'lead_quality', 'leaderboard', 'sales_team', 'setters_stats', 'acquisition_agenda', 'sales_recordings', 'webinar', 'meta_ads', 'funnel_leads', 'leads_management', 'small_leads', 'autoassign', 'sequences', 'bot_ia'] },
+  { key: 'acquisition', items: ['leads_dashboard', 'perf_sales', 'lead_quality', 'leaderboard', 'sales_team', 'setters_stats', 'acquisition_agenda', 'sales_recordings', 'webinar', 'meta_ads', 'funnel_leads', 'leads_management', 'small_leads', 'autoassign', 'sequences', 'bot_ia'] },
   { key: 'finance', items: ['dispatch', 'campaigns'] },
   { key: 'produit', items: ['optilex_board'] },
 ].map((s) => ({ key: s.key, label: s.key, items: s.items.map((id) => ({ id })) }));
