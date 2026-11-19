@@ -5063,9 +5063,10 @@ function ReschedOnboardingModal({ row, num, onClose, onDone, kind = "onboarding"
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    // Onboarding : créneaux de l'animateur du client (celui du rendez-vous, y compris un ancien relais),
-    // ou de l'animateur choisi par le responsable d'équipe.
-    const client = kind === "onboarding" && num ? `&numero_client=${encodeURIComponent(num)}` : "";
+    // Créneaux du client : pour l'onboarding, ceux de son animateur (y compris un ancien relais) ou de l'animateur
+    // choisi par le responsable d'équipe ; pour le fiscal et le social, ceux du juriste de son rendez-vous, tels que
+    // la réservation les accepte (sans le client, le back ne propose plus rien, dev 19/11/2026).
+    const client = num ? `&numero_client=${encodeURIComponent(num)}` : "";
     const chosen = hostParam ? `&host=${encodeURIComponent(hostParam)}` : "";
     apiClient.get(`/api/v1/optilex/board-reschedule-slots?kind=${kind}&start=${start}${client}${chosen}`)
       .then((r) => { if (alive) { setDays(r.days || []); setHostPhotos(r.host_photos || {}); setLoading(false); } })
