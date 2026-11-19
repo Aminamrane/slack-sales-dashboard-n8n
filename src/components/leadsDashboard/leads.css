@@ -196,3 +196,5 @@
 
 /* Graphiques : une trame de points derrière les barres. */
 .ld-days { background-image: radial-gradient(#ebe7e1 1px, transparent 1.3px); background-size: 12px 12px; background-position: 0 2px; border-radius: 12px; }
+.ld-arrived { font-size: 13px; }
+.ld-arrived b { font-weight: 500; color: var(--ink); }

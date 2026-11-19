@@ -258,6 +258,15 @@ function AdsCheck({ meta, channels }) {
 // période comparée. Une catégorie qui dépense sans lead ressort en rouge.
 const colorOfCategory = (category) => (category === 'WEBINAIRE' ? channelColor('webinar') : categoryColor(category));
 
+// Ce qui est arrivé chez nous par les ads Meta (fiches des ads et inscrits venus du formulaire Meta), à côté des leads
+// comptés par Meta ; les inscrits en direct sur la page du webinaire n'en font pas partie.
+function arrivedFromAds(channels) {
+  const by = byKey(channels);
+  const children = (by.webinar?.details || []).flatMap((x) => x.children || []);
+  const sum = (label) => children.filter((x) => x.label === label).reduce((total, x) => total + x.count, 0);
+  return { meta: (by.meta_ads?.total || 0) + sum('Formulaire Meta'), direct: sum("Page d'inscription") };
+}
+
 function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const d = state.data;
   const meta = d?.meta;
@@ -267,6 +276,7 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const h = useMemo(() => (d?.history ? byWeek(d.history, meta?.by_day) : null), [d, meta]);
   const byDay = Object.fromEntries((h?.meta || []).map((x) => [x.date, x]));
   const values = (h?.days || []).map((day) => byDay[day]?.cpl_eur ?? null);
+  const arrived = arrivedFromAds(d?.channels);
   return (
     <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={420} className="ld-glow" data-glow="lilac"
       actions={meta?.synced_at && (
@@ -279,6 +289,9 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
               <span className="ld-eyebrow">Coût par lead</span>
               <BigNumber value={total?.cpl_eur} money="cents" />
               <div className="ld-hero-sub"><span>{euros(total?.spend_eur || 0)} dépensés · {plural(total?.leads || 0, 'lead Meta', 'leads Meta')}</span></div>
+              <div className="ld-hero-sub ld-arrived">
+                <span>Reçus chez nous : <b className="fst-num">{count(arrived.meta)}</b> par Meta{arrived.direct ? <> + <b className="fst-num">{count(arrived.direct)}</b> en direct sur la page du webinaire</> : null}</span>
+              </div>
               <div className="ld-hero-sub"><Versus value={total?.cpl_eur} previous={before?.cpl_eur} cmp={cmp} invert money /></div>
             </div>
             <Donut parts={rows.map((c) => ({ key: c.category, value: c.leads, color: colorOfCategory(c.category) }))}
