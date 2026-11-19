@@ -6,7 +6,8 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import {
-  ArrowDown, ArrowDownRight, ArrowUpRight, BadgeEuro, CalendarDays, ChevronRight, History, Inbox, LifeBuoy, List, Megaphone, Phone, PhoneOutgoing, Presentation, Search, Target,
+  ArrowDown, ArrowDownRight, ArrowUpRight, BadgeEuro, Briefcase, CalendarCheck, CalendarClock, CalendarDays, ChevronRight, CircleDot, CopyX, Gift,
+  Globe, Handshake, History, Inbox, LifeBuoy, List, Megaphone, Phone, PhoneOutgoing, Presentation, Search, Sparkles, Target, TrendingDown, TrendingUp,
   Users, X,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient';
@@ -17,7 +18,7 @@ import { PeriodPicker } from '../../pages/TrackingSheetFinance/statistics/Period
 import { barHeights, count, dayShort, eur, originGroups, pct, plural } from '../../pages/TrackingSheetFinance/statistics/model.js';
 import { parisParts, parisToday } from '../../utils/parisDates.js';
 import {
-  byKey, canReadCalls, categoryColor, channelColor, compareWord, comparisonFor, dayLabel, delta, groupChannels,
+  byKey, canReadCalls, categoryColor, categoryTone, channelColor, channelTone, compareWord, TONE_INK, comparisonFor, dayLabel, delta, groupChannels,
   byWeek, headcountText, presetRange, PRESETS, provenanceColor, revenueText,
 } from './model.js';
 import './leads.css';
@@ -71,10 +72,11 @@ function Versus({ value, previous, cmp, invert = false, money = false, inTable =
       </span>
     );
   }
+  const Trend = diff > 0 ? TrendingUp : TrendingDown;
   return (
     <span className="ld-vs" title={cmp.label}>
-      <span className="ld-chip" data-tone={tone}>{diff ? <><Arrow size={14} strokeWidth={2.4} />{fmt(Math.abs(diff))}</> : 'autant'}</span>
       <span className="ld-vs-ref">{fmt(previous)} {cmp.word}</span>
+      <span className="ld-chip" data-tone={tone}>{diff ? <><Trend size={15} strokeWidth={2.2} />{diff > 0 ? '+' : '−'}{fmt(Math.abs(diff))}</> : 'autant'}</span>
     </span>
   );
 }
@@ -87,7 +89,7 @@ function BigNumber({ value, money = false }) {
   if (!known) return <span className="ld-big">–</span>;
   if (money === 'cents') {
     const [units, decimals] = cents(shown).split(',');
-    return <span className="ld-big fst-num">{units}<span className="ld-big-soft">,{decimals}</span></span>;
+    return <span className="ld-big fst-num">{units}<span className="ld-big-small">,{decimals}</span></span>;
   }
   return <span className="ld-big fst-num">{money ? euros(shown) : whole(shown)}</span>;
 }
@@ -121,19 +123,25 @@ function Donut({ parts, size = 132, stroke = 12, label, children }) {
 }
 
 // Une stat en pastille, avec son petit anneau (la part qu'elle représente).
-const StatChip = ({ value, label, share, sub, color }) => (
+const StatChip = ({ value, label, share, sub, color, icon }) => (
   <div className="ld-stat">
-    <ProgressRing value={share || 0} size={34} stroke={4} color={color} label={label}><span /></ProgressRing>
+    <ProgressRing value={share || 0} size={40} stroke={3.5} color={color} label={label}><span className="ld-stat-ico" style={{ color }}>{icon}</span></ProgressRing>
     <div className="ld-stat-text"><b className="fst-num">{count(value)} <span>{label}</span></b><small>{sub}</small></div>
   </div>
 );
 
-// La légende d'un graphique : une pastille teintée par canal.
-const Keys = ({ items }) => (
-  <div className="ld-keys">
-    {items.map((x) => <span key={x.key} style={{ background: `${x.color}2e` }}><i style={{ background: x.color }} />{x.label}</span>)}
-  </div>
-);
+// Étiquette pastel d'un canal (charte Owner) : son icône dans un petit carré teinté, son nom à l'encre du ton.
+const CHANNEL_ICON = {
+  meta_ads: Megaphone, google_ads: Search, chatgpt_ads: Sparkles, partners: Handshake, webinar: Presentation, ccs: PhoneOutgoing,
+  cold_call: Phone, referral: Gift, linkedin: Briefcase, web: Globe, other: CircleDot,
+};
+function ChannelTag({ channel, label }) {
+  const Icon = CHANNEL_ICON[channel] || CircleDot;
+  return <span className="fst-tag ld-tag" data-tone={channelTone(channel)}><i className="ld-tag-ico"><Icon size={12} strokeWidth={2.2} /></i>{label}</span>;
+}
+
+// La légende d'un graphique : l'étiquette de chaque canal.
+const Keys = ({ items }) => <div className="ld-keys">{items.map((x) => <ChannelTag key={x.key} channel={x.key} label={x.label} />)}</div>;
 
 const Fact = ({ label, value, format = whole, note }) => (
   <div className="fst-fact">
@@ -173,7 +181,7 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
   const channels = (d?.channels || []).filter((c) => h?.channels?.[c.key]);
   const stacks = h ? h.days.map((_, i) => channels.map((c) => ({ key: c.key, n: h.channels[c.key][i], color: channelColor(c.key) })).filter((s) => s.n)) : null;
   return (
-    <Card title="Leads reçus" Icon={Inbox} state={state} skeleton={380}
+    <Card title="Leads reçus" Icon={Inbox} state={state} skeleton={380} className="ld-glow" data-glow="blue"
       actions={d && <button type="button" className="fst-btn is-small" onClick={() => onSeeLeads(null)}><List size={14} />Voir les leads</button>}>
       {d && (
         <>
@@ -188,11 +196,11 @@ function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
           </div>
           <div className="ld-stats">
             <StatChip value={d.total.r1} label={d.total.r1 > 1 ? 'R1 placés' : 'R1 placé'} share={d.total.leads ? d.total.r1 / d.total.leads : 0}
-              sub={`${pct(d.total.leads ? d.total.r1 / d.total.leads : 0, 0)} des leads`} color="var(--green)" />
+              sub={`${pct(d.total.leads ? d.total.r1 / d.total.leads : 0, 0)} des leads`} color={TONE_INK.green} icon={<CalendarCheck size={15} strokeWidth={2} />} />
             <StatChip value={d.total.r2} label={d.total.r2 > 1 ? 'R2 placés' : 'R2 placé'} share={d.total.leads ? d.total.r2 / d.total.leads : 0}
-              sub={`${pct(d.total.leads ? d.total.r2 / d.total.leads : 0, 0)} des leads`} color="var(--blue)" />
+              sub={`${pct(d.total.leads ? d.total.r2 / d.total.leads : 0, 0)} des leads`} color={TONE_INK.blue} icon={<CalendarClock size={15} strokeWidth={2} />} />
             <StatChip value={d.total.duplicates} label={d.total.duplicates > 1 ? 'doublons écartés' : 'doublon écarté'}
-              share={d.total.raw ? d.total.duplicates / d.total.raw : 0} sub={`sur ${plural(d.total.raw, 'fiche')}`} color="var(--orange)" />
+              share={d.total.raw ? d.total.duplicates / d.total.raw : 0} sub={`sur ${plural(d.total.raw, 'fiche')}`} color={TONE_INK.peach} icon={<CopyX size={15} strokeWidth={2} />} />
           </div>
           <div className="fst-chart">
             <div className="fst-chart-title"><span>{h.weeks ? 'Semaine par semaine' : 'Jour par jour'}</span><span>{h.weeks ? plural(h.days.length, 'semaine') : plural(h.days.length, 'jour')}</span></div>
@@ -260,7 +268,7 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const byDay = Object.fromEntries((h?.meta || []).map((x) => [x.date, x]));
   const values = (h?.days || []).map((day) => byDay[day]?.cpl_eur ?? null);
   return (
-    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={420}
+    <Card title="Ads Meta" Icon={Megaphone} state={state} skeleton={420} className="ld-glow" data-glow="lilac"
       actions={meta?.synced_at && (
         <span className="ld-synced">Meta lu {meta.synced_at.slice(0, 10) === parisToday() ? '' : `le ${dayShort(meta.synced_at)} `}à {meta.synced_at.slice(11, 16).replace(':', ' h ')}</span>
       )}>
@@ -270,10 +278,8 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
             <div className="ld-hero">
               <span className="ld-eyebrow">Coût par lead</span>
               <BigNumber value={total?.cpl_eur} money="cents" />
-              <div className="ld-hero-sub">
-                <span>{euros(total?.spend_eur || 0)} dépensés pour {plural(total?.leads || 0, 'lead Meta', 'leads Meta')}</span>
-              </div>
-              <Versus value={total?.cpl_eur} previous={before?.cpl_eur} cmp={cmp} invert money />
+              <div className="ld-hero-sub"><span>{euros(total?.spend_eur || 0)} dépensés · {plural(total?.leads || 0, 'lead Meta', 'leads Meta')}</span></div>
+              <div className="ld-hero-sub"><Versus value={total?.cpl_eur} previous={before?.cpl_eur} cmp={cmp} invert money /></div>
             </div>
             <Donut parts={rows.map((c) => ({ key: c.category, value: c.leads, color: colorOfCategory(c.category) }))}
               label={`${plural(total?.leads || 0, 'lead Meta', 'leads Meta')} par catégorie`}>
@@ -285,9 +291,9 @@ function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
             <tbody>
               {rows.map((c) => (
                 <tr key={c.category} data-idle={!c.leads || undefined}>
-                  <td><span className="ld-mark-label"><i className="ld-mark" style={{ background: colorOfCategory(c.category) }} />{c.category}</span></td>
+                  <td><span className="ld-mark-label" style={{ color: TONE_INK[categoryTone(c.category)] }}><i className="ld-capsule" style={{ background: colorOfCategory(c.category) }} />{c.category}</span></td>
                   <td className="fst-num is-strong">{count(c.leads)}</td>
-                  <td className="fst-num ld-recap-cpl">{c.leads ? cents(c.cpl_eur) : 'aucun lead'}</td>
+                  <td className="fst-num ld-recap-cpl" style={c.leads ? { color: TONE_INK[categoryTone(c.category)] } : undefined}>{c.leads ? cents(c.cpl_eur) : 'aucun lead'}</td>
                   <td className="fst-num">{euros(c.spend_eur)}</td>
                 </tr>
               ))}
@@ -444,7 +450,7 @@ function ChannelsCard({ state, prev, cmp, onSeeLeads }) {
                     <Fragment key={c.key}>
                       <tr className="ld-line" data-can={can || undefined} data-open={isOpen || undefined} aria-expanded={can ? isOpen : undefined}
                         onClick={can ? () => setOpen(isOpen ? null : c.key) : undefined} onMouseEnter={() => setHover(c.key)} onMouseLeave={() => setHover(null)}>
-                        <td><span className="ld-mark-label"><i className="ld-mark" style={{ background: c.color }} />{c.label}</span></td>
+                        <td><ChannelTag channel={c.key} label={c.label} /></td>
                         <td className="fst-num is-strong">{count(c.total)}</td>
                         <td className="fst-num">{pct(c.share, 0)}</td>
                         <td className="fst-num">{count(c.r1)}</td>
@@ -579,7 +585,8 @@ function LeadLine({ lead, many }) {
         <div className="ld-lead-name">{lead.name || 'Sans nom'}</div>
         {facts.length > 0 && <div className="ld-lead-sub">{facts.join(' · ')}</div>}
         <div className="ld-lead-tags">
-          <span className="ld-creative-cat"><span className="fst-dot" style={{ background: channelColor(lead.channel) }} />{lead.channel_label}{from.length ? ` · ${from.join(' · ')}` : ''}</span>
+          <ChannelTag channel={lead.channel} label={lead.channel_label} />
+          {from.length > 0 && <span className="ld-lead-who">{from.join(' · ')}</span>}
           {lead.r1_date && <Pill plain tone="green">R1 le {dayShort(lead.r1_date)}</Pill>}
           {lead.r2_date && <Pill plain tone="green">R2 le {dayShort(lead.r2_date)}</Pill>}
           {lead.sales && <span className="ld-lead-who">{lead.sales}</span>}

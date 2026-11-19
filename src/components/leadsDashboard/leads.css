@@ -164,3 +164,35 @@
 .ld-recap-vs .ld-vs[data-table] { color: var(--muted); }
 .ld-recap-vs .ld-vs[data-table] { gap: 4px; }
 .ld-recap-vs .ld-vs[data-table] b { min-width: 0; }
+
+/* ── Style des références (19/11) : grands chiffres noirs, pastilles blanches, étiquettes à icône, halos ── */
+/* Grand chiffre : les décimales plus petites, toujours à l'encre. */
+.ld-big-small { font-size: .52em; letter-spacing: -.02em; color: var(--ink); margin-left: 1px; }
+.ld-big-soft { color: var(--ink); }
+
+/* Pastille d'écart : blanche, ombre légère (elle flotte), icône de tendance en couleur. */
+.ld-chip { height: 28px; padding: 0 11px 0 9px; gap: 5px; border: 0; box-shadow: 0 1px 2px rgba(50, 40, 30, .06), 0 4px 14px -6px rgba(50, 40, 30, .18); font-size: 13px; }
+.ld-chip[data-tone="good"] svg { color: #0b7a4b; }
+.ld-chip[data-tone="bad"] svg { color: #c5221f; }
+.ld-vs { gap: 10px; }
+
+/* Étiquette pastel d'un canal : icône dans un petit carré teinté. */
+.ld-tag { height: 28px; padding: 0 10px 0 4px; gap: 7px; border-radius: 9px; font-weight: 500; font-size: 13px; }
+.ld-tag-ico { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; background: var(--t-bd); color: var(--t-fg); }
+.ld-keys { gap: 8px; }
+
+/* Capsule de catégorie (comme les repères des références) : pilule pleine à liseré blanc. */
+.ld-capsule { display: inline-block; width: 8px; height: 18px; border-radius: 999px; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(50, 40, 30, .08), 0 2px 6px -2px rgba(50, 40, 30, .25); }
+
+/* Pastilles de stats : blanches, l'anneau entoure une icône. */
+.ld-stat { background: #fff; border: 1px solid var(--line-soft); box-shadow: 0 1px 2px rgba(50, 40, 30, .05); padding: 6px 18px 6px 6px; }
+.ld-stat .fst-ring-center { place-content: center; }
+.ld-stat-ico { display: grid; place-items: center; }
+
+/* Halo de couleur en bas des cartes du haut, aux teintes pastel de la charte. */
+.fst-card.ld-glow[data-glow="blue"] { background: radial-gradient(80% 38% at 20% 108%, rgba(201, 224, 250, .55), transparent 70%), radial-gradient(60% 30% at 90% 108%, rgba(207, 234, 176, .45), transparent 70%), #fff; }
+.fst-card.ld-glow[data-glow="lilac"] { background: radial-gradient(80% 38% at 80% 108%, rgba(214, 212, 246, .6), transparent 70%), radial-gradient(60% 30% at 10% 108%, rgba(248, 212, 186, .45), transparent 70%), #fff; }
+.ld-ads-top::before { display: none; }
+
+/* Graphiques : une trame de points derrière les barres. */
+.ld-days { background-image: radial-gradient(#ebe7e1 1px, transparent 1.3px); background-size: 12px 12px; background-position: 0 2px; border-radius: 12px; }

@@ -60,6 +60,19 @@ export const CHANNEL_COLOR = {
 };
 export const channelColor = (key) => CHANNEL_COLOR[key] || CHANNEL_COLOR.other;
 
+// Ton de l'étiquette pastel (charte Owner) d'un canal et d'une catégorie Meta, et l'encre de chaque ton.
+const CHANNEL_TONE = {
+  meta_ads: 'blue', google_ads: 'cyan', chatgpt_ads: 'lilac', partners: 'peach', webinar: 'lime', ccs: 'yellow',
+  cold_call: 'beige', referral: 'peach', linkedin: 'red', web: 'green', other: 'beige',
+};
+export const channelTone = (key) => CHANNEL_TONE[key] || 'beige';
+const CATEGORY_TONE = { BROAD: 'blue', BTP: 'peach', RESTAURANTS: 'red', WEBINAIRE: 'lime' };
+export const categoryTone = (name) => CATEGORY_TONE[name] || 'beige';
+export const TONE_INK = {
+  green: '#0b7a4b', red: '#c5221f', yellow: '#7a5a05', peach: '#c2500e', blue: '#1b6fd0', lilac: '#4a3fc4', cyan: '#0f7286',
+  lime: '#3f6b12', beige: '#4a4540',
+};
+
 // Provenance d'un RDV posé par un setter (règle du classement des setters).
 const PROVENANCE_COLOR = {
   second_chance: '#aaa5ee', ccs: '#ecd36a', webinar_pre: '#d4ebb5', webinar_live: '#b9dc8a', webinar_post: '#93c46a',
