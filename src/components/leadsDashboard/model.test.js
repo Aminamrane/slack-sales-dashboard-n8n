@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
-import { canReadCalls, compareWord, comparisonFor, dayLabel, delta, groupChannels, heights, presetRange, signed, signedEur, spanDays } from './model.js';
+import { canReadCalls, changeWords, headcountText, revenueText, compareWord, comparisonFor, dayLabel, delta, groupChannels, heights, presetRange, signed, signedEur, spanDays } from './model.js';
 
 const TODAY = '2026-11-18'; // un mercredi
 
@@ -52,4 +52,24 @@ test('comparaison en mots, étiquettes des jours, écarts en euros', () => {
   assert.equal(delta(52.94, 43.08).diff, 9.86);
   assert.equal(signedEur(9.86), '+9,86 €');
   assert.equal(signedEur(-5.4), '−5,40 €');
+});
+
+test('les écarts se disent en mots', () => {
+  assert.equal(changeWords(7, 'hier'), "7 de plus qu'hier");
+  assert.equal(changeWords(-1, 'hier'), "1 de moins qu'hier");
+  assert.equal(changeWords(-50, 'la semaine précédente'), '50 de moins que la semaine précédente');
+  assert.equal(changeWords(-23.33, 'hier', true), "23,33 € de moins qu'hier");
+  assert.equal(changeWords(0, 'la veille'), 'autant que la veille');
+});
+
+test('effectif et CA des formulaires, en français', () => {
+  assert.equal(headcountText('1_-_2'), '1 à 2 salariés');
+  assert.equal(headcountText('11_-_19'), '11 à 19 salariés');
+  assert.equal(headcountText('3'), '3 salariés');
+  assert.equal(headcountText('1'), '1 salarié');
+  assert.equal(headcountText(''), null);
+  assert.equal(revenueText('entre_100_000_et_500_000€'), 'CA entre 100 000 et 500 000 €');
+  assert.equal(revenueText('moins_de_100_000_€'), 'CA moins de 100 000 €');
+  assert.equal(revenueText('856556'), 'CA 856\u202f556 €');
+  assert.equal(revenueText(null), null);
 });

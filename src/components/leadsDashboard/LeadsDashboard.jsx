@@ -4,11 +4,13 @@
 // héros, barres jour par jour, barre empilée et lignes qui se déplient. Ce qui manque au kit est en ld-.
 // Le serveur compte (/api/v1/lead-statistics), la page présente. Chaque chiffre se compare à la période précédente.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { AnimatePresence, motion as Motion } from 'framer-motion';
 import {
-  BadgeEuro, CalendarDays, ChevronRight, Inbox, LifeBuoy, Megaphone, Phone, PhoneOutgoing, Presentation, Target, Users,
+  ArrowDown, BadgeEuro, CalendarDays, ChevronRight, Inbox, LifeBuoy, List, Megaphone, Phone, PhoneOutgoing, Presentation, Search, Target,
+  Users, X,
 } from 'lucide-react';
 import apiClient from '../../services/apiClient';
-import { useDrawn } from '../perfSales/motion.jsx';
+import { EASE, useDrawn } from '../perfSales/motion.jsx';
 import { Avatar, Card, Collapse, Num, Page, Pill, Reveal, Segmented, TableBox, Th } from '../../pages/TrackingSheetFinance/components/PageKit.jsx';
 import { Fill } from '../../pages/TrackingSheetFinance/statistics/parts.jsx';
 import { PeriodPicker } from '../../pages/TrackingSheetFinance/statistics/PeriodPicker.jsx';
@@ -16,7 +18,7 @@ import { barHeights, count, dayShort, eur, originGroups, pct, plural } from '../
 import { parisParts, parisToday } from '../../utils/parisDates.js';
 import {
   byKey, canReadCalls, categoryColor, channelColor, compareWord, comparisonFor, dayLabel, delta, groupChannels,
-  presetRange, PRESETS, provenanceColor, signed, signedEur,
+  changeWords, headcountText, presetRange, PRESETS, provenanceColor, revenueText,
 } from './model.js';
 import './leads.css';
 
@@ -51,14 +53,15 @@ function useLeadStat(name, range, until = null) {
   return { ...state, fresh: Boolean(key) && state.dataKey === key, retry: load };
 }
 
-// L'écart avec la période de comparaison : vert quand c'est mieux, rouge quand c'est moins bien ; rien quand c'est pareil.
-function Change({ value, previous, label, invert = false, money = false }) {
+// L'écart avec la période de comparaison, en mots (« 7 de plus qu'hier ») : vert quand c'est mieux, rouge quand c'est
+// moins bien ; rien quand c'est pareil. `cmp` : { word, label } de la comparaison, null sans comparaison.
+function Change({ value, previous, cmp, invert = false, money = false }) {
   const d = delta(value, previous);
-  if (!d || !d.diff) return null;
+  if (!cmp || !d || !d.diff) return null;
   const good = invert ? d.diff < 0 : d.diff > 0;
   return (
-    <Pill plain tone={good ? 'green' : 'red'} title={label ? `${label} : ${money ? cents(previous) : count(previous)}` : undefined}>
-      {money ? signedEur(d.diff) : signed(d.diff)}
+    <Pill plain tone={good ? 'green' : 'red'} title={`${cmp.label} : ${money ? cents(previous) : count(previous)}`}>
+      {changeWords(d.diff, cmp.word, money)}
     </Pill>
   );
 }
@@ -95,21 +98,26 @@ function DayBars({ days, inPeriod, values, stacks, format = count, tip, onPick, 
 
 // ── Leads reçus ───────────────────────────────────────────────────────────────────────────────────
 
-function LeadsCard({ state, prev, compareLabel, when, onPickDay }) {
+function LeadsCard({ state, prev, cmp, when, onPickDay, onSeeLeads }) {
   const d = state.data;
   const h = d?.history;
   const channels = (d?.channels || []).filter((c) => h?.channels?.[c.key]);
   const stacks = h ? h.days.map((_, i) => channels.map((c) => ({ key: c.key, n: h.channels[c.key][i], color: channelColor(c.key) })).filter((s) => s.n)) : null;
   return (
-    <Card title="Leads reçus" Icon={Inbox} state={state} skeleton={380}>
+    <Card title="Leads reçus" Icon={Inbox} state={state} skeleton={380}
+      actions={d && <button type="button" className="fst-btn is-small" onClick={() => onSeeLeads(null)}><List size={14} />Voir les leads</button>}>
       {d && (
         <>
           <div className="fst-hero">
-            <div>
+            <button type="button" className="ld-hero-btn" onClick={() => onSeeLeads(null)} title="Voir les leads">
               <Num className="fst-big" value={d.total.leads} format={whole} duration={1100} />
               <span className="fst-big-unit">{d.total.leads > 1 ? 'leads reçus' : 'lead reçu'} {when}</span>
-            </div>
-            <Change value={d.total.leads} previous={prev?.total?.leads} label={compareLabel} />
+            </button>
+            <Change value={d.total.leads} previous={prev?.total?.leads} cmp={cmp} />
+          </div>
+          <div className="fst-facts">
+            <Fact label="R1 placés" value={d.total.r1} note={d.total.leads ? pct(d.total.r1 / d.total.leads, 0) : null} />
+            <Fact label="R2 placés" value={d.total.r2} note={d.total.leads ? pct(d.total.r2 / d.total.leads, 0) : null} />
           </div>
           <div className="fst-chart">
             <div className="fst-chart-title"><span>Jour par jour</span><span>{plural(h.days.length, 'jour')}</span></div>
@@ -132,7 +140,7 @@ function LeadsCard({ state, prev, compareLabel, when, onPickDay }) {
 
 // ── Ads Meta ──────────────────────────────────────────────────────────────────────────────────────
 
-function AdsCard({ state, prev, compareLabel, campaignsOpen, onCampaigns }) {
+function AdsCard({ state, prev, cmp, campaignsOpen, onCampaigns }) {
   const d = state.data;
   const meta = d?.meta;
   const ads = meta?.excluding_webinar;
@@ -151,7 +159,7 @@ function AdsCard({ state, prev, compareLabel, campaignsOpen, onCampaigns }) {
               <Num className="fst-big" value={ads?.cpl_eur} format={cents} duration={1100} />
               <span className="fst-big-unit">par lead</span>
             </div>
-            <Change value={ads?.cpl_eur} previous={before?.excluding_webinar?.cpl_eur} label={compareLabel} invert money />
+            <Change value={ads?.cpl_eur} previous={before?.excluding_webinar?.cpl_eur} cmp={cmp} invert money />
           </div>
           <div className="fst-facts">
             <Fact label="Leads Meta" value={ads?.leads} />
@@ -173,7 +181,7 @@ function AdsCard({ state, prev, compareLabel, campaignsOpen, onCampaigns }) {
           </div>
           {cats.length > 0 && (
             <div className="fst-chart">
-              <div className="fst-chart-title"><span>Par catégorie</span><span>leads · CPL</span></div>
+              <div className="fst-chart-title"><span>Par catégorie</span><span>CPL</span></div>
               <div className="fst-dist">
                 {cats.map((c) => (
                   <div key={c.category} className="fst-dist-row ld-cat" title={`${c.category} : ${plural(c.leads, 'lead')}, ${euros(c.spend_eur)} dépensés`}>
@@ -188,7 +196,7 @@ function AdsCard({ state, prev, compareLabel, campaignsOpen, onCampaigns }) {
           )}
           {meta.webinar && (
             <dl className="fst-kv">
-              <dt>Webinaire</dt><dd className="fst-num">{plural(meta.webinar.leads, 'inscrit')} · {cents(meta.webinar.cpl_eur)} · {euros(meta.webinar.spend_eur)}</dd>
+              <dt>Webinaire</dt><dd className="fst-num">{plural(meta.webinar.leads, 'lead Meta', 'leads Meta')} · CPL {cents(meta.webinar.cpl_eur)} · {euros(meta.webinar.spend_eur)}</dd>
             </dl>
           )}
           <button type="button" className="fst-link" aria-expanded={campaignsOpen} onClick={onCampaigns}>
@@ -229,7 +237,7 @@ function Creatives({ rows }) {
   );
 }
 
-function ChannelRow({ channel: c, before, word, open, onToggle, onHover, creatives }) {
+function ChannelRow({ channel: c, before, cmp, open, onToggle, onHover, creatives, onSeeLeads }) {
   const d = before ? delta(c.total, before.total) : null;
   const can = c.total > 0 && Boolean(creatives || c.details?.length);
   return (
@@ -237,12 +245,11 @@ function ChannelRow({ channel: c, before, word, open, onToggle, onHover, creativ
       <button type="button" className="fst-row" aria-expanded={can ? open : undefined} disabled={!can} data-zero={!c.total || undefined} onClick={onToggle}>
         <span className="fst-row-ico"><span className="fst-dot" style={{ background: c.color }} /></span>
         <span className="fst-row-name">{c.label}
-          {before && (
-            <small>
-              {d?.diff ? <span className={d.diff > 0 ? 'ld-up' : 'ld-down'}>{signed(d.diff)}</span> : null}
-              {d?.diff ? ' · ' : ''}{word} : {count(before.total)}
+          {before && cmp && (c.total || before.total) ? (
+            <small title={`${cmp.label} : ${count(before.total)}`}>
+              {d?.diff ? <span className={d.diff > 0 ? 'ld-up' : 'ld-down'}>{changeWords(d.diff, cmp.word)}</span> : changeWords(0, cmp.word)}
             </small>
-          )}
+          ) : null}
         </span>
         <Fill value={c.share} color={c.color} />
         <span className="fst-row-num fst-num">{count(c.total)}<small>{pct(c.share, 0)}</small></span>
@@ -253,13 +260,14 @@ function ChannelRow({ channel: c, before, word, open, onToggle, onHover, creativ
           {creatives ? <Creatives rows={creatives} /> : c.details.map((x) => (
             <div key={x.label} className="fst-sub-row"><span title={x.label}>{x.label}</span><span /><b className="fst-num">{count(x.count)}</b></div>
           ))}
+          <button type="button" className="fst-link" onClick={() => onSeeLeads(c.key)}>Voir {c.total > 1 ? `ces ${count(c.total)} leads` : 'ce lead'}<ArrowDown size={13} style={{ rotate: '-90deg' }} /></button>
         </div>
       </Collapse>
     </div>
   );
 }
 
-function ChannelsCard({ state, prev, word }) {
+function ChannelsCard({ state, prev, cmp, onSeeLeads }) {
   const drawn = useDrawn();
   const d = state.data;
   const [open, setOpen] = useState(null);
@@ -287,7 +295,7 @@ function ChannelsCard({ state, prev, word }) {
                 <span className="fst-group-count fst-num"><b>{count(g.total)}</b><i>/</i>{count(total)}</span>
               </div>
               {g.channels.map((c) => (
-                <ChannelRow key={c.key} channel={c} before={before?.[c.key]} word={word} open={open === c.key} onHover={setHover}
+                <ChannelRow key={c.key} channel={c} before={before?.[c.key]} cmp={cmp} open={open === c.key} onHover={setHover} onSeeLeads={onSeeLeads}
                   onToggle={() => setOpen(open === c.key ? null : c.key)} creatives={c.key === 'meta_ads' ? d.meta?.creatives || [] : null} />
               ))}
             </div>
@@ -298,6 +306,14 @@ function ChannelsCard({ state, prev, word }) {
   );
 }
 
+// Retour sur dépense : le chiffre d'affaires annuel des ventes venues de la campagne, divisé par sa dépense.
+function Roi({ roas, sales }) {
+  if (!sales) return <span className="ld-muted">Aucune vente</span>;
+  if (roas == null) return <span className="ld-muted">Sans dépense sur la période</span>;
+  const x = `×${roas.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}`;
+  return <Pill plain tone={roas >= 1 ? 'green' : 'red'}>{roas >= 1 ? 'Rentable' : 'Pas rentable'} · {x}</Pill>;
+}
+
 function CampaignsCard({ state }) {
   const rows = state.data?.campaigns || [];
   const [all, setAll] = useState(false);
@@ -305,10 +321,10 @@ function CampaignsCard({ state }) {
   return (
     <Card title="Campagnes Meta" Icon={Megaphone} state={state} skeleton={320}>
       {!rows.length ? <div className="fst-empty">Aucune campagne sur cette période.</div> : (
-        <TableBox minWidth={980} free={false} after={rows.length > 12 && (
+        <TableBox minWidth={1180} free={false} after={rows.length > 12 && (
           <button type="button" className="fst-link" onClick={() => setAll(!all)}>{all ? 'Réduire' : `Voir les ${rows.length} campagnes`}</button>)}>
           <thead><tr><Th>Campagne</Th><Th>Catégorie</Th><Th num>Dépense</Th><Th num>Impressions</Th><Th num>Clics</Th><Th num>CTR</Th>
-            <Th num>Leads Meta</Th><Th num>Reçus</Th><Th num>CPL</Th><Th num>Ventes</Th><Th num>CA</Th><Th num>ROAS</Th></tr></thead>
+            <Th num>Leads Meta</Th><Th num>Reçus</Th><Th num>R1</Th><Th num>R2</Th><Th num>CPL</Th><Th num>Ventes</Th><Th num>CA</Th><Th>Retour sur dépense</Th></tr></thead>
           <tbody>
             {shown.map((r) => (
               <tr key={r.campaign}>
@@ -316,15 +332,100 @@ function CampaignsCard({ state }) {
                 <td><span className="ld-creative-cat"><span className="fst-dot" style={{ background: categoryColor(r.category) }} />{r.category}</span></td>
                 <td className="is-num">{euros(r.spend_eur)}</td><td className="is-num">{count(r.impressions)}</td>
                 <td className="is-num">{count(r.clicks)}</td><td className="is-num">{pct(r.ctr, 2)}</td><td className="is-num">{count(r.leads_meta)}</td>
-                <td className="is-num">{count(r.received_in_crm)}</td><td className="is-num">{cents(r.cpl_eur)}</td>
+                <td className="is-num">{count(r.received_in_crm)}</td><td className="is-num">{count(r.r1)}</td><td className="is-num">{count(r.r2)}</td>
+                <td className="is-num">{cents(r.cpl_eur)}</td>
                 <td className="is-num">{count(r.sales)}</td><td className="is-num">{euros(r.revenue_eur)}</td>
-                <td className="is-num">{r.roas == null ? '–' : `${r.roas.toLocaleString('fr-FR')}×`}</td>
+                <td><Roi roas={r.roas} sales={r.sales} /></td>
               </tr>
             ))}
           </tbody>
         </TableBox>
       )}
     </Card>
+  );
+}
+
+// ── Liste des leads reçus ─────────────────────────────────────────────────────────────────────────
+
+const timeOf = (iso) => (iso ? iso.slice(11, 16).replace(':', ' h ') : '');
+
+function LeadLine({ lead, many }) {
+  const facts = [lead.company, headcountText(lead.headcount), revenueText(lead.revenue), lead.sector].filter(Boolean);
+  const from = [lead.detail, lead.creative].filter((x, i, all) => x && all.indexOf(x) === i);
+  return (
+    <div className="ld-lead">
+      <span className="ld-lead-time fst-num">{many && lead.at ? <>{dayShort(lead.at)}<br /></> : null}{timeOf(lead.at)}</span>
+      <div className="ld-lead-main">
+        <div className="ld-lead-name">{lead.name || 'Sans nom'}</div>
+        {facts.length > 0 && <div className="ld-lead-sub">{facts.join(' · ')}</div>}
+        <div className="ld-lead-tags">
+          <span className="ld-creative-cat"><span className="fst-dot" style={{ background: channelColor(lead.channel) }} />{lead.channel_label}{from.length ? ` · ${from.join(' · ')}` : ''}</span>
+          {lead.r1_date && <Pill plain tone="green">R1 le {dayShort(lead.r1_date)}</Pill>}
+          {lead.r2_date && <Pill plain tone="green">R2 le {dayShort(lead.r2_date)}</Pill>}
+          {lead.sales && <span className="ld-lead-who">{lead.sales}</span>}
+          {!lead.sales && lead.setter && <span className="ld-lead-who">{lead.setter}</span>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LeadsDrawer({ open, range, channel, onChannel, onClose, when }) {
+  const state = useLeadStat('leads', open ? range : null);
+  const [query, setQuery] = useState('');
+  const rows = useMemo(() => (state.fresh ? state.data.leads : []), [state]);
+  const labels = useMemo(() => Object.fromEntries(rows.map((r) => [r.channel, r.channel_label])), [rows]);
+  const counts = useMemo(() => rows.reduce((acc, r) => ({ ...acc, [r.channel]: (acc[r.channel] || 0) + 1 }), {}), [rows]);
+  const needle = query.trim().toLowerCase();
+  const shown = rows.filter((r) => (!channel || r.channel === channel)
+    && (!needle || [r.name, r.company, r.sector, r.sales, r.setter, r.detail, r.creative].some((x) => String(x || '').toLowerCase().includes(needle))));
+  const many = range.from !== range.to;
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <Motion.div key="scrim" className="ld-scrim" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
+          <Motion.aside key="drawer" className="ld-drawer" role="dialog" aria-label="Leads reçus"
+            initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ duration: 0.34, ease: EASE }}>
+            <header className="ld-drawer-head">
+              <div>
+                <h3 className="fst-card-title"><Inbox size={15} strokeWidth={2.1} />Leads reçus</h3>
+                <p className="ld-drawer-sub">{state.fresh ? `${plural(rows.length, 'lead')} ${when}` : 'Lecture des leads…'}</p>
+              </div>
+              <button type="button" className="ld-close" onClick={onClose} aria-label="Fermer"><X size={17} /></button>
+            </header>
+            <div className="ld-drawer-tools">
+              <div className="fst-tabs" role="group" aria-label="Canal">
+                <button type="button" className="fst-tab" aria-pressed={!channel} onClick={() => onChannel(null)}>
+                  <span>Tous</span><span className="fst-tab-count fst-num">{count(rows.length)}</span>
+                </button>
+                {Object.keys(counts).map((key) => (
+                  <button key={key} type="button" className="fst-tab" aria-pressed={channel === key} onClick={() => onChannel(channel === key ? null : key)}>
+                    <span className="fst-dot" style={{ background: channelColor(key) }} /><span>{labels[key]}</span><span className="fst-tab-count fst-num">{count(counts[key])}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="fst-search">
+                <Search size={14} />
+                <input type="search" placeholder="Nom, entreprise, sales…" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Chercher un lead" />
+              </label>
+            </div>
+            <div className="ld-drawer-body">
+              {!state.fresh && !state.error && <div className="fst-skel" style={{ height: 240 }} />}
+              {state.error && <div className="fst-error" role="alert">{state.error}<button type="button" onClick={state.retry}>Réessayer</button></div>}
+              {state.fresh && shown.map((lead) => <LeadLine key={`${lead.id}-${lead.channel}`} lead={lead} many={many} />)}
+              {state.fresh && !shown.length && <div className="fst-empty">Aucun lead.</div>}
+            </div>
+          </Motion.aside>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
 
@@ -356,7 +457,7 @@ function PeopleBars({ rows, parts, colorOf, labelOf, total = (r) => r.total, tip
   );
 }
 
-function SettersCard({ state, prev, compareLabel }) {
+function SettersCard({ state, prev, cmp }) {
   const drawn = useDrawn();
   const s = state.data?.setters;
   const rows = (s?.by_provenance || []).filter((p) => p.rdv_placed);
@@ -367,7 +468,7 @@ function SettersCard({ state, prev, compareLabel }) {
         <>
           <div className="fst-hero">
             <div><Num className="fst-big" value={s.rdv_placed} format={whole} duration={1100} /><span className="fst-big-unit">RDV posés</span></div>
-            <Change value={s.rdv_placed} previous={prev?.setters?.rdv_placed} label={compareLabel} />
+            <Change value={s.rdv_placed} previous={prev?.setters?.rdv_placed} cmp={cmp} />
           </div>
           <div className="fst-facts"><Fact label="Honorés à ce jour" value={held} /></div>
           {rows.length > 0 && (
@@ -412,7 +513,7 @@ function SetterPeopleCard({ state }) {
   );
 }
 
-function OldWebinarCard({ state, prev, compareLabel }) {
+function OldWebinarCard({ state, prev, cmp }) {
   const old = state.data?.old_webinar;
   return (
     <Card title="Anciens webinaires" Icon={Presentation} state={state} skeleton={300}>
@@ -420,7 +521,7 @@ function OldWebinarCard({ state, prev, compareLabel }) {
         <>
           <div className="fst-hero">
             <div><Num className="fst-big" value={old.worked} format={whole} duration={1100} /><span className="fst-big-unit">fiches rappelées</span></div>
-            <Change value={old.worked} previous={prev?.old_webinar?.worked} label={compareLabel} />
+            <Change value={old.worked} previous={prev?.old_webinar?.worked} cmp={cmp} />
           </div>
           <div className="fst-facts"><Fact label="RDV posés" value={old.rdv_placed} /></div>
           <div className="fst-chart">
@@ -433,7 +534,7 @@ function OldWebinarCard({ state, prev, compareLabel }) {
   );
 }
 
-function SecondChanceCard({ state, prev, compareLabel }) {
+function SecondChanceCard({ state, prev, cmp }) {
   const sc = state.data?.second_chance;
   return (
     <Card title="Seconde chance" Icon={LifeBuoy} state={state} skeleton={300}>
@@ -441,7 +542,7 @@ function SecondChanceCard({ state, prev, compareLabel }) {
         <>
           <div className="fst-hero">
             <div><Num className="fst-big" value={sc.claimed} format={whole} duration={1100} /><span className="fst-big-unit">leads repris</span></div>
-            <Change value={sc.claimed} previous={prev?.second_chance?.claimed} label={compareLabel} />
+            <Change value={sc.claimed} previous={prev?.second_chance?.claimed} cmp={cmp} />
           </div>
           <div className="fst-facts"><Fact label="RDV reposés" value={sc.booked} /></div>
           <div className="fst-chart">
@@ -488,7 +589,7 @@ function CallsCard({ state, tooLong }) {
 
 // ── Ventes ────────────────────────────────────────────────────────────────────────────────────────
 
-function SalesCard({ state, prev, compareLabel }) {
+function SalesCard({ state, prev, cmp }) {
   const drawn = useDrawn();
   const sales = state.data?.sales;
   const groups = useMemo(() => originGroups(sales?.by_origin), [sales]);
@@ -499,7 +600,7 @@ function SalesCard({ state, prev, compareLabel }) {
         <>
           <div className="fst-hero">
             <div><Num className="fst-big" value={total} format={whole} duration={1100} /><span className="fst-big-unit">{total > 1 ? 'ventes' : 'vente'}</span></div>
-            <Change value={total} previous={prev?.sales?.totals?.sales} label={compareLabel} />
+            <Change value={total} previous={prev?.sales?.totals?.sales} cmp={cmp} />
           </div>
           <div className="fst-facts">
             <Fact label="Contrats signés, annuel HT" value={sales.totals.revenue_eur} format={euros} />
@@ -547,6 +648,9 @@ export default function LeadsDashboard() {
   const [compare, setCompare] = useState(true);
   const [tab, setTab] = useState('leads');
   const [campaignsOpen, setCampaignsOpen] = useState(false);
+  const [list, setList] = useState({ open: false, channel: null });
+  const seeLeads = useCallback((channel) => setList({ open: true, channel }), []);
+  const closeLeads = useCallback(() => setList((l) => ({ ...l, open: false })), []);
   const range = useMemo(() => (custom ? { from: custom.from, to: custom.to } : presetRange(preset, today)), [custom, preset, today]);
   const compareKey = custom ? 'custom' : preset;
   const prevRange = useMemo(() => comparisonFor(compareKey, range), [compareKey, range]);
@@ -554,9 +658,10 @@ export default function LeadsDashboard() {
   const [clock, setClock] = useState(parisClock);
   const until = range.to === today ? clock : null;
   const word = compareWord(compareKey, range);
-  const compareLabel = compare
-    ? `${word.charAt(0).toUpperCase()}${word.slice(1)} (${dayShort(prevRange.from)}${prevRange.from === prevRange.to ? '' : ` – ${dayShort(prevRange.to)}`}${until ? `, jusqu'à ${until.replace(':', ' h ')}` : ''})`
-    : null;
+  const cmp = compare ? {
+    word,
+    label: `${word.charAt(0).toUpperCase()}${word.slice(1)} (${dayShort(prevRange.from)}${prevRange.from === prevRange.to ? '' : ` – ${dayShort(prevRange.to)}`}${until ? `, jusqu'à ${until.replace(':', ' h ')}` : ''})`,
+  } : null;
 
   const current = useLeadStat('overview', range);
   const previous = useLeadStat('overview', compare ? prevRange : null, until);
@@ -598,29 +703,31 @@ export default function LeadsDashboard() {
       {tab === 'leads' && (
         <>
           <Reveal className="fst-grid">
-            <LeadsCard state={current} prev={p} compareLabel={compareLabel} when={when} onPickDay={pickDay} />
-            <AdsCard state={current} prev={p} compareLabel={compareLabel} campaignsOpen={campaignsOpen} onCampaigns={() => setCampaignsOpen(!campaignsOpen)} />
+            <LeadsCard state={current} prev={p} cmp={cmp} when={when} onPickDay={pickDay} onSeeLeads={seeLeads} />
+            <AdsCard state={current} prev={p} cmp={cmp} campaignsOpen={campaignsOpen} onCampaigns={() => setCampaignsOpen(!campaignsOpen)} />
           </Reveal>
           <Collapse open={campaignsOpen}>
             <Reveal className="ld-gap"><CampaignsCard state={campaigns} /></Reveal>
           </Collapse>
-          <Reveal className="ld-gap"><ChannelsCard state={current} prev={p} word={word} /></Reveal>
+          <Reveal className="ld-gap"><ChannelsCard state={current} prev={p} cmp={cmp} onSeeLeads={seeLeads} /></Reveal>
         </>
       )}
       {tab === 'setters' && (
         <>
           <Reveal className="fst-grid is-even">
-            <SettersCard state={current} prev={p} compareLabel={compareLabel} />
+            <SettersCard state={current} prev={p} cmp={cmp} />
             <SetterPeopleCard state={current} />
           </Reveal>
           <Reveal className="fst-grid is-even ld-gap">
-            <OldWebinarCard state={current} prev={p} compareLabel={compareLabel} />
-            <SecondChanceCard state={current} prev={p} compareLabel={compareLabel} />
+            <OldWebinarCard state={current} prev={p} cmp={cmp} />
+            <SecondChanceCard state={current} prev={p} cmp={cmp} />
           </Reveal>
         </>
       )}
       {tab === 'calls' && <Reveal><CallsCard state={calls} tooLong={tooLong} /></Reveal>}
-      {tab === 'sales' && <Reveal><SalesCard state={current} prev={p} compareLabel={compareLabel} /></Reveal>}
+      {tab === 'sales' && <Reveal><SalesCard state={current} prev={p} cmp={cmp} /></Reveal>}
+      <LeadsDrawer open={list.open} range={range} channel={list.channel} onChannel={(channel) => setList((l) => ({ ...l, channel }))}
+        onClose={closeLeads} when={when} />
       {d && (
         <p className="ld-source">
           Calculé à {d.period.generated_at.slice(11, 16).replace(':', ' h ')}{d.meta?.synced_at ? ` · Meta lu à ${d.meta.synced_at.slice(11, 16).replace(':', ' h ')}` : ''}

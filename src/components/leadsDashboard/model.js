@@ -93,6 +93,30 @@ export function dayLabel(day, i, n, short = false) {
   return short || n > 16 ? String(Number(day.slice(8, 10))) : `${weekdayShort(day)} ${Number(day.slice(8, 10))}`;
 }
 
+// Les réponses des formulaires telles qu'elles arrivent (« 1_-_2 », « entre_100_000_et_500_000€ ») remises en français :
+// « 1 à 2 salariés », « CA entre 100 000 et 500 000 € ». Un nombre seul devient un montant ou un effectif.
+const tidy = (v) => String(v).replace(/_/g, ' ').replace(/\s*-\s*/g, ' à ').replace(/\s*€/g, ' €').replace(/\s+/g, ' ').trim();
+const amount = (n) => `${Number(n).toLocaleString('fr-FR')} €`;
+export function headcountText(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const t = tidy(v);
+  return /salari/i.test(t) ? t : `${t} ${/^1$/.test(t) ? 'salarié' : 'salariés'}`;
+}
+export function revenueText(v) {
+  if (v == null || String(v).trim() === '') return null;
+  const raw = String(v).trim();
+  return /^\d+([.,]\d+)?$/.test(raw) ? `CA ${amount(raw.replace(',', '.'))}` : `CA ${tidy(raw)}`;
+}
+
+// Un écart en mots : « 7 de plus qu'hier », « 23,33 € de moins que la semaine précédente », « autant qu'hier ».
+const que = (word) => (/^[aeiouhéèê]/i.test(word) ? `qu'${word}` : `que ${word}`);
+export function changeWords(diff, word, money = false) {
+  if (!diff) return `autant ${que(word)}`;
+  const n = Math.abs(diff);
+  const amount = money ? `${n.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €` : n.toLocaleString('fr-FR');
+  return `${amount} de ${diff > 0 ? 'plus' : 'moins'} ${que(word)}`;
+}
+
 export const signedEur = (n) => `${n > 0 ? '+' : '−'}${Math.abs(n).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
 
 // Valeur d'un canal ou d'une provenance dans la réponse de comparaison.
