@@ -1,14 +1,14 @@
-import React, { useState, useMemo, useEffect, useCallback } from "react";
+import React, { useState, useMemo, useEffect, useCallback, lazy, Suspense } from "react";
 import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import apiClient from "../services/apiClient";
 import { getVisibleSections, setNavScope } from "../utils/sidebarPermissions";
+import { withoutHiddenTabs } from "../utils/hiddenPages";
 import { isReadOnlyViewer } from "../utils/readOnlyRoles";
 import Sidebar from "../components/shared/Sidebar";
-import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
-import SettersGrid from "../components/SettersGrid.jsx";
-import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
+// Onglet « Équipe Sales » : même page que /ceo/sales-team (components/equipe/), chargée à l'ouverture de l'onglet.
+const EquipePage = lazy(() => import("../components/equipe/EquipePage.jsx"));
 import { computeBoardStats, etatPeriodOptions, MONTH_LABELS_FR } from "../utils/ceoDashboardStats.js";
 import ParcPanel from "../components/ceo/ParcPanel.jsx";
 import FinancePanel from "../components/ceo/FinancePanel.jsx";
@@ -311,9 +311,9 @@ export default function CeoDashboard() {
   const [objectiveError, setObjectiveError] = useState(null);
   const canEditObjectives = user?.role === 'ceo' || user?.role === 'admin' || user?.role === 'finance_director';
   // Barre latérale : les rôles en lecture seule (RH) ont celle de la direction financière, onglets
-  // réservés retirés (sidebarPermissions) ; les autres rôles gardent la barre complète, comme avant.
+  // réservés retirés (sidebarPermissions) ; les autres rôles gardent la barre complète, moins les pages retirées des menus.
   const sidebarSections = useMemo(
-    () => (isReadOnlyViewer(user?.role) ? getVisibleSections(SIDEBAR_SECTIONS, user.role) : SIDEBAR_SECTIONS),
+    () => (isReadOnlyViewer(user?.role) ? getVisibleSections(SIDEBAR_SECTIONS, user.role) : withoutHiddenTabs(SIDEBAR_SECTIONS, user?.role)),
     [user],
   );
   const currentMonthKey = useMemo(() => new Date().toISOString().slice(0, 7), []);
@@ -358,36 +358,8 @@ export default function CeoDashboard() {
     return () => { document.body.style.background = ''; };
   }, [darkMode, P]);
 
-  // ── ÉQUIPE SALES (onglet inline, chargé à la première visite) ───────
-  const [salesTeamUsers, setSalesTeamUsers] = useState([]);
-  const [salesTeams, setSalesTeams] = useState([]);
-  const [salesTeamLoading, setSalesTeamLoading] = useState(false);
+  // ── ÉQUIPE SALES (onglet inline) : la vue Sales / Setters ; les lectures sont faites par la page elle-même ───────
   const [salesTeamView, setSalesTeamView] = useState("sales");
-  const [settersOverview, setSettersOverview] = useState([]);
-  const [settersLoading, setSettersLoading] = useState(false);
-  const [settersFetched, setSettersFetched] = useState(false);
-  useEffect(() => {
-    if (activeTab !== 'sales_team' || salesTeamUsers.length > 0 || salesTeamLoading) return;
-    setSalesTeamLoading(true);
-    Promise.all([
-      apiClient.getAssignableUsers().catch((e) => { console.warn('[CeoDashboard] getAssignableUsers failed:', e); return null; }),
-      apiClient.getTeams().catch((e) => { console.warn('[CeoDashboard] getTeams failed:', e); return null; }),
-    ])
-      .then(([usersResp, teamsResp]) => {
-        const l = Array.isArray(usersResp) ? usersResp : (usersResp?.users || usersResp?.data || []);
-        setSalesTeamUsers(l);
-        setSalesTeams(Array.isArray(teamsResp) ? teamsResp : (teamsResp?.teams || []));
-      })
-      .finally(() => setSalesTeamLoading(false));
-  }, [activeTab, salesTeamUsers.length, salesTeamLoading]);
-  useEffect(() => {
-    if (activeTab !== 'sales_team' || salesTeamView !== 'setters' || settersFetched) return;
-    setSettersLoading(true);
-    apiClient.getSettersOverview()
-      .then((resp) => { setSettersOverview(Array.isArray(resp) ? resp : (resp?.setters || [])); })
-      .catch((e) => { console.warn('[CeoDashboard] getSettersOverview failed:', e); })
-      .finally(() => { setSettersLoading(false); setSettersFetched(true); });
-  }, [activeTab, salesTeamView, settersFetched]);
 
   if (!user) return null;
 
@@ -500,28 +472,9 @@ export default function CeoDashboard() {
 
           {/* ═══ SALES TEAM TAB (CEO → Tracking Sheets individuels) ═══════════ */}
           {activeTab === 'sales_team' && (
-            <div style={{ animation: 'ceoFadeIn 0.35s ease both', paddingTop: 32 }}>
-              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
-                <div>
-                  <h1 style={{ fontSize: 24, fontWeight: 500, color: P.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                    {salesTeamView === 'sales' ? 'Équipe Sales' : 'Setters'}
-                  </h1>
-                  <p style={{ fontSize: 14, color: P.muted, margin: 0 }}>
-                    {salesTeamView === 'sales'
-                      ? 'Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).'
-                      : 'Les setters classés par équipe, avec les sales dont ils traitent les leads.'}
-                  </p>
-                </div>
-                <SalesSettersToggle view={salesTeamView} setView={setSalesTeamView} C={P} darkMode={darkMode} />
-              </div>
-              {salesTeamView === 'sales' ? (
-                <SalesTeamGrid users={salesTeamUsers} teams={salesTeams} loading={salesTeamLoading} C={P} darkMode={darkMode}
-                  onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)} />
-              ) : (
-                <SettersGrid setters={settersOverview} teams={salesTeams} loading={settersLoading} C={P} darkMode={darkMode}
-                  onOpenAccount={(email) => navigate(`/ceo/setter-sheet/${encodeURIComponent(email)}?ghost=true`)} />
-              )}
-            </div>
+            <Suspense fallback={<div style={{ minHeight: 320 }} aria-busy="true" />}>
+              <EquipePage inline darkMode={darkMode} view={salesTeamView} onView={setSalesTeamView} />
+            </Suspense>
           )}
         </div>
       </div>

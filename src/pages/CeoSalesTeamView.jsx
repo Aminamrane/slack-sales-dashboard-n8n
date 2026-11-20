@@ -1,28 +1,22 @@
 // src/pages/CeoSalesTeamView.jsx
 //
-// Route /ceo/sales-team — grille "Équipe Sales" embeddée dans le shell
-// CEO / Acquisition Director (sidebar shared + SharedNavbar).
+// Route /ceo/sales-team — la page « Équipe » (Sales / Setters) dans le shell CEO / Acquisition Director
+// (barre latérale partagée). Le contenu vit dans components/equipe/ (refonte du 19/11/2026 : une équipe = un panneau,
+// une personne = une rangée avec un bouton rond, les setters à plat puisqu'il n'y a plus d'équipes côté setters).
 //
-// Pattern strictement aligné sur CeoPerfSalesView. Comme la grille de
-// l'onglet sales_team de CeoDashboard est purement UI + un appel
-// apiClient.getAssignableUsers(), on la reproduit ici en standalone
-// pour ne pas toucher au CeoDashboard qui tourne en prod (sacred-ish
-// zone : 1996 lignes, refactor récent).
-//
-// Auth gate : admin | ceo | acquisition_director | head_of_acquisition.
-// L'endpoint /api/v1/users/assignable est ouvert à tout user actif
-// authentifié (pas de require_admin), donc les 4 rôles peuvent fetch.
+// Gabarit identique aux autres vues CEO (CeoSettersView, CeoPerfSalesView…).
+// Auth gate : admin | ceo | hr | acquisition_director | head_of_acquisition | finance_director.
+// Les lectures (/api/v1/users/assignable, /teams, /users/setters-overview) sont ouvertes à tout compte actif authentifié.
+// ?view=setters ouvre la vue Setters (retour depuis un compte setter en mode ghost).
 
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SalesTeamGrid from "../components/SalesTeamGrid.jsx";
-import SettersGrid from "../components/SettersGrid.jsx";
-import SalesSettersToggle from "../components/SalesSettersToggle.jsx";
+import EquipePage from "../components/equipe/EquipePage.jsx";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "hr", "acquisition_director", "head_of_acquisition", "finance_director"]);
 
@@ -30,19 +24,24 @@ export default function CeoSalesTeamView() {
   const navigate = useNavigate();
 
   // ── DARK MODE (read-only sync) ──────────────────────────────────────
+  // La classe `dark-mode` du body est posée par le bouton de thème de la barre latérale : on la suit à chaque changement
+  // (plus de sondage toutes les 500 ms), et une fois à l'ouverture, comme le premier passage du sondage le faisait.
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === "darkMode") setDarkMode(e.newValue === "true");
     };
-    window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => {
+    const sync = () => {
       const isDark = document.body.classList.contains("dark-mode");
       setDarkMode((prev) => (prev !== isDark ? isDark : prev));
-    }, 500);
+    };
+    window.addEventListener("storage", onStorage);
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    sync();
     return () => {
       window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
+      observer.disconnect();
     };
   }, []);
 
@@ -68,49 +67,16 @@ export default function CeoSalesTeamView() {
     setAuthChecked(true);
   }, [navigate]);
 
-  // ── FETCH ASSIGNABLE USERS + ÉQUIPES ────────────────────────────────
-  // Les deux en parallèle : /assignable donne la liste (email + avatar +
-  // rôle, déjà filtrée is_active), /teams sert à regrouper par équipe.
-  const [salesTeamUsers, setSalesTeamUsers] = useState([]);
-  const [teams, setTeams] = useState([]);
-  const [salesTeamLoading, setSalesTeamLoading] = useState(false);
-  useEffect(() => {
-    if (!authChecked) return;
-    let alive = true;
-    setSalesTeamLoading(true);
-    Promise.all([
-      apiClient.getAssignableUsers().catch((e) => { console.warn("[CeoSalesTeamView] getAssignableUsers failed:", e); return null; }),
-      apiClient.getTeams().catch((e) => { console.warn("[CeoSalesTeamView] getTeams failed:", e); return null; }),
-    ])
-      .then(([usersResp, teamsResp]) => {
-        if (!alive) return;
-        const list = Array.isArray(usersResp) ? usersResp : (usersResp?.users || usersResp?.data || []);
-        setSalesTeamUsers(list);
-        setTeams(Array.isArray(teamsResp) ? teamsResp : (teamsResp?.teams || []));
-      })
-      .finally(() => { if (alive) setSalesTeamLoading(false); });
-    return () => { alive = false; };
-  }, [authChecked]);
-
-  // ── VUE Sales / Setters (toggle) + fetch setters (lazy, 1re visite) ──
-  // ?view=setters (retour depuis un compte setter en ghost) -> ouvre l'onglet Setters.
-  const [view, setView] = useState(() => (new URLSearchParams(window.location.search).get("view") === "setters" ? "setters" : "sales"));
-  const [setters, setSetters] = useState([]);
-  const [settersLoading, setSettersLoading] = useState(false);
-  const [settersFetched, setSettersFetched] = useState(false);
-  useEffect(() => {
-    // NB: settersLoading ne DOIT PAS être dans les deps ni le guard — on le
-    // modifie dans l'effet, ce qui relancerait l'effet, tuerait le fetch en vol
-    // (alive=false) et bloquerait le loading à true (skeletons infinis).
-    if (view !== "setters" || settersFetched) return;
-    let alive = true;
-    setSettersLoading(true);
-    apiClient.getSettersOverview()
-      .then((resp) => { if (alive) setSetters(Array.isArray(resp) ? resp : (resp?.setters || [])); })
-      .catch((e) => { console.warn("[CeoSalesTeamView] getSettersOverview failed:", e); })
-      .finally(() => { if (alive) { setSettersLoading(false); setSettersFetched(true); } });
-    return () => { alive = false; };
-  }, [view, settersFetched]);
+  // ── VUE Sales / Setters : portée par l'adresse (?view=setters), donc retour du navigateur et lien direct fonctionnent ──
+  const [searchParams, setSearchParams] = useSearchParams();
+  const view = searchParams.get("view") === "setters" ? "setters" : "sales";
+  const setView = useCallback((next) => {
+    setSearchParams((prev) => {
+      const q = new URLSearchParams(prev);
+      if (next === "setters") q.set("view", "setters"); else q.delete("view");
+      return q;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
@@ -157,7 +123,7 @@ export default function CeoSalesTeamView() {
       style={{
         display: "flex",
         minHeight: "100vh",
-        background: darkMode ? "#13141b" : "#f6f7f9",
+        background: darkMode ? "#13141b" : "#ffffff",
         fontFamily: "Inter, -apple-system, BlinkMacSystemFont, system-ui, sans-serif",
         WebkitFontSmoothing: "antialiased",
         MozOsxFontSmoothing: "grayscale",
@@ -165,9 +131,6 @@ export default function CeoSalesTeamView() {
       }}
     >
       <style>{`
-        @keyframes ceoFadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-        @keyframes ceoCardPop { from { opacity: 0; transform: translateY(10px) scale(0.97); } to { opacity: 1; transform: none; } }
-        @keyframes ceoPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         .ceo-side { transition: width 0.22s cubic-bezier(0.4,0,0.2,1); }
         .ceo-side-item { transition: background 0.12s ease; }
         .ceo-side-item:hover { background: ${darkMode ? "rgba(255,255,255,0.05)" : "#f5f5f4"}; }
@@ -177,34 +140,6 @@ export default function CeoSalesTeamView() {
         .ceo-side-scroll::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; border: 2px solid transparent; background-clip: padding-box; }
         .ceo-side-scroll:hover::-webkit-scrollbar-thumb { background: ${darkMode ? "rgba(255,255,255,0.18)" : "rgba(55,53,47,0.16)"}; background-clip: padding-box; }
         .ceo-side-scroll::-webkit-scrollbar-track { background: transparent; }
-        /* ceo-card border (miroir CeoDashboard) pour cohérence visuelle. */
-        .ceo-card {
-          position: relative;
-          border-radius: 16px;
-          background: transparent;
-          border: none;
-          overflow: visible;
-          isolation: isolate;
-        }
-        .ceo-card::before {
-          content: '';
-          position: absolute;
-          inset: -3px;
-          border-radius: 18px;
-          background: linear-gradient(180deg, #EDEDEE 0%, #DCDCDD 100%);
-          z-index: -2;
-          pointer-events: none;
-        }
-        .ceo-card::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 16px;
-          background: linear-gradient(180deg, #FCFCFD 0%, #F8F8F8 40%, #F8F8F8 60%, #F3F3F4 100%);
-          box-shadow: inset 0 0 0 1.5px rgba(255,255,255,0.85);
-          pointer-events: none;
-          z-index: -1;
-        }
       `}</style>
 
       <div style={{
@@ -227,48 +162,8 @@ export default function CeoSalesTeamView() {
         />
       </div>
 
-      {/* Workspace — SharedNavbar (dynamic-island) au-dessus, puis la
-          grille Équipe Sales. paddingTop pour passer sous la navbar
-          flottante. */}
       <div style={{ flex: 1, minWidth: 0, position: 'relative', paddingTop: 16 }}>
-
-        <div style={{ padding: '32px 56px 64px' }}>
-          <div style={{ animation: 'ceoFadeIn 0.35s ease both' }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap', marginBottom: 28 }}>
-              <div>
-                <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: '0 0 4px', letterSpacing: '-0.02em' }}>
-                  {view === 'sales' ? 'Équipe Sales' : 'Setters'}
-                </h1>
-                <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
-                  {view === 'sales'
-                    ? 'Accédez aux Tracking Sheets individuels en mode ghost (lecture transparente, pas de notification).'
-                    : 'Les setters classés par équipe, avec les sales dont ils traitent les leads.'}
-                </p>
-              </div>
-              <SalesSettersToggle view={view} setView={setView} C={C} darkMode={darkMode} />
-            </div>
-
-            {view === 'sales' ? (
-              <SalesTeamGrid
-                users={salesTeamUsers}
-                teams={teams}
-                loading={salesTeamLoading}
-                C={C}
-                darkMode={darkMode}
-                onOpenSheet={(email) => navigate(`/ceo/sheet/${encodeURIComponent(email)}?ghost=true`)}
-              />
-            ) : (
-              <SettersGrid
-                setters={setters}
-                teams={teams}
-                loading={settersLoading}
-                C={C}
-                darkMode={darkMode}
-                onOpenAccount={(email) => navigate(`/ceo/setter-sheet/${encodeURIComponent(email)}?ghost=true`)}
-              />
-            )}
-          </div>
-        </div>
+        <EquipePage darkMode={darkMode} view={view} onView={setView} />
       </div>
     </div>
   );

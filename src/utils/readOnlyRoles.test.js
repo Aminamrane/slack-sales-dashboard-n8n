@@ -72,17 +72,20 @@ test('hr a la barre latérale de finance_director, plus les onglets de la direct
 
 test('hr gagne la Finance, les Campagnes, le Board et garde Heures de travail', () => {
   const ids = visible('hr').flatMap((s) => s.items);
-  for (const id of ['dashboard', 'dispatch', 'campaigns', 'optilex_board', 'webinar', 'autoassign', 'sequences', 'work_hours', 'conges', 'variables', 'meta_ads', 'bot_ia']) {
+  // « Auto-affectation » n'y est plus : retirée des menus le 19/11 (utils/hiddenPages.js).
+  for (const id of ['dashboard', 'dispatch', 'campaigns', 'optilex_board', 'webinar', 'sequences', 'work_hours', 'conges', 'variables', 'meta_ads', 'bot_ia']) {
     assert.ok(ids.includes(id), id);
   }
 });
 
-test('hr voit aussi les onglets de la direction (Perf Setters, agenda, enregistrements, leads), pas Ma Tracking Sheet', () => {
+test('hr voit aussi les onglets de la direction (Perf Setters, agenda, enregistrements), pas Ma Tracking Sheet', () => {
   const ids = visible('hr').flatMap((s) => s.items);
-  for (const id of ['sales_recordings', 'leads_management', 'small_leads', 'setters_stats', 'acquisition_agenda']) {
+  for (const id of ['sales_recordings', 'setters_stats', 'acquisition_agenda']) {
     assert.ok(ids.includes(id), id);
   }
   assert.equal(ids.includes('my_tracking_sheet'), false);
+  // « Gestion des leads » et « Leads < 100 k€ » ne sont plus au menu (retirées le 19/11, utils/hiddenPages.js).
+  for (const id of ['leads_management', 'small_leads']) assert.equal(ids.includes(id), false, id);
 });
 
 test('le contexte RH (navScope hr) suit la même barre, y compris pour un admin', () => {
@@ -96,7 +99,9 @@ test('les autres barres latérales ne bougent pas', () => {
   assert.deepEqual(visible('head_of_acquisition').find((s) => s.key === 'finance').items, ['campaigns']);
   assert.deepEqual(visible('acquisition_director').map((s) => s.key), ['recent', 'acquisition']);
   assert.deepEqual(visible('customer_success_manager').map((s) => s.key), ['acquisition', 'produit']);
-  const all = SECTIONS.flatMap((s) => s.items.map((it) => it.id));
+  // Le ceo voit tout, sauf les pages retirées des menus le 19/11 (utils/hiddenPages.js).
+  const RETIRED = ['lead_quality', 'funnel_leads', 'leads_management', 'small_leads', 'autoassign'];
+  const all = SECTIONS.flatMap((s) => s.items.map((it) => it.id)).filter((id) => !RETIRED.includes(id));
   assert.deepEqual(visible('ceo').flatMap((s) => s.items), all);
 });
 

@@ -1,6 +1,6 @@
 // src/pages/CeoSequencesView.jsx
 //
-// Route /ceo/sequences — embed <SequencesMonitor embed /> dans le
+// Route /ceo/sequences — embed <SequencesMonitor embed dark={darkMode} /> dans le
 // shell CEO / Acquisition Director (sidebar shared + SharedNavbar conservés).
 //
 // Calque de CeoPerfSalesView. Différence : LeadAssignmentLive prend le prop
@@ -27,15 +27,26 @@ export default function CeoSequencesView() {
       if (e.key === "darkMode") setDarkMode(e.newValue === "true");
     };
     window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => {
+    // Le thème peut être basculé ailleurs (barre du haut) : on suit la classe du <body> avec un observateur,
+    // au lieu d'un sondage toutes les 500 ms.
+    const observer = new MutationObserver(() => {
       const isDark = document.body.classList.contains("dark-mode");
       setDarkMode((prev) => (prev !== isDark ? isDark : prev));
-    }, 500);
+    });
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => {
       window.removeEventListener("storage", onStorage);
-      clearInterval(interval);
+      observer.disconnect();
     };
   }, []);
+  // La coquille est la source du thème de cette route : elle l'applique au document (classe `dark-mode`, que lisent
+  // index.css et la barre latérale) et le mémorise. Sans cela, le thème mémorisé était ignoré à l'ouverture directe
+  // et la bascule de la barre latérale revenait en arrière (même correction que la coquille de /ceo/campaigns).
+  useEffect(() => {
+    localStorage.setItem("darkMode", String(darkMode));
+    document.body.classList.toggle("dark-mode", darkMode);
+    document.documentElement.classList.toggle("dark-mode", darkMode);
+  }, [darkMode]);
 
   const [sideCollapsed, setSideCollapsed] = useState(() => {
     const stored = localStorage.getItem("ceoSideCollapsed_v2");
@@ -143,7 +154,7 @@ export default function CeoSequencesView() {
       </div>
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: 16 }}>
-        <SequencesMonitor embed />
+        <SequencesMonitor embed dark={darkMode} />
       </div>
     </div>
   );

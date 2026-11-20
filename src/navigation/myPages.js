@@ -10,6 +10,7 @@ import {
   Megaphone, MonitorDot, NotebookPen, PhoneCall, Sheet, Shuffle, Target, Trophy, UsersRound, Wallet,
 } from "lucide-react";
 import apiClient from "../services/apiClient";
+import { isHiddenTab } from "../utils/hiddenPages.js";
 
 const I = (icon) => createElement(icon, { size: 16, strokeWidth: 1.9 });
 const roleIn = (...roles) => (u) => roles.includes(u?.role);
@@ -43,7 +44,7 @@ export const MY_PAGES = [
 // `tab` : l'onglet du menu des tableaux de bord qui ouvre la même page ; le menu ne la répète pas dans « Mes pages »
 // quand cet onglet y est déjà (dev 09/11/2026 : « j'ai tout en double »).
 
-// Pages visibles pour l'utilisateur connecté, sans celle où il se trouve déjà.
+// Pages visibles pour l'utilisateur connecté, sans celle où il se trouve déjà ni les pages retirées des menus (utils/hiddenPages.js).
 export function myPages(user = apiClient.getUser(), currentPath = window.location.pathname) {
-  return MY_PAGES.filter((p) => p.path !== currentPath && p.visible(user));
+  return MY_PAGES.filter((p) => p.path !== currentPath && !(p.tab && isHiddenTab(p.tab, user?.role)) && p.visible(user));
 }

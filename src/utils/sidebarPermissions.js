@@ -14,6 +14,7 @@
 // Vincent (customer_success_manager) et les admins. Aucune adresse ici : le
 // dépôt est public, la liste nominative vit dans le backend.
 import { READ_ONLY_DIRECTION_ROLES } from "./readOnlyRoles.js";
+import { withoutHiddenTabs } from "./hiddenPages.js";
 
 export const SUB_TICKETS_ROLES = new Set(["admin", "ceo", "head_of_acquisition", "acquisition_director", "finance_director", "hr", "customer_success_manager"]);
 
@@ -100,6 +101,9 @@ export function getVisibleSections(allSections, role) {
     const scope = sessionStorage.getItem("navScope");
     if (scope) effective = scope;
   } catch { /* noop */ }
+  // Pages retirées des menus (utils/hiddenPages.js) : masquées avant tout autre filtre. Rôle effectif, comme les autres filtres :
+  // un admin dans le contexte d'un dashboard de rôle (navScope) y voit la barre de CE rôle.
+  allSections = withoutHiddenTabs(allSections, effective);
   // Gate par-item (global) : retire les onglets réservés à certains rôles.
   allSections = allSections.map((s) => (
     s.items

@@ -4,30 +4,28 @@
 // Tableau des sales par équipe avec nb vidéos + nb transcriptions (scan Drive via
 // le service account recordings-fetcher). Shell CEO standard (sidebar + navbar),
 // strictement aligné sur CeoSalesTeamView.
+// Refonte du 19/11/2026 : l'affichage vit dans components/recordings/ (même langage visuel que la page Équipe) ; ici restent les données, l'accès et la barre latérale.
 //
 // Auth gate : admin | ceo | acquisition_director | head_of_sales_manager | head_of_sales.
 
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import apiClient from "../services/apiClient";
 import { navigateBackToDashboard } from "../utils/dashboardNavigation";
 import { SIDEBAR_SECTIONS, getColors } from "./CeoDashboard.jsx";
 import Sidebar from "../components/shared/Sidebar";
 import { getVisibleSections } from "../utils/sidebarPermissions";
-import SalesRecordingsGrid from "../components/SalesRecordingsGrid.jsx";
-import SalesRecordingsDetail from "../components/SalesRecordingsDetail.jsx";
 import { monthRange } from "../utils/callsPeriod.js";
-import TeamReportView from "../components/TeamReportView.jsx";
+import { Frame, Empty, Skeleton } from "../components/recordings/parts.jsx";
+import RecordingsBoard from "../components/recordings/RecordingsBoard.jsx";
+import { fmtPeriod } from "../components/recordings/recordingsData.js";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales", ...READ_ONLY_DIRECTION_ROLES]);
 
-// "2026-W31" -> "Semaine 31 · 2026"
-const fmtPeriod = (p) => {
-  if (!p) return "";
-  const m = /^(\d{4})-W(\d{1,2})$/.exec(p);
-  return m ? `Semaine ${parseInt(m[2], 10)} · ${m[1]}` : p;
-};
+// La fiche d'un sales et le rapport direction ne se chargent qu'à leur ouverture (la liste s'affiche sans eux).
+const RecordingsDetail = lazy(() => import("../components/recordings/RecordingsDetail.jsx"));
+const TeamReportView = lazy(() => import("../components/TeamReportView.jsx"));
 
 // `embed` : rendu SANS le shell CEO (sidebar + navbar + fond de page), pour être
 // inséré tel quel dans un onglet de la tracking sheet, exactement comme
@@ -39,12 +37,16 @@ export default function CeoSalesRecordingsView({ embed = false }) {
   const [darkMode, setDarkMode] = useState(() => localStorage.getItem("darkMode") === "true");
   useEffect(() => {
     const onStorage = (e) => { if (e.key === "darkMode") setDarkMode(e.newValue === "true"); };
-    window.addEventListener("storage", onStorage);
-    const interval = setInterval(() => {
+    // La classe `dark-mode` du body est posée par le bouton de thème de la barre latérale : on la suit à chaque changement (plus de sondage toutes les 500 ms) et une fois à l'ouverture.
+    const sync = () => {
       const isDark = document.body.classList.contains("dark-mode");
       setDarkMode((prev) => (prev !== isDark ? isDark : prev));
-    }, 500);
-    return () => { window.removeEventListener("storage", onStorage); clearInterval(interval); };
+    };
+    window.addEventListener("storage", onStorage);
+    const observer = new MutationObserver(sync);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    sync();
+    return () => { window.removeEventListener("storage", onStorage); observer.disconnect(); };
   }, []);
 
   // ── SIDEBAR COLLAPSE ────────────────────────────────────────────────
@@ -89,9 +91,14 @@ export default function CeoSalesRecordingsView({ embed = false }) {
   // ── ANALYSES HEBDO : rapport direction + sélecteur de semaine ────────
   const [pageTab, setPageTab] = useState("equipes"); // 'equipes' (défaut) | 'direction'
   const [periods, setPeriods] = useState([]);
+  const [periodsLoaded, setPeriodsLoaded] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState(null);
-  const [teamReport, setTeamReport] = useState(null);
+  const [teamReport, setTeamReport] = useState(undefined); // undefined = en cours de lecture, null = pas de rapport
   const [allScorecards, setAllScorecards] = useState([]);
+  const [scLoaded, setScLoaded] = useState(false);
+  // Le rapport direction et ses classements ne sont lus que si l'onglet est ouvert, ou survolé / pris au clavier juste avant.
+  const [wantDirection, setWantDirection] = useState(false);
+  const needDirection = pageTab === "direction" || wantDirection;
 
   const load = (refresh = false) => {
     if (refresh) setRefreshing(true); else setLoading(true);
@@ -156,29 +163,33 @@ export default function CeoSalesRecordingsView({ embed = false }) {
         setPeriods(list);
         setSelectedPeriod((prev) => prev || list[0] || null);
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (alive) setPeriodsLoaded(true); });
     return () => { alive = false; };
   }, [authChecked]);
 
   // Rapport direction de la semaine sélectionnée.
   useEffect(() => {
-    if (!selectedPeriod) { setTeamReport(null); return; }
+    if (!needDirection || !periodsLoaded) return undefined;
+    if (!selectedPeriod) { setTeamReport(null); return undefined; }
     let alive = true;
+    setTeamReport(undefined);
     apiClient.getRecordingAnalysis("TEAM", "team_weekly", selectedPeriod)
       .then((r) => { if (alive) setTeamReport(r?.payload || null); })
       .catch(() => { if (alive) setTeamReport(null); });
     return () => { alive = false; };
-  }, [selectedPeriod]);
+  }, [needDirection, periodsLoaded, selectedPeriod]);
 
   // Toutes les scorecards (agrégées pour le classement du rapport direction).
   useEffect(() => {
-    if (!authChecked) return;
+    if (!authChecked || !needDirection || scLoaded) return undefined;
     let alive = true;
     apiClient.getScorecards()
       .then((r) => { if (alive) setAllScorecards(r?.scorecards || []); })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => { if (alive) setScLoaded(true); });
     return () => { alive = false; };
-  }, [authChecked]);
+  }, [authChecked, needDirection, scLoaded]);
 
   const C = useMemo(() => getColors(darkMode), [darkMode]);
   const visibleSections = useMemo(() => getVisibleSections(SIDEBAR_SECTIONS, userRole), [userRole]);
@@ -273,10 +284,10 @@ export default function CeoSalesRecordingsView({ embed = false }) {
       )}
 
       <div style={{ flex: 1, minWidth: 0, position: "relative", paddingTop: embed ? 0 : 16 }}>
-        <div style={{ padding: embed ? "4px 4px 40px" : "32px clamp(16px, 4vw, 56px) 64px" }}>
-          <div style={{ animation: "ceoFadeIn 0.35s ease both" }}>
-            {selectedEmail ? (
-              <SalesRecordingsDetail
+        <Frame darkMode={darkMode} embed={embed}>
+          {selectedEmail ? (
+            <Suspense fallback={<Skeleton kind="block" />}>
+              <RecordingsDetail
                 sales={{
                   ...((data?.sales || []).find((s) => s.email === selectedEmail) || { name: selectedEmail, email: selectedEmail, recordings: [] }),
                   avatar_url: avatars[selectedEmail.toLowerCase()],
@@ -290,78 +301,61 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                 C={C}
                 darkMode={darkMode}
               />
-            ) : (
-              <>
-                <div style={{ marginBottom: 20 }}>
-                  <h1 style={{ fontSize: 24, fontWeight: 700, color: C.text, margin: "0 0 4px", letterSpacing: "-0.02em" }}>
-                    Enregistrements sales
-                  </h1>
-                  <p style={{ fontSize: 14, color: C.muted, margin: 0 }}>
-                    Retrouvez les rendez-vous, les documents et les analyses de chaque sales.
-                  </p>
-                </div>
-
+            </Suspense>
+          ) : (
+            <>
+              <div className="rc-head">
+                <h1><span>Enregistrements sales</span></h1>
                 {/* Onglets de page : Équipes (défaut) | Rapport direction */}
-                <div style={{ display: "flex", gap: 4, borderBottom: `1px solid ${C.border}`, marginBottom: 24 }}>
-                  {[{ key: "equipes", label: "Équipes" }, { key: "direction", label: "Rapport direction" }].map((t) => {
-                    const active = pageTab === t.key;
-                    return (
-                      <button key={t.key} onClick={() => setPageTab(t.key)} style={{
-                        padding: "9px 16px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit",
-                        fontSize: 14, fontWeight: active ? 700 : 500, color: active ? C.text : C.muted,
-                        borderBottom: `2px solid ${active ? "#3b82f6" : "transparent"}`, marginBottom: -1,
-                      }}>{t.label}</button>
-                    );
-                  })}
+                <div className="rc-tabs" role="group" aria-label="Vue de la page" onPointerEnter={() => setWantDirection(true)} onFocus={() => setWantDirection(true)} onTouchStart={() => setWantDirection(true)}>
+                  <button type="button" className="rc-tab is-blue" aria-pressed={pageTab === "equipes"} onClick={() => setPageTab("equipes")}>Équipes</button>
+                  <button type="button" className="rc-tab is-green" aria-pressed={pageTab === "direction"} onClick={() => setPageTab("direction")}>Rapport direction</button>
                 </div>
+              </div>
 
-                {/* ÉQUIPES (défaut) */}
-                {pageTab === "equipes" && (
-                  <SalesRecordingsGrid
-                    data={data}
-                    loading={loading}
-                    videosLoading={videosLoading}
-                    error={error}
-                    onRefresh={() => load(true)}
-                    refreshing={refreshing}
-                    onSelectSales={(email, tab) => { setSelectedTab(tab || "analyses"); setSelectedEmail(email); }}
-                    avatars={avatars}
-                    calls={calls}
-                    C={C}
-                    darkMode={darkMode}
-                  />
-                )}
+              {/* ÉQUIPES (défaut) */}
+              {pageTab === "equipes" && (
+                <RecordingsBoard
+                  data={data}
+                  loading={loading}
+                  videosLoading={videosLoading}
+                  error={error}
+                  onRefresh={() => load(true)}
+                  refreshing={refreshing}
+                  onSelectSales={(email, tab) => { setSelectedTab(tab || "analyses"); setSelectedEmail(email); }}
+                  avatars={avatars}
+                  calls={calls}
+                />
+              )}
 
-                {/* RAPPORT DIRECTION — onglet à part, semaine sélectionnable */}
-                {pageTab === "direction" && (
-                  <div>
-                    {/* Le dossier porte son propre titre (masthead) : ici on ne garde que
-                        le sélecteur de semaine, aligné à droite. */}
-                    {periods.length > 0 && (
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                        <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.08em", textTransform: "uppercase", color: C.muted, marginLeft: "auto" }}>Semaine</span>
-                        <select
-                          value={selectedPeriod || ""}
-                          onChange={(e) => setSelectedPeriod(e.target.value)}
-                          style={{ fontSize: 12.5, fontWeight: 600, color: C.text, background: darkMode ? "rgba(255,255,255,0.05)" : "#fff", border: `1px solid ${C.border}`, borderRadius: 8, padding: "6px 10px", cursor: "pointer", fontFamily: "inherit" }}
-                        >
-                          {periods.map((p) => <option key={p} value={p}>{fmtPeriod(p)}</option>)}
-                        </select>
-                      </div>
-                    )}
-                    {teamReport ? (
-                      <TeamReportView report={teamReport} stats={teamStats} period={selectedPeriod} C={C} darkMode={darkMode} />
-                    ) : (
-                      <div style={{ border: `1px dashed ${C.border}`, borderRadius: 14, padding: 36, textAlign: "center", color: C.muted, fontSize: 14 }}>
-                        Pas encore de rapport direction pour cette semaine. Il sera généré au prochain passage d'analyse.
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </div>
-        </div>
+              {/* RAPPORT DIRECTION — onglet à part, semaine sélectionnable */}
+              {pageTab === "direction" && (
+                <>
+                  {/* Le dossier porte son propre titre (masthead) : ici on ne garde que le sélecteur de semaine. */}
+                  {periods.length > 0 && (
+                    <div className="rc-weekbar">
+                      <label htmlFor="rc-week">Semaine</label>
+                      <select id="rc-week" className="rc-select" value={selectedPeriod || ""} onChange={(e) => setSelectedPeriod(e.target.value)}>
+                        {periods.map((p) => <option key={p} value={p}>{fmtPeriod(p)}</option>)}
+                      </select>
+                    </div>
+                  )}
+                  {!(scLoaded && periodsLoaded && teamReport !== undefined) ? (
+                    <Skeleton kind="block" />
+                  ) : teamReport ? (
+                    <div className="rc-doc">
+                      <Suspense fallback={<Skeleton kind="block" />}>
+                        <TeamReportView report={teamReport} stats={teamStats} period={selectedPeriod} C={C} darkMode={darkMode} />
+                      </Suspense>
+                    </div>
+                  ) : (
+                    <Empty>Pas encore de rapport direction pour cette semaine. Il sera généré au prochain passage d'analyse.</Empty>
+                  )}
+                </>
+              )}
+            </>
+          )}
+        </Frame>
       </div>
     </div>
   );

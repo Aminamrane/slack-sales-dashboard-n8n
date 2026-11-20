@@ -12,6 +12,8 @@ import {
 } from "lucide-react";
 import Sidebar from "./Sidebar.jsx";
 import { myPages } from "../../../navigation/myPages.js";
+import { isHiddenTab } from "../../../utils/hiddenPages.js";
+import apiClient from "../../../services/apiClient";
 
 // Un seul jeu d'icônes, au trait et à la taille du menu partagé (16 px, trait 1,9) : les images de l'ancien menu
 // des sales avaient chacune leurs marges et sortaient à des tailles inégales dans le rail replié (dev 09/11/2026).
@@ -40,8 +42,11 @@ function ViewIcon({ view }) {
   return <span>{view.icon}</span>;
 }
 
-export default function SheetSidebar({ title = "Ma Tracking Sheet", views, activeView, onView, headerExtra, C, darkMode, setDarkMode }) {
+export default function SheetSidebar({ title = "Ma Tracking Sheet", views: allViews, activeView, onView, headerExtra, C, darkMode, setDarkMode }) {
   const navigate = useNavigate();
+  // Pages retirées des menus (utils/hiddenPages.js) : leurs vues (Funnel Leads, Gestion des leads, Qualité Leads) ne s'affichent plus ici.
+  const role = apiClient.getUser()?.role;
+  const views = allViews.filter((v) => !isHiddenTab(v.key, role));
   const [collapsed, setCollapsed] = useState(() => {
     try { const v = localStorage.getItem("ceoSideCollapsed_v2"); return v === null ? true : v === "true"; } catch { return true; }
   });

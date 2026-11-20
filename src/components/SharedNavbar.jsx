@@ -12,6 +12,7 @@ import lightIcon from "../assets/light.png";
 import darkIcon from "../assets/dark.png";
 import meetIcon from "../assets/meet.png";
 import { usesDashboardOnlyNavbar } from "../utils/dashboardAudience.js";
+import { isHiddenTab } from "../utils/hiddenPages.js";
 
 const COLORS = {
   primary: "#6366f1",
@@ -883,7 +884,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {apiClient.hasAccess('leads_management') && (
+                {apiClient.hasAccess('leads_management') && !isHiddenTab('leads_management', apiClient.getUser()?.role) && (
                   <button
                     onClick={() => navigate("/leads-management")}
                     style={{
@@ -1027,7 +1028,7 @@ export default function SharedNavbar({ session, darkMode, setDarkMode, notificat
                   </button>
                 )}
 
-                {['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'head_of_sales_manager'].includes(apiClient.getUser()?.role) && (
+                {['admin', 'ceo', 'acquisition_director', 'head_of_acquisition', 'head_of_sales_manager'].includes(apiClient.getUser()?.role) && !isHiddenTab('funnel_leads', apiClient.getUser()?.role) && (
                   <button
                     onClick={() => navigate("/funnel-leads")}
                     style={{
