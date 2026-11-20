@@ -1,5 +1,5 @@
 import { memo, useDeferredValue, useMemo, useState } from 'react';
-import { ArrowUpRight, ChartNoAxesCombined, FileText, FolderOpen, LoaderCircle, Phone, RefreshCw, Search, Share2, TriangleAlert, Users, Video } from 'lucide-react';
+import { ArrowUpRight, ChartNoAxesCombined, FileText, FolderOpen, LoaderCircle, Phone, RefreshCw, Search, Share2, Star, TriangleAlert, Users, Video } from 'lucide-react';
 import { callsOf, fmtN, groupTeams, salesName, sharedCount, teamOf, totalsOf } from './recordingsData';
 import { Avatar, Empty, Failed, Skeleton } from './parts';
 
@@ -29,7 +29,7 @@ const COUNTERS = [
   { key: 'analyses', icon: ChartNoAxesCombined, tone: 'blue', label: 'Analyses' },
 ];
 
-const Person = memo(function Person({ s, avatar, calls, videosLoading, onSelect }) {
+const Person = memo(function Person({ s, avatar, captain, calls, videosLoading, onSelect }) {
   const name = salesName(s);
   const shared = sharedCount(s);
   const values = {
@@ -42,8 +42,11 @@ const Person = memo(function Person({ s, avatar, calls, videosLoading, onSelect 
     <article className="rc-person">
       <span className="rc-cover" aria-hidden="true" />
       <button type="button" className="rc-open" onClick={() => onSelect(s.email, s.nb_scored ? 'analyses' : 'transcriptions')} title={s.email}>
-        <span className="rc-sticker"><Avatar key={avatar || s.email} src={avatar} name={name} /></span>
-        <b>{name}</b>
+        <span className="rc-sticker">
+          <Avatar key={avatar || s.email} src={avatar} name={name} />
+          {captain && <Star className="rc-star" size={14} strokeWidth={1.6} aria-hidden="true" />}
+        </span>
+        <b>{name}{captain && <i className="rc-sr"> (capitaine)</i>}</b>
       </button>
       <ArrowUpRight className="rc-arrow" size={15} strokeWidth={2} aria-hidden="true" />
       <div className="rc-counts">
@@ -83,19 +86,19 @@ const Team = memo(function Team({ group, avatars, calls, videosLoading, onSelect
       </header>
       <ul className="rc-people">
         {group.members.map((s) => (
-          <li key={s.email}><Person s={s} avatar={avatars[String(s.email || '').toLowerCase()]} calls={calls} videosLoading={videosLoading} onSelect={onSelect} /></li>
+          <li key={s.email}><Person s={s} avatar={avatars[String(s.email || '').toLowerCase()]} captain={group.captains.has(s.email)} calls={calls} videosLoading={videosLoading} onSelect={onSelect} /></li>
         ))}
       </ul>
     </section>
   );
 });
 
-export default function RecordingsBoard({ data, loading, videosLoading, error, onRefresh, refreshing, onSelectSales, avatars = {}, calls }) {
+export default function RecordingsBoard({ data, loading, videosLoading, error, onRefresh, refreshing, onSelectSales, avatars = {}, calls, captains }) {
   const [search, setSearch] = useState('');
   const [team, setTeam] = useState('');
   const query = useDeferredValue(search);
   const sales = data?.sales;
-  const { teams, groups } = useMemo(() => groupTeams(sales, { query, team }), [sales, query, team]);
+  const { teams, groups } = useMemo(() => groupTeams(sales, { query, team, captains }), [sales, query, team, captains]);
   const counts = useMemo(() => {
     const m = {};
     for (const s of sales || []) { const k = teamOf(s); m[k] = (m[k] || 0) + 1; }

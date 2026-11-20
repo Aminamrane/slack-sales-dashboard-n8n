@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  NO_TEAM, callsOf, fmtDate, fmtN, fmtPeriod, groupTeams, initialsOf, matchesSearch, prospectName, scoreBand, sharedCount, sortScorecards, splitFiles, TONES, totalsOf,
+  NO_TEAM, callsOf, captainKeys, isCaptain, fmtDate, fmtN, fmtPeriod, groupTeams, initialsOf, matchesSearch, prospectName, scoreBand, sharedCount, sortScorecards, splitFiles, TONES, totalsOf,
 } from './recordingsData.js';
 
 const sales = [
@@ -125,4 +125,25 @@ test('fmtPeriod, fmtDate, prospectName', () => {
   assert.match(fmtDate('2026-11-05T10:00:00Z'), /05/);
   assert.equal(prospectName({ prospect: 'Jean Dupont (Acme)' }), 'Jean Dupont');
   assert.equal(prospectName({}), 'Prospect');
+});
+
+test('capitaines : en tête de leur équipe avec le reste dans l\'ordre d\'arrivée, sans accents ni casse', () => {
+  const teams = [{ label: 'Alpha', captain: { name: 'dan roux' } }, { label: 'Beta', captain: { email: 'C@x.fr' } }];
+  const captains = captainKeys(teams);
+  const { groups } = groupTeams(sales, { captains });
+  const alpha = groups.find((g) => g.label === 'Alpha');
+  assert.deepEqual(alpha.members.map((s) => s.email), ['d@x.fr', 'a@x.fr']);
+  assert.deepEqual([...alpha.captains], ['d@x.fr']);
+  assert.deepEqual([...groups.find((g) => g.label === 'Beta').captains], ['c@x.fr']);
+  assert.equal(groups.find((g) => g.label === NO_TEAM).captains.size, 0);
+});
+
+test('capitaines : un capitaine ne compte que dans son équipe ; sans données, l\'ordre d\'avant', () => {
+  const captains = captainKeys([{ label: 'Beta', captain: { name: 'Dan Roux' } }]);
+  assert.equal(isCaptain(sales[3], captains), false);
+  assert.equal(isCaptain(sales[3], null), false);
+  assert.deepEqual(captainKeys(undefined), new Set());
+  assert.deepEqual(captainKeys({ teams: [{ label: 'Alpha', captain: null }] }), new Set());
+  const { groups } = groupTeams(sales, { captains: null });
+  assert.deepEqual(groups.find((g) => g.label === 'Alpha').members.map((s) => s.email), ['a@x.fr', 'd@x.fr']);
 });

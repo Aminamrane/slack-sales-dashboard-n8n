@@ -22,8 +22,30 @@ export const matchesSearch = (s, query) => {
 // Couleur d'équipe : l'API n'en donne pas pour cette page, on en attribue une par rang (deux équipes voisines n'ont jamais la même), « Sans équipe » reste neutre.
 export const TONES = ['green', 'blue', 'amber', 'peach', 'terra'];
 
+// Capitaines : /api/v1/teams → clés « équipe + nom » et « équipe + e-mail » (sans accents ni casse). Un capitaine ne compte que dans SON équipe.
+export function captainKeys(teams) {
+  const keys = new Set();
+  for (const t of Array.isArray(teams) ? teams : (teams?.teams || [])) {
+    const c = t?.captain;
+    if (!c || !t.label) continue;
+    const label = fold(t.label);
+    const name = fold(c.name || c.full_name);
+    const mail = fold(c.email);
+    if (name) keys.add(`${label}|${name}`);
+    if (mail) keys.add(`${label}|${mail}`);
+  }
+  return keys;
+}
+
+export const isCaptain = (s, captains) => {
+  if (!captains || !captains.size || !s?.team) return false;
+  const label = fold(s.team);
+  return captains.has(`${label}|${fold(s.name || s.full_name)}`) || (!!s.email && captains.has(`${label}|${fold(s.email)}`));
+};
+
 // Équipes dans l'ordre d'arrivée des données (comme avant), « Sans équipe » en dernier ; une équipe vide après filtre disparaît.
-export function groupTeams(sales, { query = '', team = '' } = {}) {
+// Le capitaine passe en tête de son équipe (le reste garde l'ordre d'arrivée).
+export function groupTeams(sales, { query = '', team = '', captains = null } = {}) {
   const order = [];
   const seen = new Set();
   for (const s of sales || []) {
@@ -31,13 +53,16 @@ export function groupTeams(sales, { query = '', team = '' } = {}) {
     if (!seen.has(t)) { seen.add(t); order.push(t); }
   }
   order.sort((a, b) => (a === NO_TEAM) - (b === NO_TEAM));
-  const groups = order.map((label, i) => ({ key: label, label, tone: label === NO_TEAM ? null : TONES[i % TONES.length], members: [] }));
+  const groups = order.map((label, i) => ({ key: label, label, tone: label === NO_TEAM ? null : TONES[i % TONES.length], members: [], captains: new Set() }));
   const byLabel = new Map(groups.map((g) => [g.label, g]));
   for (const s of sales || []) {
     if (team && teamOf(s) !== team) continue;
     if (!matchesSearch(s, query)) continue;
-    byLabel.get(teamOf(s)).members.push(s);
+    const g = byLabel.get(teamOf(s));
+    g.members.push(s);
+    if (isCaptain(s, captains)) g.captains.add(s.email);
   }
+  for (const g of groups) if (g.captains.size) g.members.sort((a, b) => g.captains.has(b.email) - g.captains.has(a.email));
   return { teams: order, groups: groups.filter((g) => g.members.length > 0) };
 }
 

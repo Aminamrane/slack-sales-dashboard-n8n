@@ -18,7 +18,7 @@ import { getVisibleSections } from "../utils/sidebarPermissions";
 import { monthRange } from "../utils/callsPeriod.js";
 import { Frame, Empty, Skeleton } from "../components/recordings/parts.jsx";
 import RecordingsBoard from "../components/recordings/RecordingsBoard.jsx";
-import { fmtPeriod } from "../components/recordings/recordingsData.js";
+import { captainKeys, fmtPeriod } from "../components/recordings/recordingsData.js";
 import { READ_ONLY_DIRECTION_ROLES } from "../utils/readOnlyRoles";
 
 const ALLOWED_ROLES = new Set(["admin", "ceo", "acquisition_director", "head_of_acquisition", "head_of_sales_manager", "head_of_sales", ...READ_ONLY_DIRECTION_ROLES]);
@@ -85,6 +85,14 @@ export default function CeoSalesRecordingsView({ embed = false }) {
     apiClient.get(`/api/v1/sales-calls/overview?start=${start}&end=${end}`)
       .then((d) => { if (!live) return; const byEmail = {}; (d?.sales || []).forEach((s) => { byEmail[(s.email || "").toLowerCase()] = s; }); setCalls({ byEmail, total: d?.total_calls ?? null, loading: false }); })
       .catch(() => { if (live) setCalls({ byEmail: {}, total: null, loading: false }); });
+    return () => { live = false; };
+  }, []);
+
+  // Capitaines d'équipe (étoile, en tête de leur équipe). Lecture facultative : si elle échoue, l'ordre et l'affichage restent ceux d'avant.
+  const [captains, setCaptains] = useState(null);
+  useEffect(() => {
+    let live = true;
+    apiClient.getTeams().then((t) => { if (live) setCaptains(captainKeys(t)); }).catch(() => {});
     return () => { live = false; };
   }, []);
 
@@ -325,6 +333,7 @@ export default function CeoSalesRecordingsView({ embed = false }) {
                   onSelectSales={(email, tab) => { setSelectedTab(tab || "analyses"); setSelectedEmail(email); }}
                   avatars={avatars}
                   calls={calls}
+                  captains={captains}
                 />
               )}
 
