@@ -32,7 +32,7 @@ import { canChooseVisibility, scopeOf, sendBlocker } from "../utils/commentVisib
 import { isOnboardingToReschedule, onboardingDateOf, onboardingSituation } from "../utils/boardIntegration.js";
 import { isOnboardingUpcoming, isOnboardingOverdue, isIntegrationUpcoming, isIntegrationOverdue } from "../utils/boardPredicates.js";
 import { createLatestRequestTracker, displayEtat, EXITED_ETATS, isOutOfOnboarding, matchesSignedClient, withConfirmedEtat } from "../utils/boardClientState.js";
-import { Fragment, memo, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useId } from "react";
+import { Fragment, createContext, memo, useContext, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useId } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
 import { sharedEmailOptions } from "../utils/boardContacts.js";
@@ -118,10 +118,11 @@ const ProgramIcon = ({ kind, size = 16 }) => (
 const tabLabel = (t) => TAB_LABEL[t] || t;
 // États que le cabinet peut poser manuellement (badge cliquable, table + fiche).
 const ETAT_OPTIONS = ["Signé", "En cours de résiliation", "En cours de rétractation", "Résiliation", "Rétractation", "Self-Résiliation", "Pause", "Liquidation", "En cours de liquidation"];
-// RÈGLE MÉTIER : le rôle optilex (fiscalistes du cabinet) ne peut pas POSER Résiliation/
-// Rétractation (états actés par Owner) — seulement les "En cours de ...". Le backend
+// RÈGLE MÉTIER : acter une sortie (Résiliation, Rétractation, Self-Résiliation, Liquidation) est réservé aux comptes
+// que le serveur désigne (`permissions.act_exit` du board) ; les autres posent les "En cours de ...". Le serveur
 // applique la même règle (403) ; ici on retire les options de leur picker.
-const CABINET_FORBIDDEN_ETATS = ["Résiliation", "Rétractation"];
+const ACTED_ETATS = ["Résiliation", "Rétractation", "Self-Résiliation", "Liquidation"];
+const BoardExitActContext = createContext(false);
 // finance_team (Aurélie) : accès très restreint -> ne peut poser QUE ces 2 états
 // (+ noter la météo + cocher l'onboarding owner). Tout le reste = lecture seule.
 const FINANCE_TEAM_ETATS = ["En cours de résiliation", "En cours de rétractation"];
@@ -130,13 +131,11 @@ const isFinanceTeam = () => { try { return (apiClient.getUser() || {}).role === 
 // strict que finance_team (ni état, ni onboarding, ni météo, ni commentaire, ni rendez-vous). Les contrôles
 // d'écriture restent visibles et désactivés ; les valeurs éditables s'affichent comme des valeurs.
 const isBoardReadOnly = () => { try { return isReadOnlyViewer((apiClient.getUser() || {}).role); } catch { return false; } };
-const etatOptionsForUser = () => {
+const etatOptionsForUser = (canActExit) => {
   try {
-    const role = (apiClient.getUser() || {}).role;
-    if (role === "finance_team") return FINANCE_TEAM_ETATS;
-    if (role === "optilex") return ETAT_OPTIONS.filter((o) => !CABINET_FORBIDDEN_ETATS.includes(o));
-  } catch { /* défaut : liste complète */ }
-  return ETAT_OPTIONS;
+    if ((apiClient.getUser() || {}).role === "finance_team") return FINANCE_TEAM_ETATS;
+  } catch { /* défaut : la règle des états actés */ }
+  return canActExit ? ETAT_OPTIONS : ETAT_OPTIONS.filter((o) => !ACTED_ETATS.includes(o));
 };
 // ── Météo client : bandes, sens et icônes vivent dans components/meteo.jsx (partagés avec la
 // météo d'onboarding). Réexportés d'ici pour les pages qui les importent déjà du board.
@@ -726,6 +725,7 @@ export function EtatBadge({ etat, withIcon = false, pop = 0 }) {
 // (Sheet)" -> onPick(null) efface l'override. Se ferme au scroll/resize ; flip vers le haut.
 const ETAT_MENU_H = 360;
 function EtatPicker({ etat, onPick, disabled }) {
+  const canActExit = useContext(BoardExitActContext);
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état confirmé,
@@ -764,7 +764,7 @@ function EtatPicker({ etat, onPick, disabled }) {
     pending.then(done, done);
   };
   // "Automatique" = état calculé (suivi cabinet / signatures), efface l'override manuel.
-  const items = [...(isFinanceTeam() ? [] : [{ opt: null, label: "Automatique" }]), ...etatOptionsForUser().map((o) => ({ opt: o, label: o }))];
+  const items = [...(isFinanceTeam() ? [] : [{ opt: null, label: "Automatique" }]), ...etatOptionsForUser(canActExit).map((o) => ({ opt: o, label: o }))];
   return (
     <span onClick={(e) => e.stopPropagation()}>
       <button ref={btnRef} type="button" onClick={toggle} title="Changer l'état" disabled={saving} aria-busy={saving || undefined}
@@ -1395,6 +1395,7 @@ export default function OptilexBoard({ embed = false }) {
   // sans CSM). Coché, le board entier se réduit au portefeuille : onglets, compteurs et liste.
   const [csmList, setCsmList] = useState([]);
   const [canAssignCsm, setCanAssignCsm] = useState(false);
+  const [canActExit, setCanActExit] = useState(false);
   const [csmSel, setCsmSel] = useState([]);
   const [sortCol, setSortCol] = useState(null);  // tri manuel par en-tête : null | owner_signed | onboarding
   // Largeur disponible du tableau -> part égale du surplus pour chaque colonne (cf. TABLE_COLS).
@@ -1451,6 +1452,7 @@ export default function OptilexBoard({ embed = false }) {
     const next = r.csms || [];
     setCsmList((prev) => (JSON.stringify(prev) === JSON.stringify(next) ? prev : next));
     setCanAssignCsm(!!r.permissions?.assign_csm);
+    setCanActExit(!!r.permissions?.act_exit);
   }, []);
   useEffect(() => {
     let alive = true;
@@ -1944,6 +1946,7 @@ export default function OptilexBoard({ embed = false }) {
   const td = ROW_TD;
 
   return (
+    <BoardExitActContext.Provider value={canActExit}>
     <div style={{ minHeight: embed ? "auto" : "100vh", background: embed ? "transparent" : BG, padding: embed ? "10px 24px 28px" : "24px 28px", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif", fontFeatureSettings: "'cv11','ss01'", color: TEXT }} className="ob-root">
       <style>{CSM_CSS}</style>
       <style>{BULK_CSS}</style>
@@ -2850,6 +2853,7 @@ export default function OptilexBoard({ embed = false }) {
       </AnimatePresence>
       </BoardCsmContext.Provider>
     </div>
+    </BoardExitActContext.Provider>
   );
 }
 

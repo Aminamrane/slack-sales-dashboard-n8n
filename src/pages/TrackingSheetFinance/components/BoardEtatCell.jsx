@@ -31,8 +31,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   EtatBadge, ETAT_STYLE, ETAT_DATE_CONFIG, displayEtat, isEtatPending,
 } from '../../OptilexBoard.jsx';
-import { formatDateFR, pauseRange, canEditAmounts, ACTED_EXIT_ETATS } from '../constants.js';
-import apiClient from '../../../services/apiClient.js';
+import { formatDateFR, pauseRange, ACTED_EXIT_ETATS } from '../constants.js';
 
 // Palette locale minimale (sync avec la charte du board — Attio/Linear sobre).
 const MUTED = '#9d9890';
@@ -41,40 +40,27 @@ const BORDER = '#e8e4de';
 const GREEN = '#0b7a4b';
 const AMBER = '#c2500e';
 
-// Options posables depuis la page finance.
+// Options posables depuis la page finance, dans l'ordre du board : les états actés juste après les « en cours »,
+// pour qu'on lise la progression d'un dossier de haut en bas.
 //
-// « Résiliation » et « Rétractation » sont des états ACTÉS : ils engagent
-// l'entreprise et coupent la facturation. Ouverts à la DIRECTION seulement
-// (admin, direction financière) le 2026-08-28, à la demande du dev — Ismahane
-// acte désormais les sorties depuis la finance, sans passer par le board. Le
-// serveur applique la même règle (403 pour les autres rôles) : cette liste ne
-// fait que refléter l'écran.
-const FINANCE_ETAT_OPTIONS = [
+// Résiliation, Rétractation, Self-Résiliation et Liquidation sont des états ACTÉS : ils engagent l'entreprise et
+// coupent la facturation. Réservés aux comptes que le serveur désigne (`can_act_exit` de la fiche, dev 21/11/2026) ;
+// le serveur applique la même règle (403) : cette liste ne fait que refléter l'écran.
+const ALL_ETAT_OPTIONS = [
   'Signé',
   'En cours de résiliation',
   'En cours de rétractation',
+  'Résiliation',
+  'Rétractation',
   'Self-Résiliation',
   'Pause',
   'Liquidation',
   'En cours de liquidation',
 ];
 
-const ACTED_ETAT_OPTIONS = ['Résiliation', 'Rétractation'];
-
-// L'ordre suit celui du board : les états actés juste après les « en cours »,
-// pour qu'on lise la progression d'un dossier de haut en bas.
 const etatOptionsFor = (canActe) => (canActe
-  ? [
-    'Signé',
-    'En cours de résiliation',
-    'En cours de rétractation',
-    ...ACTED_ETAT_OPTIONS,
-    'Self-Résiliation',
-    'Pause',
-    'Liquidation',
-    'En cours de liquidation',
-  ]
-  : FINANCE_ETAT_OPTIONS);
+  ? ALL_ETAT_OPTIONS
+  : ALL_ETAT_OPTIONS.filter((o) => !ACTED_EXIT_ETATS.has(o)));
 
 const MENU_MAX_H = 380;
 
@@ -116,16 +102,13 @@ function DateField({ label, value, onCommit }) {
 // la main au dialogue de sortie client, qui demande la date d'effet et règle le
 // sort des créances. Sans cette prop (tableau), le comportement historique
 // reste : POST immédiat.
-export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null, canActe: canActeProp }) {
+export default function BoardEtatCell({ boardRow, onEtatChange, disabled = false, onActedEtat = null, canActe = false }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState(null);
   // Pose en cours : l'état affiché vient du serveur, le badge garde donc l'état
   // confirmé, estompé, jusqu'à sa réponse (même règle que le board).
   const [saving, setSaving] = useState(false);
   const btnRef = useRef(null);
-  // Acter une résiliation ou une rétractation : direction seulement (la fiche
-  // passe le rôle de la page Finance, servi par l'API).
-  const canActe = canActeProp ?? canEditAmounts(apiClient.getUser()?.role);
 
   // Même hygiène que le board : le menu (position: fixed) se ferme dès que la
   // table scrolle ou que la fenêtre est resize, sinon il "flotte" détaché.

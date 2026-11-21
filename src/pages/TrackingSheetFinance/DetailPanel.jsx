@@ -1193,6 +1193,7 @@ export default function DetailPanel({
           />
           <ExitClientDialog
             open={exitOpen && canEditMoney}
+            canActe={!!profile?.can_act_exit}
             onClose={() => setExitOpen(false)}
             client={client}
             boardRow={boardRow}
@@ -1394,7 +1395,7 @@ function StatusStrip({
             <BoardEtatCell
               boardRow={boardRow}
               disabled={!canEditEtat}
-              canActe={canEditEtat}
+              canActe={canEditEtat && !!profile?.can_act_exit}
               onEtatChange={(payload) => onBoardEtatChange?.(client?.numero_client, payload)}
               onActedEtat={onActedEtat}
             />
