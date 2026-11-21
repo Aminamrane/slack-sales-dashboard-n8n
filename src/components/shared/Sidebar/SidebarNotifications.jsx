@@ -8,6 +8,10 @@
 // propre liste : les autres destinataires gardent la leur.
 // Non lues (dev 21/11/2026) : la liste s'ouvre sur « Non lues », et une notification lue par « Lire la suite » y reste
 // affichée jusqu'à ce qu'on referme la liste ou change d'onglet, pour pouvoir la lire.
+// Mouvement (dev 21/11/2026 : « quand on les supprime, quand on les ouvre, que ce soit vraiment rassurant ») : une
+// notification retirée se teinte de rouge et glisse vers la droite avant que la place se referme ; une notification lue
+// quitte « Non lues » en se repliant ; plusieurs à la fois partent en cascade ; le point vert se rétracte ; le texte
+// révélé apparaît en fondu ; les compteurs rebondissent quand ils changent. Animations réduites : simple fondu.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // eslint-disable-next-line no-unused-vars -- motion utilisé via JSX (faux positif)
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -87,9 +91,23 @@ export function NotificationsRow({ collapsed, unread, open, onToggle }) {
         aria-expanded={open} aria-label={label} title={collapsed ? label : undefined}>
         <span className={`sb-notif-bell${unread ? " is-ringing" : ""}`}><Bell size={16} strokeWidth={2} aria-hidden="true" /></span>
         {!collapsed && <span className="sb-notif-label">Notifications</span>}
-        {unread > 0 && <span className="sb-notif-count">{unread > 99 ? "99+" : unread}</span>}
+        {unread > 0 && <Count className="sb-notif-count" value={unread > 99 ? "99+" : unread} />}
       </button>
     </div>
+  );
+}
+
+const EASE = [0.22, 1, 0.36, 1];          // courbe du style Owner
+const AWAY = [0.5, 0, 0.75, 0.25];        // ce qui s'en va (mouvement de rangement)
+// Un compteur qui change rebondit, pour qu'on voie que le geste a été pris en compte.
+// Pas au premier affichage : seulement quand la valeur change sous les yeux.
+function Count({ value, className }) {
+  const reduce = useReducedMotion();
+  const shownOnce = useRef(false);
+  useEffect(() => { shownOnce.current = true; }, []);
+  return (
+    <motion.span key={value} className={className} initial={shownOnce.current && !reduce ? { scale: 1.35 } : false} animate={{ scale: 1 }}
+      transition={{ type: "spring", stiffness: 520, damping: 18 }}>{value}</motion.span>
   );
 }
 
@@ -109,6 +127,16 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   // Lues par « Lire la suite » pendant cette ouverture : elles restent dans « Non lues », même quand le prochain passage
   // du serveur (qui ne renvoie que les non lues) ne les contient plus.
   const [kept, setKept] = useState({});
+  // Comment chaque notification qui va quitter la liste s'en va : retirée (« remove ») ou lue (« read »), et son rang
+  // dans un départ groupé. Lu par les cartes qui sortent au moment de leur départ (AnimatePresence `custom`).
+  const [leaving, setLeaving] = useState({});
+  const leavingTimer = useRef(null);
+  const markLeaving = (list, kind) => {
+    setLeaving(Object.fromEntries(list.map((n, order) => [n.id, { kind, order }])));
+    clearTimeout(leavingTimer.current);   // les départs finis, plus rien n'est en route
+    leavingTimer.current = setTimeout(() => setLeaving({}), 1600);
+  };
+  useEffect(() => () => clearTimeout(leavingTimer.current), []);
   const shown = view === "unread" ? unreadShown(items, kept) : items;
   const left = Math.max(0, total - items.length);
   // Changer d'onglet ou quitter la sélection repart de zéro.
@@ -118,12 +146,15 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   const toggle = (id) => setPicked((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const allPicked = shown.length > 0 && shown.every((n) => picked.has(n.id));
   const ids = [...picked];
-  const readPicked = async () => { await onMarkRead(ids); setSelecting(false); };
+  const readPicked = async () => { markLeaving(shown.filter((n) => picked.has(n.id)), "read"); await onMarkRead(ids); setSelecting(false); };
   const removePicked = async () => {
     if (!confirm) { setConfirm(true); return; }
+    markLeaving(shown.filter((n) => picked.has(n.id)), "remove");
     await onDismiss(ids);
     setSelecting(false);
   };
+  const removeOne = (ids1) => { markLeaving(shown.filter((n) => ids1.includes(n.id)), "remove"); return onDismiss(ids1); };
+  const readAll = () => { markLeaving(shown.filter((n) => !n.read), "read"); return onReadAll(); };
   const expand = (n) => {
     setExpanded((e) => ({ ...e, [n.id]: !e[n.id] }));
     if (!n.read) {                       // lue en entier : comptée comme lue, mais gardée sous les yeux
@@ -141,20 +172,27 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
         <div className="sb-notif-tabs" role="tablist" aria-label="Filtrer les notifications">
           {[["all", "Toutes"], ["unread", "Non lues"]].map(([k, l]) => (
             <button key={k} type="button" role="tab" aria-selected={view === k} className={view === k ? "is-on" : ""} onClick={() => onView(k)}>
-              {l}{k === "unread" && unreadCount > 0 && <span>{unreadCount}</span>}
+              {l}{k === "unread" && unreadCount > 0 && <Count value={unreadCount} />}
             </button>
           ))}
         </div>
       </header>
       <div className="sb-notif-list ceo-side-scroll">
-        <AnimatePresence initial={false}>
+        <AnimatePresence initial={false} custom={leaving}>
           {shown.map((n, i) => (
             <NotificationItem key={n.id} n={n} i={i} reduce={reduce} selecting={selecting} on={picked.has(n.id)} open={!!expanded[n.id]}
-              onToggle={() => toggle(n.id)} onExpand={() => expand(n)} onOpen={onOpen} onDismiss={onDismiss} />
+              onToggle={() => toggle(n.id)} onExpand={() => expand(n)} onOpen={onOpen} onDismiss={removeOne} />
           ))}
         </AnimatePresence>
         {!shown.length && !loading && (
-          <div className="sb-notif-empty"><Bell size={22} aria-hidden="true" /><p>{view === "unread" ? "Tout est lu." : "Aucune notification."}</p></div>
+          <motion.div className="sb-notif-empty" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: EASE, delay: 0.12 }}>
+            {view === "unread" ? (
+              <motion.span className="sb-notif-done" initial={reduce ? false : { scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: "spring", stiffness: 420, damping: 16, delay: 0.2 }}><CheckCheck size={20} aria-hidden="true" /></motion.span>
+            ) : <Bell size={22} aria-hidden="true" />}
+            <p>{view === "unread" ? "Tout est lu." : "Aucune notification."}</p>
+          </motion.div>
         )}
         {left > 0 && shown.length > 0 && (
           <button type="button" className="sb-notif-load" onClick={onMore} disabled={loading}>
@@ -177,11 +215,34 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
             </span>
           </div>
         ) : (
-          <button type="button" onClick={onReadAll} disabled={!unreadCount}><CheckCheck size={15} aria-hidden="true" />Tout marquer comme lu</button>
+          <button type="button" onClick={readAll} disabled={!unreadCount}><CheckCheck size={15} aria-hidden="true" />Tout marquer comme lu</button>
         )}
       </footer>
     </section>
   );
+}
+
+// Arrivée en cascade ; départ selon `leaving` (passé par AnimatePresence au moment où la carte quitte la liste) :
+// retirée = teinte rouge, glissement à droite, puis la place se referme ; lue ou partie autrement = fondu, puis la place
+// se referme. Dans un départ groupé, chaque carte attend son tour.
+const COLLAPSE = { height: 0, paddingTop: 0, paddingBottom: 0, borderBottomWidth: 0, overflow: "hidden" };
+function itemMotion(id, reduce) {
+  return {
+    hidden: { opacity: 0, y: 10 },
+    shown: (i) => ({ opacity: 1, y: 0, transition: { delay: typeof i === "number" ? Math.min(i, 8) * 0.038 : 0, duration: 0.32, ease: EASE } }),
+    gone: (leaving) => {
+      const how = leaving && typeof leaving === "object" ? leaving[id] : null;
+      const delay = how ? Math.min(how.order, 10) * 0.045 : 0;
+      if (reduce) return { opacity: 0, transition: { duration: 0.15, delay } };
+      if (how?.kind === "remove") {
+        return { ...COLLAPSE, opacity: 0, x: 56, backgroundColor: "var(--sb-red-bg)",
+          transition: { default: { duration: 0.26, ease: EASE, delay: delay + 0.2 }, backgroundColor: { duration: 0.12, delay },
+            x: { duration: 0.28, ease: AWAY, delay: delay + 0.04 }, opacity: { duration: 0.22, delay: delay + 0.1 } } };
+      }
+      return { ...COLLAPSE, opacity: 0,
+        transition: { default: { duration: how ? 0.28 : 0.2, ease: EASE, delay: delay + (how ? 0.1 : 0) }, opacity: { duration: 0.18, delay } } };
+    },
+  };
 }
 
 function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpand, onOpen, onDismiss }) {
@@ -193,8 +254,7 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
   const { cardRef, expand } = useHeightGlide(open, reduce, onExpand);
   return (
     <motion.article ref={cardRef} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}`}
-      initial={reduce ? false : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0, transition: { delay: Math.min(i, 8) * 0.025 } }}
-      exit={reduce ? { opacity: 0 } : { opacity: 0, height: 0, paddingTop: 0, paddingBottom: 0, borderBottomWidth: 0, overflow: "hidden", transition: { duration: 0.18, ease: [0.2, 0.7, 0.2, 1] } }}
+      variants={itemMotion(n.id, reduce)} custom={i} initial={reduce ? false : "hidden"} animate="shown" exit="gone"
       onClick={selecting ? onToggle : undefined}>
       {selecting ? (
         <span className={`sb-notif-check${on ? " is-on" : ""}`} role="checkbox" aria-checked={on} aria-label={`Sélectionner : ${n.title || n.message}`}
@@ -221,7 +281,12 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
           </div>
         )}
       </div>
-      {!selecting && !n.read && <button type="button" className="sb-notif-dot" onClick={() => onOpen(n, null)} aria-label="Marquer comme lue" title="Marquer comme lue" />}
+      <AnimatePresence initial={false}>
+        {!selecting && !n.read && (
+          <motion.button key="dot" type="button" className="sb-notif-dot" onClick={() => onOpen(n, null)} aria-label="Marquer comme lue" title="Marquer comme lue"
+            exit={reduce ? { opacity: 0 } : { scale: 0, opacity: 0, transition: { duration: 0.22, ease: AWAY } }} />
+        )}
+      </AnimatePresence>
       {!selecting && (
         <button type="button" className="sb-notif-del" onClick={() => onDismiss([n.id])} aria-label="Retirer de ma liste" title="Retirer de ma liste">
           <Trash2 size={13} aria-hidden="true" />
