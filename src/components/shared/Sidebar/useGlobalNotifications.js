@@ -15,7 +15,7 @@ export default function useGlobalNotifications() {
   // Compteurs du serveur : toutes les non lues visibles, et combien la liste demandée en contient en tout.
   const [unread, setUnread] = useState(0);
   const [total, setTotal] = useState(0);
-  const [view, setView] = useState("all");      // "all" | "unread"
+  const [view, setView] = useState("unread");   // "all" | "unread" — la liste s'ouvre sur les non lues (dev 21/11/2026)
   const [limit, setLimit] = useState(PAGE);
   const [loading, setLoading] = useState(false);
   const alive = useRef(true);

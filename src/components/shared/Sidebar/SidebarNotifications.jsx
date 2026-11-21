@@ -6,6 +6,8 @@
 // masse ») : le texte se lit en entier (« Lire la suite »), la liste s'allonge (« Voir plus »), et « Sélectionner »
 // fait apparaître des cases pour marquer lu ou retirer plusieurs notifications d'un coup. Retirer ne touche que sa
 // propre liste : les autres destinataires gardent la leur.
+// Non lues (dev 21/11/2026) : la liste s'ouvre sur « Non lues », et une notification lue par « Lire la suite » y reste
+// affichée jusqu'à ce qu'on referme la liste ou change d'onglet, pour pouvoir la lire.
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 // eslint-disable-next-line no-unused-vars -- motion utilisé via JSX (faux positif)
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -91,16 +93,27 @@ export function NotificationsRow({ collapsed, unread, open, onToggle }) {
   );
 }
 
+const stamp = (n) => new Date(notificationDate(n.created_at).iso || 0).getTime();
+function unreadShown(items, kept) {
+  const list = items.filter((n) => !n.read || kept[n.id]);
+  const gone = Object.values(kept).filter((k) => !items.some((n) => n.id === k.id));
+  return gone.length ? [...list, ...gone].sort((a, b) => stamp(b) - stamp(a)) : list;
+}
+
 export function NotificationsPanel({ items, unreadCount, total, view, onView, onMore, loading, onOpen, onMarkRead, onReadAll, onDismiss, onClose }) {
   const reduce = useReducedMotion();
   const [expanded, setExpanded] = useState({});
   const [selecting, setSelecting] = useState(false);
   const [picked, setPicked] = useState(() => new Set());
   const [confirm, setConfirm] = useState(false);
-  const shown = view === "unread" ? items.filter((n) => !n.read) : items;
+  // Lues par « Lire la suite » pendant cette ouverture : elles restent dans « Non lues », même quand le prochain passage
+  // du serveur (qui ne renvoie que les non lues) ne les contient plus.
+  const [kept, setKept] = useState({});
+  const shown = view === "unread" ? unreadShown(items, kept) : items;
   const left = Math.max(0, total - items.length);
   // Changer d'onglet ou quitter la sélection repart de zéro.
   useEffect(() => { setPicked(new Set()); setConfirm(false); }, [view, selecting]);
+  useEffect(() => { setKept({}); }, [view]);
   useEffect(() => { setConfirm(false); }, [picked]);
   const toggle = (id) => setPicked((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const allPicked = shown.length > 0 && shown.every((n) => picked.has(n.id));
@@ -113,7 +126,10 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   };
   const expand = (n) => {
     setExpanded((e) => ({ ...e, [n.id]: !e[n.id] }));
-    if (!n.read) onMarkRead([n.id]);   // lue en entier : comptée comme lue
+    if (!n.read) {                       // lue en entier : comptée comme lue, mais gardée sous les yeux
+      setKept((k) => ({ ...k, [n.id]: { ...n, read: true } }));
+      onMarkRead([n.id]);
+    }
   };
   return (
     <section className={`sb-notif-panel${selecting ? " is-selecting" : ""}`} aria-label="Notifications">
