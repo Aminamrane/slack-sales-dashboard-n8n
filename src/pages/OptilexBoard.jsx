@@ -2352,8 +2352,9 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xr:hover .ob-xr-tools .br-add,.ob-xr-tools .br-add[aria-expanded="true"]{opacity:1}
         @media (hover:none){.ob-xr-tools .br-add{opacity:1}}
         .ob-xr.is-fresh{animation:obFresh 1.8s cubic-bezier(.22,1,.36,1)}
-        .ob-xc.is-target,.ob-xr.is-target{scroll-margin:24px;animation:obTarget 2.8s cubic-bezier(.22,1,.36,1) .5s both}
-        @keyframes obTarget{0%,40%{background:#fbf1c2;border-color:#e9d98a;box-shadow:0 0 0 4px rgba(233,217,138,.35)}100%{box-shadow:0 0 0 0 rgba(233,217,138,0)}}
+        /* Message visé par une notification : un éclair, puis un trait qui reste (21/11/2026 : « pour vraiment voir celle sur laquelle venait la notification »). */
+        .ob-xc.is-target,.ob-xr.is-target{scroll-margin:24px;animation:obTarget 2.8s cubic-bezier(.22,1,.36,1) .2s both}
+        @keyframes obTarget{0%,40%{background:#fbf1c2;border-color:#e9d98a;box-shadow:0 0 0 4px rgba(233,217,138,.35),inset 0 0 0 0 #e9d98a}100%{box-shadow:0 0 0 0 rgba(233,217,138,0),inset 3px 0 0 0 #e9d98a}}
         @keyframes obFresh{0%{opacity:0;transform:translateY(-6px);background:#fbf1c2}18%{opacity:1;transform:none;background:#fbf1c2}100%{background:#faf9f7}}
         /* Réponse sous le message : une ligne de saisie avec son avatar et l'envoi en avion. */
         .ob-xi{overflow:hidden}
@@ -5810,7 +5811,7 @@ function RatingItem({ r, numero, replies, t, openSignal, onEdited, onDeleted, on
   const qualification = r.weather_context?.qualification;
   const key = `rating:${r.id}`;
   return (
-    <motion.article id={`weather-${r.id}`} layout="position" className="ob-xc" initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+    <motion.article id={`weather-${r.id}`} layout="position" className={`ob-xc${String(t.focusRatingId) === String(r.id) ? " is-target" : ""}`} initial={{ opacity: 0 }} animate={{ opacity: 1 }}
       transition={{ layout: { type: "spring", stiffness: 380, damping: 36 } }}>
       <MsgHead author={authorOf(r)} time={msgTime(r.created_at)}
         extra={r.note_updated_at ? <span title={fmtDT(r.note_updated_at)}> · commentaire modifié{r.note_updated_by_name ? ` par ${r.note_updated_by_name}` : ""}</span> : null}
@@ -6074,7 +6075,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   const openSignalOf = (e) => (bump.key === `${e.kind}:${e.id}` ? bump.n : 0) || (e.kind === "rating" && String(focusRating) === String(e.id) ? 1 : 0)
     || (focusComment && repliesOf(e.kind, e.id).some((r) => String(r.id) === String(focusComment)) ? 1 : 0);
   const t = {
-    readOnly, focusId: focusComment, canEdit: (c) => !readOnly && canEdit(c), people, peopleFor, editPeople, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
+    readOnly, focusId: focusComment, focusRatingId: focusRating, canEdit: (c) => !readOnly && canEdit(c), people, peopleFor, editPeople, editingId, editDraft, setEditDraft, saveEdit, savingEdit, confirmDeleteId, deleteComment, deletingId, react,
     myName, replying, sendReply, startReply: (key) => { if (!readOnly) setReplying((k) => (k === key ? null : key)); }, cancelReply: () => setReplying(null),
     reactionsOf: (kind, id) => reactions[`${kind}:${id}`] || [],
     startEdit: (c) => { setEditingId(c.id); setEditDraft(c.body); setConfirmDeleteId(null); },

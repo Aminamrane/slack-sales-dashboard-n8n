@@ -116,6 +116,9 @@
 .sb-notif-del { transition: opacity .15s, background .15s, color .15s, transform .18s cubic-bezier(.34, 1.56, .64, 1); }
 .sb-notif-del:active { transform: scale(.88); }
 .sb-notif-dot { transition: box-shadow .15s; }
+/* Repères de jour et notification en cours (21/11/2026). */
+.sb-notif-day { position: sticky; top: 0; z-index: 1; padding: 10px 8px 6px; background: var(--sb-bg); font-size: 11.5px; font-weight: 600; color: var(--sb-muted); letter-spacing: .01em; }
+.sb-notif-item.is-current { background: var(--sb-subtle); border-radius: 10px; box-shadow: inset 3px 0 0 var(--sb-text); }
 .sb-notif-empty .sb-notif-done { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(34,163,90,.12); color: #22a35a; }
 @media (prefers-reduced-motion: reduce) { .sb-notif-bell.is-ringing svg, .sb-notif-panel, .sb-notif-body p.is-open { animation: none; } .sb-notif-del:active { transform: none; } }
 

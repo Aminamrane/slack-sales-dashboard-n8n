@@ -8,6 +8,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import apiClient from "../../../services/apiClient";
 
 const POLL_MS = 30000;
+// Onglet choisi, gardé d'une page à l'autre (21/11/2026) : ouvrir une notification change de page sans fermer la liste.
+let lastView = "unread";
 export const PAGE = 30;
 
 export default function useGlobalNotifications() {
@@ -15,7 +17,7 @@ export default function useGlobalNotifications() {
   // Compteurs du serveur : toutes les non lues visibles, et combien la liste demandée en contient en tout.
   const [unread, setUnread] = useState(0);
   const [total, setTotal] = useState(0);
-  const [view, setView] = useState("unread");   // "all" | "unread" — la liste s'ouvre sur les non lues (dev 21/11/2026)
+  const [view, setView] = useState(() => lastView);   // "all" | "unread" — la liste s'ouvre sur les non lues (dev 21/11/2026)
   const [limit, setLimit] = useState(PAGE);
   const [loading, setLoading] = useState(false);
   const alive = useRef(true);
@@ -77,7 +79,7 @@ export default function useGlobalNotifications() {
     return () => window.removeEventListener("global_notifications_read", onRead);
   }, []);
 
-  const changeView = useCallback((next) => { setView(next); setLimit(PAGE); setLoading(true); }, []);
+  const changeView = useCallback((next) => { lastView = next; setView(next); setLimit(PAGE); setLoading(true); }, []);
   const showMore = useCallback(() => { setLimit((l) => l + PAGE); setLoading(true); }, []);
 
   const markRead = useCallback(async (ids) => {
