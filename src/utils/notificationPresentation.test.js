@@ -64,3 +64,10 @@ test('une mention ouvre le commentaire exact dans la fiche (16/11/2026)', () => 
     '/ceo/optilex-board?client=n%C2%B095&focus=comments&comment=812');
   assert.equal(notificationTarget({ type: 'board_mention', data: { comment_id: 9 } }), '/optilex-board?comment=9');
 });
+
+test("une mention dans une note Finance mène à la note exacte (21/11/2026)", () => {
+  const n = { type: 'finance_note_mention', data: { path: '/tracking-finance?client=573&onglet=echanges', note_id: 'f3a7bc62' } };
+  assert.equal(notificationTarget(n, 'admin'), '/tracking-finance?client=573&onglet=echanges&note=f3a7bc62');
+  assert.equal(notificationTarget({ type: 'finance_note_mention', data: { path: '/tracking-finance?client=1&note=x' } }), '/tracking-finance?client=1&note=x');
+  assert.equal(notificationTarget({ type: 'finance_note_mention', data: {} }), '/tracking-finance');
+});

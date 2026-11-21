@@ -22,6 +22,7 @@ import React, { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } f
 import { AnimatePresence, motion as Motion } from 'framer-motion';
 import { ArrowUpRight, AtSign, BriefcaseBusiness, ChevronDown, CornerUpLeft, Lock, MoreHorizontal, Paperclip, Pencil, Pin, PinOff, SendHorizontal, Smile, Trash2, Users } from 'lucide-react';
 import apiClient from '../../../services/apiClient.js';
+import { pinIntoView } from '../../../utils/pinIntoView.js';
 import MentionTextarea, { MentionedText } from '../../../components/MentionTextarea.jsx';
 import { EmojiPalette, Reactions, toggledReactions } from '../../../components/BoardReactions.jsx';
 import { ComposerFiles, MessageFiles, MESSAGE_FILE_ACCEPT, MESSAGE_FILE_MAX, uploadMessageFile } from '../../../components/BoardClientFiles.jsx';
@@ -226,7 +227,7 @@ function NoteReply({ n, t, threadKey }) {
   const edited = n.updated_at && n.updated_at !== n.created_at;
   const list = n.reactions || [];
   return (
-    <div className={`fx-sub${n.fresh ? ' is-fresh' : ''}`}>
+    <div className={`fx-sub${n.fresh ? ' is-fresh' : ''}${t.focusKey === key ? ' is-target' : ''}`} id={`fx-${key}`}>
       <Head author={authorOf(n)} size={22} small iso={n.created_at} extra={edited ? ' · modifiée' : ''}
         menu={!t.readOnly && <><AnswerTo t={t} threadKey={threadKey} author={authorOf(n)} people={t.notePeople} /><EmojiPalette onPick={(e) => t.reactNote(n, e)} />{n.can_moderate && t.edit.key !== key && <ItemMenu label="Actions de la réponse" items={editItems(t, key, n.body)} />}</>} />
       <div className="fx-sub-in">
@@ -327,7 +328,7 @@ function WeatherCard({ e, t }) {
 function NoteCard({ e, t }) {
   const edited = e.updated_at && e.updated_at !== e.created_at;
   return (
-    <Motion.article id={`fx-${e.key}`} className={`fx-card is-note${e.pinned ? ' is-pinned' : ''}`} {...CARD_MOTION} animate={{ opacity: e._pending ? 0.6 : 1, y: 0 }}>
+    <Motion.article id={`fx-${e.key}`} className={`fx-card is-note${e.pinned ? ' is-pinned' : ''}${t.focusKey === e.key ? ' is-target' : ''}`} {...CARD_MOTION} animate={{ opacity: e._pending ? 0.6 : 1, y: 0 }}>
       <Head author={authorOf(e)} iso={e.created_at} extra={edited ? ' · modifiée' : ''}
         tags={<>
           <span className="fx-tag" title="Note interne : le cabinet ne la voit pas"><Lock size={11} strokeWidth={2.2} />Interne</span>
@@ -640,11 +641,28 @@ export default function ExchangeThread({ numero, internal = null, onShowToast, o
     setKind('all'); setLimit(Infinity);
     setBump((b) => ({ key: rootKey, n: b.n + 1 }));
     setFocusKey(`c:${comment.id}`);
-    const scroll = setTimeout(() => document.getElementById(`fx-c:${comment.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 460);
-    const clear = setTimeout(() => setFocusKey(null), 2800);
-    return () => { clearTimeout(scroll); clearTimeout(clear); };
+    // Le fil s'ouvre d'abord (0,3 s), puis le message est amené au centre et gardé là pendant que la fiche se charge.
+    let stop = () => {};
+    const start = setTimeout(() => { stop = pinIntoView(() => document.getElementById(`fx-c:${comment.id}`)); }, 360);
+    const clear = setTimeout(() => setFocusKey(null), 3200);
+    return () => { clearTimeout(start); stop(); clearTimeout(clear); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus?.id, focus?.n, shared]);
+
+  // Note interne d'une mention (`focus.note`, 21/11/2026) : même geste, sur la note ou sur sa réponse.
+  useEffect(() => {
+    if (!focus?.note || notesState !== 'ready') return undefined;
+    const note = notes.find((n) => sameId(n.id, focus.note));
+    if (!note) return undefined;
+    setKind('all'); setLimit(Infinity);
+    setBump((b) => ({ key: `n:${isNoteReply(note) ? note.parent_id : note.id}`, n: b.n + 1 }));
+    setFocusKey(`n:${note.id}`);
+    let stop = () => {};
+    const start = setTimeout(() => { stop = pinIntoView(() => document.getElementById(`fx-n:${note.id}`)); }, 360);
+    const clear = setTimeout(() => setFocusKey(null), 3200);
+    return () => { clearTimeout(start); stop(); clearTimeout(clear); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus?.note, focus?.n, notesState]);
 
   const idOf = (key) => { const raw = key.slice(2); return /^\d+$/.test(raw) ? Number(raw) : raw; };
   const saveEdit = async () => {
