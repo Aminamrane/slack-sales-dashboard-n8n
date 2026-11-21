@@ -146,14 +146,23 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   const toggle = (id) => setPicked((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const allPicked = shown.length > 0 && shown.every((n) => picked.has(n.id));
   const ids = [...picked];
+  // Retirée = partie pour de bon (21/11/2026) : une notification gardée sous les yeux par « Lire la suite » ne doit pas
+  // revenir dans « Non lues » après qu'on l'a retirée (bug : la corbeille semblait ne rien faire).
+  const forget = (ids1) => setKept((k) => {
+    if (!ids1.some((id) => k[id])) return k;
+    const next = { ...k };
+    ids1.forEach((id) => { delete next[id]; });
+    return next;
+  });
   const readPicked = async () => { markLeaving(shown.filter((n) => picked.has(n.id)), "read"); await onMarkRead(ids); setSelecting(false); };
   const removePicked = async () => {
     if (!confirm) { setConfirm(true); return; }
     markLeaving(shown.filter((n) => picked.has(n.id)), "remove");
+    forget(ids);
     await onDismiss(ids);
     setSelecting(false);
   };
-  const removeOne = (ids1) => { markLeaving(shown.filter((n) => ids1.includes(n.id)), "remove"); return onDismiss(ids1); };
+  const removeOne = (ids1) => { markLeaving(shown.filter((n) => ids1.includes(n.id)), "remove"); forget(ids1); return onDismiss(ids1); };
   const readAll = () => { markLeaving(shown.filter((n) => !n.read), "read"); return onReadAll(); };
   const expand = (n) => {
     setExpanded((e) => ({ ...e, [n.id]: !e[n.id] }));
