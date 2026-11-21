@@ -187,6 +187,9 @@ export default function ExitClientDialog({
   // État choisi depuis le badge d'état de la fiche : le dialogue s'ouvre
   // dessus, il ne reste qu'à confirmer la date d'effet (dev 2026-09-03).
   initialEtat = null, signatureDate = null,
+  // Acter un état de sortie : les seuls comptes désignés par le serveur (`can_act_exit` de la fiche, dev 21/11/2026).
+  // Les autres gardent la perte.
+  canActe = false,
 }) {
   const [etat, setEtat] = useState('');
   const [etatDate, setEtatDate] = useState(todayISO());
@@ -329,7 +332,7 @@ export default function ExitClientDialog({
           </div>
 
           {/* ── 1. Acter un état ─────────────────────────────────────── */}
-          <section style={{ padding: '16px 20px', borderBottom: `1px solid ${N.borderSft}` }}>
+          {canActe && <section style={{ padding: '16px 20px', borderBottom: `1px solid ${N.borderSft}` }}>
             <div style={{ fontSize: 12.5, fontWeight: 600, color: N.text, marginBottom: 4 }}>
               Acter un état
             </div>
@@ -462,7 +465,8 @@ export default function ExitClientDialog({
               </div>
             )}
             {error && <div role="alert" style={{ marginTop: 10, color: N.red, fontSize: 12 }}>{error}</div>}
-          </section>
+          </section>}
+          {!canActe && error && <div role="alert" style={{ margin: '12px 20px 0', color: N.red, fontSize: 12 }}>{error}</div>}
 
           {/* ── 2. Perte ─────────────────────────────────────────────── */}
           {(loss || (!withdrawing && etatDone?.etat !== 'Rétractation' && posedEtat !== 'Rétractation')) && <section style={{ padding: '16px 20px 20px' }}>
