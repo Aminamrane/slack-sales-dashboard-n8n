@@ -5749,11 +5749,13 @@ function ReplyThread({ replies, t, openSignal }) {
   const [open, setOpen] = useState(replies.length <= 2);
   useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   const names = replies.map(authorOf);
+  const who = whoReplied(names);
+  const of = /^[aeiouyhàâäéèêëîïôöùûü]/i.test(who) ? "d’" : "de ";   // « d’Emilie », « de Paul »
   return (
     <div className="ob-xt">
       <button type="button" className="ob-xt-sum" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <AvatarStack names={names} />
-        <span><b>{replies.length} réponse{replies.length > 1 ? "s" : ""}</b> de {whoReplied(names)}</span>
+        <span><b>{replies.length} réponse{replies.length > 1 ? "s" : ""}</b> {of}{who}</span>
         {CHEVRON}
       </button>
       <AnimatePresence initial={false}>
