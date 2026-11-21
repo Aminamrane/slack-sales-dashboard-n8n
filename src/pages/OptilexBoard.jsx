@@ -277,6 +277,21 @@ const etatHint = (r) => {
 const ov = (r, ovrKey, origKey) => (r[ovrKey] != null && r[ovrKey] !== "" ? r[ovrKey] : r[origKey]);
 // Clé de ligne stable (les contrats pré-client n'ont pas de numero_client).
 const rowKey = (r) => r.row_key || r.numero_client;
+// Fil d'une fiche ouverte depuis une notification (21/11/2026) : demandé dès l'arrivée sur le board, en même temps que la
+// ligne du client, au lieu d'attendre que la fiche s'affiche. Pris une seule fois, et seulement s'il est récent.
+const commentsUrl = (numero) => `/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}`;
+const commentsAhead = new Map();
+function prefetchComments(numero) {
+  if (!numero || commentsAhead.has(numero)) return;
+  const promise = apiClient.get(commentsUrl(numero));
+  promise.catch(() => { /* la fiche redemandera le fil */ });
+  commentsAhead.set(numero, { promise, at: Date.now() });
+}
+function takeComments(numero) {
+  const ahead = commentsAhead.get(numero);
+  commentsAhead.delete(numero);
+  return ahead && Date.now() - ahead.at < 15000 ? ahead.promise : null;
+}
 // Nom de la société (Sheet/CRM), et nom mis en avant : la PERSONNE (contact CRM) si on
 // l'a, sinon la société. Beaucoup de vieux clients n'ont que la société (pas de contrat lié).
 const companyName = (r) => r.crm_societe || r.societe_sheet || null;
@@ -1379,6 +1394,7 @@ export default function OptilexBoard({ embed = false }) {
   // Lu une fois : passé aux lignes du tableau (des centaines) plutôt que relu ligne par ligne.
   const [readOnly] = useState(isBoardReadOnly);
   const requestedClient = searchParams.get('client');
+  const requestedFocus = searchParams.get('focus');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [etatFilter, setEtatFilter] = useState("Signé");   // onglet primaire actif (défaut Signé, décision dev 2026-08-25)
@@ -1419,11 +1435,12 @@ export default function OptilexBoard({ embed = false }) {
   useEffect(() => {
     if (!requestedClient) return undefined;
     let alive = true;
+    if (requestedFocus === "comments") prefetchComments(requestedClient);
     apiClient.get(`/api/v1/optilex/board?numero_client=${encodeURIComponent(requestedClient)}`)
       .then((r) => { const row = (r?.clients || []).find((x) => x.numero_client === requestedClient); if (alive && row) setQuickRow(row); })
       .catch(() => { /* le board entier ouvrira la fiche */ });
     return () => { alive = false; };
-  }, [requestedClient]);
+  }, [requestedClient, requestedFocus]);
   useEffect(() => {
     if (!requestedClient) return;
     const row = rows.find(r => r.numero_client === requestedClient) || (quickRow?.numero_client === requestedClient ? quickRow : null);
@@ -5917,9 +5934,8 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
     }
     focusDone.current = key;
     if (!exact) { rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); return undefined; }
-    // Le fil de réponses qui contient le message s'ouvre d'abord (0,3 s).
-    const start = setTimeout(() => { focusStop.current = pinIntoView(target); }, 320);
-    focusStop.current = () => clearTimeout(start);
+    // Tout de suite : le recalage suit le fil de réponses qui s'ouvre autour du message.
+    focusStop.current = pinIntoView(target);
     return undefined;
   }, [focusComments, focusRating, focusComment, loading, ratings, comments, numero]);
   useEffect(() => {
@@ -5947,7 +5963,7 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
   useEffect(() => {
     let alive = true;
     setLoading(true); setError("");
-    apiClient.get(`/api/v1/optilex/comments?numero_client=${encodeURIComponent(numero)}`)
+    ((refresh === 0 && takeComments(numero)) || apiClient.get(commentsUrl(numero)))
       .then((r) => { if (alive) { setComments(r.comments || []); setReactions(r.reactions || {}); } })
       .catch(() => { if (alive) setError("Les commentaires n’ont pas pu être chargés."); })
       .finally(() => { if (alive) setLoading(false); });

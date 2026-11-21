@@ -1319,23 +1319,32 @@ export default function TrackingSheetFinance() {
   // Lien direct vers la fiche d'un client (notification d'une mention dans une note interne) :
   // /tracking-finance?client=<id>&onglet=echanges[&note=<id>]. Traité une fois par lien, quand les lignes du mois sont là.
   // La note exacte d'une mention (21/11/2026) : le fil des Échanges défile jusqu'à elle.
+  // Ouverte tout de suite (21/11/2026, « il faut qu'il soit plus rapide ») : la fiche se charge seule à partir du client
+  // (frise, profil, échanges) ; la liste du mois (plusieurs secondes) n'est plus attendue. La ligne du mois rejoint la
+  // fiche quand la liste arrive.
   const { search: linkSearch } = useLocation();
   const linkDone = useRef(null);
+  const linkClient = useRef(null);
   const [panelTab, setPanelTab] = useState(null);
   useEffect(() => {
-    if (linkDone.current === linkSearch || !rows.length) return;
+    if (linkDone.current === linkSearch) return;
+    linkDone.current = linkSearch;
     const params = new URLSearchParams(linkSearch);
     const wanted = Number(params.get('client'));
-    linkDone.current = linkSearch;
     if (!wanted) return;
-    const row = rows.find((r) => r.client?.id === wanted || r.client_id === wanted);
-    if (!row) { showToast('Ce client n’a pas de ligne sur le mois affiché.', 'info'); return; }
-    setPanelClientId(row.client_id);
-    setPanelRowId(row.id);
+    linkClient.current = wanted;
+    setPanelClientId(wanted);
+    setPanelRowId(null);
     setPanelOpen(true);
     if (params.get('onglet') === 'echanges') setPanelTab({ tab: 'exchanges', n: Date.now(), note: params.get('note') || null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, linkSearch]);
+  }, [linkSearch]);
+  useEffect(() => {
+    const wanted = linkClient.current;
+    if (!wanted || !rows.length) return;
+    const row = rows.find((r) => r.client?.id === wanted || r.client_id === wanted);
+    linkClient.current = null;
+    if (row) setPanelRowId((current) => current ?? row.id);
+  }, [rows]);
   const onSelectPanelRow = useCallback((rowId) => setPanelRowId(rowId), []);
   // Ouvrir la fiche depuis une vue qui ne connaît que le client (pertes,
   // encaissements) : on retrouve sa ligne du mois.
