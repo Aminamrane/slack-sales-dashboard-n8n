@@ -41,6 +41,7 @@ import { CSS } from "@dnd-kit/utilities";
 import apiClient from "../../../services/apiClient";
 import useGlobalNotifications from "./useGlobalNotifications.js";
 import { NotificationsPanel, NotificationsRow } from "./SidebarNotifications.jsx";
+import { panelMemory } from "./panelMemory.js";
 import SidebarProfile from "./SidebarProfile.jsx";
 import SidebarAvailability from "./SidebarAvailability.jsx";
 import { usesDashboardOnlyNavbar } from "../../../utils/dashboardAudience.js";
@@ -108,17 +109,21 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   // Notifications : la liste s'ouvre dans le menu, qui reste déplié et s'élargit le temps de la lecture.
   const navigate = useNavigate();
   const notifs = useGlobalNotifications();
-  const [notifOpen, setNotifOpen] = useState(false);
+  // Ouverte, la liste le reste en ouvrant une notification et d'une page à l'autre (dev 21/11/2026 : « je ne reste pas
+  // sur la notification à gauche, ça se ferme automatiquement »). Elle se ferme par la flèche, la cloche ou Échap.
+  const [notifOpen, setNotifOpen] = useState(() => panelMemory.open);
+  useEffect(() => {
+    panelMemory.open = notifOpen;
+    if (!notifOpen) { panelMemory.current = null; panelMemory.kept = {}; }
+  }, [notifOpen]);
   const asideRef = useRef(null);
   const effCollapsed = collapsed && !hovered && !notifOpen;
   const effWidth = notifOpen ? NOTIF_W : (collapsed && hovered) ? EXPANDED_W : width;
   useEffect(() => {
     if (!notifOpen) return undefined;
     const onKey = (e) => { if (e.key === "Escape") setNotifOpen(false); };
-    const onDown = (e) => { if (asideRef.current && !asideRef.current.contains(e.target)) setNotifOpen(false); };
     window.addEventListener("keydown", onKey);
-    document.addEventListener("mousedown", onDown);
-    return () => { window.removeEventListener("keydown", onKey); document.removeEventListener("mousedown", onDown); };
+    return () => window.removeEventListener("keydown", onKey);
   }, [notifOpen]);
   // Raccourci Shift+S → Tracking Sheet, repris de la navbar (jamais pendant une saisie, seulement si l'accès existe).
   useEffect(() => {
@@ -144,7 +149,7 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   };
   const openNotification = (n, target) => {
     if (!n.read) notifs.markRead([n.id]);
-    if (target) { setNotifOpen(false); navigate(target); }
+    if (target) navigate(target);   // la liste reste ouverte sur la notification
   };
   // Mode sombre : l'état de la page (setDarkMode) et la préférence partagée (localStorage + classe dark-mode,
   // que les pages relisent).

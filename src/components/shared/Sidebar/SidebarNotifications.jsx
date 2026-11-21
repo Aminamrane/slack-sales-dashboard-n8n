@@ -18,6 +18,8 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ArrowLeft, AtSign, Bell, Check, CheckCheck, FileText, Mail, MessageSquare, ShieldAlert, Trash2, TrendingDown, User } from "lucide-react";
 import apiClient from "../../../services/apiClient";
 import { CLIENT_NOTIFICATION_TYPES, notificationDate, notificationTarget } from "../../../utils/notificationPresentation.js";
+import { panelMemory } from "./panelMemory.js";
+import { pinIntoView } from "../../../utils/pinIntoView.js";
 
 const ago = (value) => {
   const { iso } = notificationDate(value);
@@ -118,6 +120,21 @@ function unreadShown(items, kept) {
   return gone.length ? [...list, ...gone].sort((a, b) => stamp(b) - stamp(a)) : list;
 }
 
+// Repère de jour : « Aujourd'hui », « Hier », puis « Lundi 16 novembre » (heure de Paris).
+const dayKeyOf = (value) => {
+  const { iso } = notificationDate(value);
+  return iso ? new Intl.DateTimeFormat("fr-CA", { timeZone: "Europe/Paris" }).format(new Date(iso)) : "";
+};
+function dayLabel(key) {
+  if (!key) return "";
+  const today = dayKeyOf(new Date().toISOString());
+  const yesterday = dayKeyOf(new Date(Date.now() - 86400000).toISOString());
+  if (key === today) return "Aujourd’hui";
+  if (key === yesterday) return "Hier";
+  const label = new Intl.DateTimeFormat("fr-FR", { timeZone: "Europe/Paris", weekday: "long", day: "numeric", month: "long" }).format(new Date(`${key}T12:00:00Z`));
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export function NotificationsPanel({ items, unreadCount, total, view, onView, onMore, loading, onOpen, onMarkRead, onReadAll, onDismiss, onClose }) {
   const reduce = useReducedMotion();
   const [expanded, setExpanded] = useState({});
@@ -126,7 +143,10 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   const [confirm, setConfirm] = useState(false);
   // Lues par « Lire la suite » pendant cette ouverture : elles restent dans « Non lues », même quand le prochain passage
   // du serveur (qui ne renvoie que les non lues) ne les contient plus.
-  const [kept, setKept] = useState({});
+  const [kept, setKept] = useState(() => panelMemory.kept);
+  useEffect(() => { panelMemory.kept = kept; }, [kept]);
+  // La notification ouverte en dernier : surlignée dans la liste, retrouvée et montrée dans chaque onglet.
+  const [current, setCurrent] = useState(() => panelMemory.current);
   // Comment chaque notification qui va quitter la liste s'en va : retirée (« remove ») ou lue (« read »), et son rang
   // dans un départ groupé. Lu par les cartes qui sortent au moment de leur départ (AnimatePresence `custom`).
   const [leaving, setLeaving] = useState({});
@@ -141,7 +161,24 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   const left = Math.max(0, total - items.length);
   // Changer d'onglet ou quitter la sélection repart de zéro.
   useEffect(() => { setPicked(new Set()); setConfirm(false); }, [view, selecting]);
-  useEffect(() => { setKept({}); }, [view]);
+  // Un vrai changement d'onglet (pas le retour de la liste sur une nouvelle page) repart sans notification gardée.
+  const viewSeen = useRef(view);
+  useEffect(() => { if (viewSeen.current !== view) { viewSeen.current = view; setKept({}); } }, [view]);
+  // « Toutes » : la notification ouverte est chargée (« Voir plus » au besoin), puis amenée sous les yeux.
+  useEffect(() => {
+    if (view !== "all" || !current || loading || items.some((n) => n.id === current) || left <= 0) return;
+    onMore();
+  }, [view, current, loading, items, left, onMore]);
+  // Centrée et gardée là le temps que la liste finisse de se remplir (même outil que les messages de la fiche).
+  const shownFor = useRef(null);
+  const stopShow = useRef(() => {});
+  useEffect(() => () => stopShow.current(), []);
+  useEffect(() => {
+    if (!current || shownFor.current === `${view}|${current}` || !document.getElementById(`notif-${current}`)) return;
+    shownFor.current = `${view}|${current}`;
+    stopShow.current();
+    stopShow.current = pinIntoView(() => document.getElementById(`notif-${current}`), { hold: 1200 });
+  });
   useEffect(() => { setConfirm(false); }, [picked]);
   const toggle = (id) => setPicked((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
   const allPicked = shown.length > 0 && shown.every((n) => picked.has(n.id));
@@ -164,6 +201,18 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
   };
   const removeOne = (ids1) => { markLeaving(shown.filter((n) => ids1.includes(n.id)), "remove"); forget(ids1); return onDismiss(ids1); };
   const readAll = () => { markLeaving(shown.filter((n) => !n.read), "read"); return onReadAll(); };
+  // Ouvrir une notification : elle devient la notification en cours, reste à sa place dans « Non lues » (lue) et
+  // reste surlignée ; la liste ne se ferme pas.
+  const openOne = (n, target) => {
+    if (target) {
+      panelMemory.current = n.id;
+      setCurrent(n.id);
+      shownFor.current = `${view}|${n.id}`;   // déjà sous les yeux : pas de défilé
+      // Écrite tout de suite dans la mémoire : la page change dans le même geste, avant tout effet de cette liste.
+      if (!n.read) { panelMemory.kept = { ...kept, [n.id]: { ...n, read: true } }; setKept(panelMemory.kept); }
+    }
+    onOpen(n, target);
+  };
   const expand = (n) => {
     setExpanded((e) => ({ ...e, [n.id]: !e[n.id] }));
     if (!n.read) {                       // lue en entier : comptée comme lue, mais gardée sous les yeux
@@ -188,10 +237,16 @@ export function NotificationsPanel({ items, unreadCount, total, view, onView, on
       </header>
       <div className="sb-notif-list ceo-side-scroll">
         <AnimatePresence initial={false} custom={leaving}>
-          {shown.map((n, i) => (
-            <NotificationItem key={n.id} n={n} i={i} reduce={reduce} selecting={selecting} on={picked.has(n.id)} open={!!expanded[n.id]}
-              onToggle={() => toggle(n.id)} onExpand={() => expand(n)} onOpen={onOpen} onDismiss={removeOne} />
-          ))}
+          {shown.flatMap((n, i) => {
+            const key = dayKeyOf(n.created_at);
+            const head = i === 0 || key !== dayKeyOf(shown[i - 1].created_at)
+              ? [<motion.div key={`day:${key}`} className="sb-notif-day" initial={reduce ? false : { opacity: 0 }} animate={{ opacity: 1 }}
+                  exit={{ opacity: 0, transition: { duration: 0.15 } }}>{dayLabel(key)}</motion.div>]
+              : [];
+            return [...head,
+              <NotificationItem key={n.id} n={n} i={i} reduce={reduce} selecting={selecting} on={picked.has(n.id)} open={!!expanded[n.id]}
+                current={current === n.id} onToggle={() => toggle(n.id)} onExpand={() => expand(n)} onOpen={openOne} onDismiss={removeOne} />];
+          })}
         </AnimatePresence>
         {!shown.length && !loading && (
           <motion.div className="sb-notif-empty" initial={reduce ? false : { opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
@@ -254,7 +309,7 @@ function itemMotion(id, reduce) {
   };
 }
 
-function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpand, onOpen, onDismiss }) {
+function NotificationItem({ n, i, reduce, selecting, on, open, current, onToggle, onExpand, onOpen, onDismiss }) {
   const Glyph = glyphOf(n);
   const action = actionOf(n);
   const message = n.message && n.message !== n.title ? n.message : "";
@@ -262,7 +317,7 @@ function NotificationItem({ n, i, reduce, selecting, on, open, onToggle, onExpan
   const canExpand = open || clipped;
   const { cardRef, expand } = useHeightGlide(open, reduce, onExpand);
   return (
-    <motion.article ref={cardRef} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}`}
+    <motion.article ref={cardRef} id={`notif-${n.id}`} className={`sb-notif-item${n.read ? "" : " is-unread"}${on ? " is-picked" : ""}${open ? " is-open" : ""}${current ? " is-current" : ""}`}
       variants={itemMotion(n.id, reduce)} custom={i} initial={reduce ? false : "hidden"} animate="shown" exit="gone"
       onClick={selecting ? onToggle : undefined}>
       {selecting ? (
