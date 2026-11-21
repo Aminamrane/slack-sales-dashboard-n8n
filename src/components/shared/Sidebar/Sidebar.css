@@ -108,7 +108,16 @@
 .sb-tool:hover { color: var(--sb-text); }
 .sb-tool.is-armed { color: #fff; background: var(--sb-red); }
 
-@media (prefers-reduced-motion: reduce) { .sb-notif-bell.is-ringing svg, .sb-notif-panel { animation: none; } }
+/* Mouvement des notifications (21/11/2026) : couleurs qui passent en douceur à la lecture, texte révélé en fondu,
+   pression sur la corbeille, coche de « Tout est lu ». */
+.sb-notif-top strong, .sb-notif-ic { transition: color .3s, font-weight .3s; }
+.sb-notif-body p.is-open { animation: sbTextIn .32s cubic-bezier(.22, 1, .36, 1); }
+@keyframes sbTextIn { from { opacity: .35; } }
+.sb-notif-del { transition: opacity .15s, background .15s, color .15s, transform .18s cubic-bezier(.34, 1.56, .64, 1); }
+.sb-notif-del:active { transform: scale(.88); }
+.sb-notif-dot { transition: box-shadow .15s; }
+.sb-notif-empty .sb-notif-done { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(34,163,90,.12); color: #22a35a; }
+@media (prefers-reduced-motion: reduce) { .sb-notif-bell.is-ringing svg, .sb-notif-panel, .sb-notif-body p.is-open { animation: none; } .sb-notif-del:active { transform: none; } }
 
 /* ── Pastilles des onglets et contenu sous l'en-tête ─────────────────────── */
 .sb-header-extra { padding: 0 8px 6px; }
