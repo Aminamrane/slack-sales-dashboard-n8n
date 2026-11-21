@@ -33,7 +33,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { createPortal } from "react-dom";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
-import { ChevronDown, Home, MessageSquare, Mail, Search, Sparkles, PanelLeft } from "lucide-react";
+import { ChevronDown, Home, MessageSquare, Search, Sparkles, PanelLeft } from "lucide-react";
 import OwnerMark from "./OwnerMark.jsx";
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy, useSortable, arrayMove } from "@dnd-kit/sortable";
@@ -361,14 +361,13 @@ function IconRow({ collapsed, C, onHome }) {
   const items = [
     { key: 'home',   icon: <Home size={16} />,          label: 'Accueil', onClick: onHome },
     { key: 'inbox',  icon: <MessageSquare size={16} />, label: 'Discussions' },
-    { key: 'mail',   icon: <Mail size={16} />,          label: 'Boîte de réception' },
     { key: 'search', icon: <Search size={16} />,        label: 'Recherche' },
   ];
   return (
     <div style={{
       display: collapsed ? 'flex' : 'grid',
       flexDirection: collapsed ? 'column' : undefined,
-      gridTemplateColumns: collapsed ? undefined : 'repeat(4, 1fr)',
+      gridTemplateColumns: collapsed ? undefined : `repeat(${items.length}, 1fr)`,
       gap: 2,
       padding: collapsed ? '4px 8px 8px' : '0 8px 6px',
     }}>
