@@ -35,6 +35,7 @@ import { createLatestRequestTracker, displayEtat, EXITED_ETATS, isOutOfOnboardin
 import { Fragment, createContext, memo, useContext, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, useId } from "react";
 import { createPortal } from "react-dom";
 import { useSearchParams } from "react-router-dom";
+import { pinIntoView } from "../utils/pinIntoView.js";
 import { sharedEmailOptions } from "../utils/boardContacts.js";
 import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
 import { CalendarCheck, CircleDashed, CloudSun, FileSignature, Maximize2, Minimize2, Scale, Store, UserRound } from "lucide-react";
@@ -1412,11 +1413,22 @@ export default function OptilexBoard({ embed = false }) {
   const [sortDir, setSortDir] = useState("asc");  // asc | desc
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState(null); // numero_client du client ouvert
+  // Fiche demandée par un lien (notification) : son client seul arrive en une fraction de seconde, le board entier en
+  // plusieurs (dev 21/11/2026 : « l'ouverture est vraiment longue »). La fiche s'ouvre avec lui, le board suit.
+  const [quickRow, setQuickRow] = useState(null);
+  useEffect(() => {
+    if (!requestedClient) return undefined;
+    let alive = true;
+    apiClient.get(`/api/v1/optilex/board?numero_client=${encodeURIComponent(requestedClient)}`)
+      .then((r) => { const row = (r?.clients || []).find((x) => x.numero_client === requestedClient); if (alive && row) setQuickRow(row); })
+      .catch(() => { /* le board entier ouvrira la fiche */ });
+    return () => { alive = false; };
+  }, [requestedClient]);
   useEffect(() => {
     if (!requestedClient) return;
-    const row = rows.find(r => r.numero_client === requestedClient);
+    const row = rows.find(r => r.numero_client === requestedClient) || (quickRow?.numero_client === requestedClient ? quickRow : null);
     if (row) setSelected(row.row_key || row.numero_client);
-  }, [requestedClient, rows]);
+  }, [requestedClient, rows, quickRow]);
   const closeDetail = () => {
     setSelected(null);
     if (requestedClient) {
@@ -1753,7 +1765,9 @@ export default function OptilexBoard({ embed = false }) {
     }
   }, [flagSaveError]);
 
-  const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || null, [rows, selected]);
+  // Tant que le board entier n'est pas là, la fiche demandée par un lien vit sur sa ligne rapide.
+  const selRow = useMemo(() => rows.find((r) => rowKey(r) === selected) || (quickRow && rowKey(quickRow) === selected ? quickRow : null),
+    [rows, selected, quickRow]);
 
   // Vue = l'ensemble des filtres (onglets, autres états, météo, affiner ; ni la frappe de la recherche ni le tri).
   // Quand elle change, la liste glisse (VIEW_SLIDE) dans le sens du contrôle cliqué : `navTo(position)` le note
@@ -5882,15 +5896,32 @@ function CommentThread({ numero, onAddWeather, ratings = [], ratingsLoading = fa
       .catch(() => { /* sans annuaire, le fil reste utilisable sans complétion */ });
     return () => { alive = false; };
   }, []);
+  // Une seule fois par lien (dev 21/11/2026) : le rafraîchissement du fil ne ramène plus au message quelqu'un qui a
+  // fait défiler ailleurs. Le message est amené au centre et gardé là tant que la fiche se construit au-dessus de lui
+  // (blocs chargés après coup) ; avant, le défilé partait trop tôt et la fiche le repoussait hors de vue.
+  const focusDone = useRef(null);
+  // Le recalage continue quand le fil se rafraîchit pendant qu'il tourne ; il s'arrête en quittant la fiche.
+  const focusStop = useRef(() => {});
+  useEffect(() => () => focusStop.current(), []);
   useEffect(() => {
     if (!focusComments || loading) return undefined;
+    const key = `${numero}|${focusComment || ""}|${focusRating || ""}`;
+    if (focusDone.current === key) return undefined;
+    focusStop.current();
     setLimit(Infinity);
+    const exact = focusComment || focusRating;
     const target = () => (focusComment && document.getElementById(`msg-${focusComment}`))
-      || (focusRating && document.getElementById(`weather-${focusRating}`)) || rootRef.current;
-    // Un peu plus tard pour un commentaire : le fil de réponses qui le contient s'ouvre d'abord (0,3 s).
-    const timer = setTimeout(() => target()?.scrollIntoView({ behavior: "smooth", block: focusComment ? "center" : "start" }), focusComment ? 520 : 250);
-    return () => clearTimeout(timer);
-  }, [focusComments, focusRating, focusComment, loading, ratings, comments]);
+      || (focusRating && document.getElementById(`weather-${focusRating}`)) || (exact ? null : rootRef.current);
+    if (exact && !target() && !comments.some((c) => String(c.id) === String(focusComment)) && !ratings.some((r) => String(r.id) === String(focusRating))) {
+      return undefined;   // le message n'est pas encore dans le fil chargé : on attend le prochain rendu
+    }
+    focusDone.current = key;
+    if (!exact) { rootRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }); return undefined; }
+    // Le fil de réponses qui contient le message s'ouvre d'abord (0,3 s).
+    const start = setTimeout(() => { focusStop.current = pinIntoView(target); }, 320);
+    focusStop.current = () => clearTimeout(start);
+    return undefined;
+  }, [focusComments, focusRating, focusComment, loading, ratings, comments, numero]);
   useEffect(() => {
     if (!notice) return undefined;
     const timer = setTimeout(() => setNotice(""), 8000);

@@ -158,7 +158,7 @@ export default function DetailPanel({
   rowId,           // currently focused period row (the one user clicked)
   onClose,
   onSelectRow,     // (rowId) → caller updates rowId
-  openOnTab = null, // { tab, n } : rubrique à ouvrir (lien direct d'une notification) ; `n` change à chaque demande
+  openOnTab = null, // { tab, n, note } : rubrique à ouvrir (lien direct d'une notification) ; `n` change à chaque demande ; `note` : la note interne à montrer
   boardMap,        // Map numero_client → row board Owner/Opti'Lex (états)
   onBoardEtatChange, // (numero_client, payload) → POST /optilex/etat-change
   financeRole = apiClient.getUser()?.role, // rôle de la page Finance servi par l'API
@@ -182,12 +182,17 @@ export default function DetailPanel({
   // Rubrique ouverte, gardée d'un client à l'autre : on relit souvent la même rubrique sur plusieurs fiches.
   // Détails s'ouvre d'abord (dev 17/11/2026), Paiements vient ensuite.
   const [tab, setTab] = useState('details');
-  useEffect(() => { if (openOnTab?.tab) setTab(openOnTab.tab); }, [openOnTab]);
   // Résumé du fil d'échanges (nombre, derniers messages), remonté par ExchangeThread : pastille de l'onglet et
   // rappel dans « Paiements ». `null` tant que le fil charge.
   const [exchangeSummary, setExchangeSummary] = useState(null);
   // Message à ouvrir dans les Échanges (dernier commentaire du sales, sous « Sales », dev 17/11/2026) : { id, n }.
   const [exchangeFocus, setExchangeFocus] = useState(null);
+  // Lien direct d'une notification : la rubrique demandée, et la note interne mentionnée s'il y en a une.
+  useEffect(() => {
+    if (!openOnTab?.tab) return;
+    setTab(openOnTab.tab);
+    if (openOnTab.note) setExchangeFocus((f) => ({ note: openOnTab.note, n: (f?.n || 0) + 1 }));
+  }, [openOnTab]);
   const scrollRef = useRef(null);
   const [actionsOpen, setActionsOpen] = useState(false);
   const actionsAnchor = useRef(null);

@@ -5,6 +5,7 @@ import "./styles/readOnly.css";
 import React, { lazy, Suspense, useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import FinanceEntry from "./navigation/FinanceEntry.jsx";
 
 const Leaderboard = lazy(() => import("./pages/Leaderboard.jsx"));
 const EmployeeSales = lazy(() => import("./pages/EmployeeSales.jsx"));
@@ -117,7 +118,7 @@ function App() {
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/perf-closing" element={<PerfClosing />} />
         <Route path="/tracking-sheets" element={<TrackingSheetAdmin />} />
-        <Route path="/tracking-finance" element={<TrackingSheetFinance />} />
+        <Route path="/tracking-finance" element={<FinanceEntry><TrackingSheetFinance /></FinanceEntry>} />
         <Route path="/marketing" element={<Marketing />} />
         <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 

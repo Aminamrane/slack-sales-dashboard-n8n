@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import Sidebar from "./Sidebar.jsx";
 import { myPages } from "../../../navigation/myPages.js";
+import { dashboardMenuSections, hasDashboardMenu, openDashboardTab } from "../../../navigation/dashboardMenu.jsx";
 import { isHiddenTab } from "../../../utils/hiddenPages.js";
 import apiClient from "../../../services/apiClient";
 
@@ -58,6 +59,9 @@ export default function SheetSidebar({ title = "Ma Tracking Sheet", views: allVi
       key: "sheet", label: title,
       items: views.map((v) => ({ id: `view:${v.key}`, label: v.label, icon: <ViewIcon view={v} />, badge: v.badge })),
     }];
+    // Un rôle qui a un tableau de bord retrouve son menu entier sous les vues de la sheet (dev 21/11/2026 : le menu ne
+    // change pas d'une page à l'autre) ; les autres, « Mes pages ».
+    if (hasDashboardMenu(role)) return [...out, ...dashboardMenuSections(role)];
     const pages = myPages();
     if (pages.length) out.push({ key: "pages", label: "Mes pages", items: pages.map((p) => ({ id: p.id, label: p.label, icon: p.icon })) });
     return out;
@@ -66,6 +70,7 @@ export default function SheetSidebar({ title = "Ma Tracking Sheet", views: allVi
 
   const onTab = (id) => {
     if (id.startsWith("view:")) { onView(id.slice(5)); return; }
+    if (hasDashboardMenu(role)) { openDashboardTab(navigate, role, id); return; }
     const page = myPages().find((p) => p.id === id);
     if (page) navigate(page.path);
   };

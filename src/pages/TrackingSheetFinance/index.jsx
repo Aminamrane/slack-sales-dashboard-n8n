@@ -1317,7 +1317,8 @@ export default function TrackingSheetFinance() {
   }, [panelRowId]);
   const closePanel = useCallback(() => setPanelOpen(false), []);
   // Lien direct vers la fiche d'un client (notification d'une mention dans une note interne) :
-  // /tracking-finance?client=<id>&onglet=echanges. Traité une fois par lien, quand les lignes du mois sont là.
+  // /tracking-finance?client=<id>&onglet=echanges[&note=<id>]. Traité une fois par lien, quand les lignes du mois sont là.
+  // La note exacte d'une mention (21/11/2026) : le fil des Échanges défile jusqu'à elle.
   const { search: linkSearch } = useLocation();
   const linkDone = useRef(null);
   const [panelTab, setPanelTab] = useState(null);
@@ -1332,7 +1333,7 @@ export default function TrackingSheetFinance() {
     setPanelClientId(row.client_id);
     setPanelRowId(row.id);
     setPanelOpen(true);
-    if (params.get('onglet') === 'echanges') setPanelTab({ tab: 'exchanges', n: Date.now() });
+    if (params.get('onglet') === 'echanges') setPanelTab({ tab: 'exchanges', n: Date.now(), note: params.get('note') || null });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, linkSearch]);
   const onSelectPanelRow = useCallback((rowId) => setPanelRowId(rowId), []);

@@ -31,8 +31,14 @@ export function notificationTarget(notif, role) {
     if (!id || /[?&]comment=/.test(path)) return path;
     return `${path}${path.includes('?') ? '&' : '?'}comment=${encodeURIComponent(String(id))}`;
   }
-  // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur).
-  if (notif.type === 'finance_note_mention') return notif.data?.path || '/tracking-finance';
+  // Mention dans une note interne finance : la fiche du client, onglet Échanges (chemin donné par le serveur), plus la
+  // note exacte (dev 21/11/2026 : « ça ne nous met pas là où on nous a tagués ») : le fil défile jusqu'à elle.
+  if (notif.type === 'finance_note_mention') {
+    const path = notif.data?.path || '/tracking-finance';
+    const id = notif.data?.note_id;
+    if (!id || /[?&]note=/.test(path)) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}note=${encodeURIComponent(String(id))}`;
+  }
   // Client sorti repassé dans un état actif (dev 18/11/2026) : sa fiche Finance, où la facturation décide de la reprise.
   if (notif.type === 'finance_resume_after_exit') return notif.data?.path || '/tracking-finance';
   if (notif.type === 'sheet_invitation') return '/tracking-sheet?view=notifications';
