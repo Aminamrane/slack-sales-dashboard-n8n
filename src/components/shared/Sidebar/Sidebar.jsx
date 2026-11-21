@@ -137,6 +137,11 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
   // les comptes « tableau de bord seul » (dashboardAudience.js), à qui la navbar ne la montrait pas.
   const header = headerExtra
     || (usesDashboardOnlyNavbar(apiClient.getUser()) ? null : (c) => <SidebarAvailability C={C} darkMode={darkMode} collapsed={c} />);
+  // Chaque ouverture repart sur « Non lues » (dev 21/11/2026).
+  const toggleNotifs = () => {
+    if (!notifOpen && notifs.view !== "unread") notifs.setView("unread");
+    setNotifOpen((o) => !o);
+  };
   const openNotification = (n, target) => {
     if (!n.read) notifs.markRead([n.id]);
     if (target) { setNotifOpen(false); navigate(target); }
@@ -275,7 +280,7 @@ export default function Sidebar({ width, collapsed, onToggle, sections, activeTa
         {/* Contenu propre à la page sous l'en-tête (ex. disponibilité des sales), rendu selon l'état replié. */}
         {header && <div className="sb-header-extra">{header(renderCollapsed)}</div>}
         <IconRow collapsed={renderCollapsed} C={C} onHome={() => navigate(homeRouteFor(apiClient.getUser()?.role))} />
-        <NotificationsRow collapsed={renderCollapsed} unread={notifs.unreadCount} open={notifOpen} onToggle={() => setNotifOpen((o) => !o)} />
+        <NotificationsRow collapsed={renderCollapsed} unread={notifs.unreadCount} open={notifOpen} onToggle={toggleNotifs} />
       </div>
 
       {notifOpen ? (
