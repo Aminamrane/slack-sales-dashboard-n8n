@@ -2326,7 +2326,8 @@ export default function OptilexBoard({ embed = false }) {
         .ob-xi-box{display:flex;align-items:flex-end;gap:8px;margin-top:10px;padding:6px 6px 6px 8px;border:1px solid #e8e4de;border-radius:14px;background:${CARD};transition:border-color .15s,box-shadow .15s}
         .ob-xi-box:focus-within{border-color:#d8d3cb;box-shadow:0 0 0 3px rgba(43,41,39,.05)}
         .ob-xi-box>:first-child{margin-bottom:4px}
-        .ob-xi-ta{flex:1;min-width:0;min-height:30px;max-height:160px;padding:5px 2px;border:0;outline:0;resize:none;background:transparent;font:inherit;font-size:13.5px;line-height:1.5;color:${TEXT}}
+        .ob-xi-box>:nth-child(2){flex:1;min-width:0}
+        .ob-xi-ta{display:block;width:100%;box-sizing:border-box;min-height:30px;max-height:160px;padding:5px 2px;border:0;outline:0;resize:none;background:transparent;font:inherit;font-size:13.5px;line-height:1.5;color:${TEXT}}
         .ob-xi-send{display:grid;place-items:center;flex-shrink:0;width:30px;height:30px;border:0;border-radius:50%;background:#2b2927;color:#fff;cursor:pointer;transition:background .15s,opacity .15s}
         .ob-xi-send svg{transition:transform .35s cubic-bezier(.34,1.56,.64,1)}
         .ob-xi-send:hover:not(:disabled) svg{transform:translate(2px,-2px) rotate(-8deg)}
@@ -5748,11 +5749,13 @@ function ReplyThread({ replies, t, openSignal }) {
   const [open, setOpen] = useState(replies.length <= 2);
   useEffect(() => { if (openSignal) setOpen(true); }, [openSignal]);
   const names = replies.map(authorOf);
+  const who = whoReplied(names);
+  const of = /^[aeiouyhàâäéèêëîïôöùûü]/i.test(who) ? "d’" : "de ";   // « d’Emilie », « de Paul »
   return (
     <div className="ob-xt">
       <button type="button" className="ob-xt-sum" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <AvatarStack names={names} />
-        <span><b>{replies.length} réponse{replies.length > 1 ? "s" : ""}</b> de {whoReplied(names)}</span>
+        <span><b>{replies.length} réponse{replies.length > 1 ? "s" : ""}</b> {of}{who}</span>
         {CHEVRON}
       </button>
       <AnimatePresence initial={false}>
